@@ -5,7 +5,8 @@ import Quickshell
 Singleton {
     // Formats
     readonly property list<string> validImageTypes: ["jpeg", "png", "webp", "tiff", "svg"]
-    readonly property list<string> validImageExtensions: ["jpg", "jpeg", "png", "webp", "avif", "bmp", "tif", "tiff", "svg"]
+    readonly property list<string> validImageExtensions: ["jpg", "jpeg", "png", "webp", "avif", "bmp", "tif", "tiff", "svg",
+        "mp4", "webm", "mkv", "avi", "mov", "gif", "m4v", "wmv", "flv", "ogv", "3gp", "qt"]
 
     function isValidImageByName(name: string): bool {
         const lower = (name || "").toLowerCase();

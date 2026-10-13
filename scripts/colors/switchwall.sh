@@ -142,11 +142,11 @@ RESTORE_SCRIPT_DIR="$CUSTOM_DIR/scripts"
 RESTORE_SCRIPT="$RESTORE_SCRIPT_DIR/__restore_video_wallpaper.sh"
 THUMBNAIL_DIR="$RESTORE_SCRIPT_DIR/mpvpaper_thumbnails"
 MPVPAPER_FLAGS="-p -a max"
-VIDEO_OPTS="no-audio loop hwdec=auto scale=bilinear interpolation=no video-sync=display-resample panscan=1.0 video-scale-x=1.0 video-scale-y=1.0 video-align-x=0.5 video-align-y=0.5 load-scripts=no"
+VIDEO_OPTS="--no-audio --loop=inf --hwdec=auto"
 
 is_video() {
     local extension="${1##*.}"
-    [[ "$extension" == "mp4" || "$extension" == "webm" || "$extension" == "mkv" || "$extension" == "avi" || "$extension" == "mov" ]] && return 0 || return 1
+    [[ "$extension" == "mp4" || "$extension" == "webm" || "$extension" == "mkv" || "$extension" == "avi" || "$extension" == "mov" || "$extension" == "gif" || "$extension" == "m4v" || "$extension" == "wmv" || "$extension" == "flv" || "$extension" == "ogv" || "$extension" == "3gp" || "$extension" == "qt" ]] && return 0 || return 1
 }
 
 kill_existing_mpvpaper() {

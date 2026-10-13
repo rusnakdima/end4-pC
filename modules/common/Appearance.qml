@@ -19,7 +19,7 @@ Singleton {
     ColorQuantizer {
         id: wallColorQuant
         property string wallpaperPath: Config.options.background.wallpaperPath
-        property bool wallpaperIsVideo: wallpaperPath.endsWith(".mp4") || wallpaperPath.endsWith(".webm") || wallpaperPath.endsWith(".mkv") || wallpaperPath.endsWith(".avi") || wallpaperPath.endsWith(".mov")
+        property bool wallpaperIsVideo: wallpaperPath.endsWith(".mp4") || wallpaperPath.endsWith(".webm") || wallpaperPath.endsWith(".mkv") || wallpaperPath.endsWith(".avi") || wallpaperPath.endsWith(".mov") || wallpaperPath.endsWith(".gif") || wallpaperPath.endsWith(".m4v") || wallpaperPath.endsWith(".wmv") || wallpaperPath.endsWith(".flv") || wallpaperPath.endsWith(".ogv") || wallpaperPath.endsWith(".3gp") || wallpaperPath.endsWith(".qt")
         source: Qt.resolvedUrl(wallpaperIsVideo ? Config.options.background.thumbnailPath : Config.options.background.wallpaperPath)
         depth: 0 // 2^0 = 1 color
         rescaleSize: 10
