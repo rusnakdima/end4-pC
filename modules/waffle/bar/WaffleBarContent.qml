@@ -1,10 +1,11 @@
 import QtQuick
 import QtQuick.Layouts
+import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.waffle.looks
 import qs.modules.waffle.bar.tasks
-import qs.modules.waffle.bar.KeyboardLayoutButton
+import qs.modules.waffle.bar.tray
 
 Rectangle {
     id: root
@@ -70,7 +71,11 @@ Rectangle {
             sourceComponent: WidgetsButton {}
         }
         Tray {}
-KeyboardLayoutButton {}
+        FadeLoader {
+            Layout.fillHeight: true
+            shown: Config.options.waffles.bar.keyboardLayoutButton && WM.compositor === "hyprland"
+            sourceComponent: KeyboardLayoutButton {}
+        }
         SystemButton {}
         TimeButton {}
     }

@@ -849,6 +849,49 @@ ContentPage {
         }
 
         ContentSection {
+            shape: MaterialShape.Shape.Clover8Leaf
+            icon: "keyboard"
+            title: Translation.tr("Waffle Bar Keyboard")
+            visible: Config.options.panelFamily === "waffle"
+            GroupedList {
+                ConfigSwitch {
+                    buttonIcon: "keyboard"
+                    text: Translation.tr("Show keyboard layout button in the bar")
+                    checked: Config.options.waffles.bar.keyboardLayoutButton
+                    onCheckedChanged: { Config.options.waffles.bar.keyboardLayoutButton = checked; }
+                }
+                ConfigTextArea {
+                    id: waffleKeyboardLayoutsField
+                    Layout.fillWidth: true
+                    buttonIcon: "keyboard"
+                    text: Translation.tr("Keyboard layout codes")
+                    description: Translation.tr("Comma-separated list of XKB layout codes offered by the bar button")
+                    placeholderText: Translation.tr("e.g., us,ru")
+                    Component.onCompleted: value = Config.options.waffles.bar.keyboardLayouts
+                    onValueChanged: waffleKeyboardLayoutsDebounce.restart()
+
+                    Timer {
+                        id: waffleKeyboardLayoutsDebounce
+                        interval: 1000
+                        repeat: false
+                        onTriggered: {
+                            const list = waffleKeyboardLayoutsField.value;
+                            // Opening the page seeds the field from the config, so
+                            // an unchanged value must not be written back: the
+                            // bar button may have reordered the layout since.
+                            if (list === Config.options.waffles.bar.keyboardLayouts) return;
+                            Config.options.waffles.bar.keyboardLayouts = list;
+                            Config.options.hyprland.input.kbLayout = list;
+                            if (WM.compositor === "hyprland") {
+                                HyprlandConfig.set("input:kb_layout", list);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        ContentSection {
             shape: MaterialShape.Shape.Puffy
             icon: "tooltip"; title: Translation.tr("Tooltips")
             GroupedList {
