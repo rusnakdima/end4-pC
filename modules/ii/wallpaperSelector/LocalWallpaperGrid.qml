@@ -2,7 +2,6 @@ import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
-import qs.modules.common.functions
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -427,16 +426,23 @@ Item {
                     introAnim.start();
                 }
                 fileModelData: delegateCell.modelData
+                // The cells are styled like the icon view of a file manager:
+                // a themed surface with a themed label. The hovered and the
+                // selected cells keep their accent color.
                 colBackground: (delegateCell.index === grid.currentIndex || cellMouseArea.containsMouse)
                     ? Appearance.colors.colPrimary
                     : (delegateCell.modelData.filePath === Config.options.background.wallpaperPath)
                         ? Appearance.colors.colSecondaryContainer
-                        : ColorUtils.transparentize(Appearance.colors.colPrimaryContainer)
+                        : (delegateCell.modelData.fileIsDir
+                            ? Appearance.colors.colLayer1
+                            : Appearance.colors.colSurfaceContainerLow)
                 colText: (delegateCell.index === grid.currentIndex || cellMouseArea.containsMouse)
                     ? Appearance.colors.colOnPrimary
                     : (delegateCell.modelData.filePath === Config.options.background.wallpaperPath)
                         ? Appearance.colors.colOnSecondaryContainer
-                        : Appearance.colors.colOnLayer0
+                        : (delegateCell.modelData.fileIsDir
+                            ? Appearance.colors.colOnLayer1
+                            : Appearance.colors.colOnSurfaceVariant)
             }
 
             SequentialAnimation {

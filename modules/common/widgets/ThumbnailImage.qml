@@ -40,6 +40,12 @@ StyledImage {
     property int candidateIndex: 0
     readonly property string candidateSizeName: sizeCandidates[candidateIndex] || root.effectiveSizeName
 
+    // Generation is retried a couple of times, but never endlessly: a file
+    // that cannot be rendered would otherwise make the process restart in a
+    // loop and burn the CPU.
+    property int generationAttempts: 0
+    readonly property int maxGenerationAttempts: 4
+
     // The path of the thumbnail that is currently displayed. It is set
     // explicitly instead of being bound so that the image can be reloaded
     // after a thumbnail has been generated.
@@ -82,13 +88,30 @@ StyledImage {
         loadCandidate(0);
     }
 
-    onSourceSizeChanged: {
+    // Renders the thumbnail on demand. The number of attempts is bounded,
+    // so a file that cannot be rendered never makes the process restart in
+    // an endless loop.
+    function startGeneration() {
         if (!root.generateThumbnail) return;
+        if (root.generationAttempts >= root.maxGenerationAttempts) return;
+        root.generationAttempts++;
         thumbnailGeneration.running = false;
         thumbnailGeneration.running = true;
     }
 
+    onSourceSizeChanged: {
+        // A new size selects another cache bucket, so the thumbnail has to
+        // be rendered for it. The attempts of the previous size are over.
+        root.generationAttempts = 0;
+        startGeneration();
+    }
+
     onStatusChanged: {
+        if (status === Image.Ready) {
+            // The thumbnail is there, further attempts are allowed again.
+            root.generationAttempts = 0;
+            return;
+        }
         if (status !== Image.Error) return;
         // The current cache bucket has no thumbnail, try the next one.
         if (candidateIndex < sizeCandidates.length - 1) {
@@ -96,10 +119,7 @@ StyledImage {
             return;
         }
         // No cached thumbnail at all, render one.
-        if (root.generateThumbnail) {
-            thumbnailGeneration.running = false;
-            thumbnailGeneration.running = true;
-        }
+        startGeneration();
     }
 
     Process {
@@ -120,6 +140,7 @@ StyledImage {
                 return ["bash", "-c", `
                     thumb="$1"; src="$2"; max="$3"
                     [ -f "$thumb" ] && exit 0
+                    mkdir -p "$(dirname "$thumb")" || exit 2
                     tmp="$thumb.$$.tmp.png"
                     trap 'rm -f "$tmp"' EXIT
                     for seek in 00:00:03 00:00:01 00:00:00; do
@@ -132,6 +153,7 @@ StyledImage {
             return ["bash", "-c", `
                 thumb="$1"; src="$2"; max="$3"
                 [ -f "$thumb" ] && exit 0
+                mkdir -p "$(dirname "$thumb")" || exit 2
                 tmp="$thumb.$$.tmp.png"
                 trap 'kill "$pid" 2>/dev/null; rm -f "$tmp"' EXIT
                 magick "$src" -auto-orient -resize "$max"x"$max" "$tmp" & pid=$!
