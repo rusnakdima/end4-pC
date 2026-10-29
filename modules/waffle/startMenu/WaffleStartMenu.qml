@@ -84,7 +84,7 @@ Scope {
     }
 
     IpcHandler {
-        target: "search"
+        target: "startMenu"
 
         function toggle() {
             GlobalStates.searchOpen = !GlobalStates.searchOpen;

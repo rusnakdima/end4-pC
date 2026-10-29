@@ -35,7 +35,7 @@ Singleton {
         { repo: "Blapples/wallpapers", branch: "main", prefix: "", sanitize: false, rootWallpapers: true }
     ]
 
-    readonly property string shareFilter: 'with_entries(select(.key as $k | ["appearance","background","bar","calendar","crosshair","dock","interactions","launcher","light","lock","media","notifications","osd","osk","overlay","overview","panelFamily","profile","regionSelector","resources","settings","sidebar","tray","wallpaperSelector","windows","hyprland"] | index($k))) | if (.hyprland | type) == "object" then .hyprland |= with_entries(select(.key as $k | ["decoration","gaps","animations","general"] | index($k))) else . end | '
+    readonly property string shareFilter: 'with_entries(select(.key as $k | ["appearance","background","bar","calendar","crosshair","dock","interactions","launcher","light","lock","media","notifications","osd","osk","overlay","overview","panelFamily","profile","regionSelector","resources","settings","sidebar","tray","wallpaperSelector","windows","hyprland"] | index($k))) | if (.hyprland | type) == "object" then .hyprland |= with_entries(select(.key as $k | ["decoration","gaps","animations","general","hyprOptions"] | index($k))) else . end | '
 
     readonly property var thumbSet: {
         const names = new Set();

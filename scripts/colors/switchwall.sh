@@ -220,7 +220,26 @@ if [[ -z "\$wallpaper" || ! -f "\$wallpaper" ]]; then
     exit 0
 fi
 
-exec "\$SCRIPT_DIR/__video_wallpaper.sh" "\$wallpaper"
+# The supervisor is optional: it is only installed when the user deployed
+# it. Without it the wallpaper is started directly, one mpvpaper per
+# monitor, so the restore always works on its own.
+if [[ -x "\$SCRIPT_DIR/__video_wallpaper.sh" ]]; then
+    exec "\$SCRIPT_DIR/__video_wallpaper.sh" "\$wallpaper"
+fi
+
+case "\$wallpaper" in
+    *.mp4|*.webm|*.mkv|*.avi|*.mov|*.gif|*.m4v|*.wmv|*.flv|*.ogv|*.3gp|*.qt) ;;
+    *) exit 0 ;;
+esac
+
+pkill -f -9 mpvpaper 2>/dev/null || true
+
+if command -v hyprctl >/dev/null 2>&1; then
+    for monitor in \$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | .name'); do
+        mpvpaper -p -a max --no-audio --loop=inf --hwdec=auto "\$monitor" "\$wallpaper" &
+        sleep 0.1
+    done
+fi
 EOF
     mv "$RESTORE_SCRIPT.tmp" "$RESTORE_SCRIPT"
     chmod +x "$RESTORE_SCRIPT"

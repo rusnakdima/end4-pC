@@ -1,3 +1,4 @@
+GlobalStates.qml|it holds the global state of the running session - which panel is open, which screen is hovered - and it registers the compositor shortcuts and the IPC handlers of that session, so its helpers only mean something against the live shell
 services/AppSearch.qml|the launcher ranks the desktop entries the live XDG database exposes and guesses each icon against the installed icon theme; the normalisation helpers only split an id and swap spaces or underscores for dashes
 services/BluetoothStatus.qml|every helper reads the live BlueZ device objects the shell enumerates, so the sorting and battery predicates only have meaning against real adapters and devices
 services/Booru.qml|the request URL encodes the seven providers' differing query-parameter names, so it only has meaning against those live APIs, and the response normalisation carries their payload shapes into the shell
@@ -11,6 +12,7 @@ services/FirstRunExperience.qml|it only looks for the first-run marker file and 
 services/GlobalFocusGrab.qml|it owns the shared Hyprland focus grab; its lists hold live compositor windows and the focus check walks the live scene graph
 services/HyprlandAntiFlashbangShader.qml|the enable, disable and cycle states only mean something as they are written into the live Hyprland config and the compositor reloads
 services/HyprlandBindOverrides.qml|it parses the action and combo lines of ~/.config/hypr/custom/keybind_overrides.conf and rewrites that file, ending in a live hyprctl reload
+services/HyprlandKeybinds.qml|it parses the keybind files of the user's live Hyprland configuration with the keybind script, so the binds it lists and the combos it formats are the ones of that configuration
 services/HyprlandOptions.qml|it mirrors the compositor's options in and out, and every value it caches was read from the live hyprctl process
 services/KeyringStorage.qml|the values it stores live in the desktop keyring behind secret-tool, so a test would assert the keyring stand-in rather than the shell
 services/LatexRenderer.qml|it renders LaTeX through the MicroTeX binary it spawns and memoises by hash, and the render only exists as the produced SVG file
@@ -22,6 +24,7 @@ services/NiriBackend.qml|it is the niri half of the compositor backend, so the w
 services/NiriConfig.qml|it writes the KDL fragments niri includes at startup; the escaping and the mode-string parsing exist to produce that file for the live compositor to read
 services/NiriXkb.qml|the layout code it exposes comes from the xkb-rules file it reads for the running niri session
 services/Notes.qml|notes are persisted as JSON in the user's notes file, and the add, update and delete helpers only attach an id and a timestamp before writing that file back
+services/Notifications.qml|it owns the live D-Bus notification server and persists the notifications of the running session into the notification file of the user, so the list it groups and serialises only means something against a running notification server
 services/PeripheralBattery.qml|it classifies the UPower devices the shell enumerates and fires notifications for them, so the thresholds only mean something against real device states
 services/PresetsOnline.qml|it lists and downloads presets from GitHub and renders their thumbnails with curl and magick, and every helper belongs to that live fetch-and-cache pipeline
 services/ResourceUsage.qml|the RAM, swap, CPU and disk figures it reports are read from /proc and the system tools on the running machine
@@ -36,9 +39,12 @@ services/TaskbarApps.qml|the dock list is assembled from the compositor's live t
 services/TimerService.qml|the pomodoro, stopwatch and countdown run off the live wall clock and the persisted timer state, so their transitions only mean something against that clock
 services/Todo.qml|the to-do list is stored as JSON in the user's todo file; every helper flips one done flag or removes one entry and then rewrites that file
 services/TrayService.qml|it splits the live D-Bus system tray into pinned and unpinned items and keeps the pinned list in the config; the tooltip it builds only concatenates the fields the live tray item exposes
+services/Updates.qml|the update count it publishes comes from the checkupdates and yay processes it runs on the running machine, and the thresholds it compares that count against come from the live config of the user
 services/Vpn.qml|the profile list comes from nmcli and the import path is a live file dialog plus an nmcli import, so the field splitter only ever sees nmcli's own output
 services/WM.qml|it is the facade over the running compositor, and every window, workspace and monitor answer it returns comes from the live Hyprland or niri backend
 services/WallhavenSearch.qml|it queries the wallhaven.cc API over the network and downloads the wallpapers that come back
+services/Wallpapers.qml|it browses the wallpaper folders of the user, applies the wallpaper with the switchwall script and writes the custom order back into the live config, so the sorting and the scoring only mean something against the real folder
+services/Weather.qml|it fetches the live OpenWeather payload over the network with curl, and every value it publishes - the units, the times, the wind - comes from that response
 services/WorldClock.qml|the offsets it prints come from the live timezone database, so the formatting is only meaningful against real zone data
 services/Ydotool.qml|every function is a ydotool key event, and no value is computed beyond the keycode it forwards
 modules/common/widgets/AttachedFileIndicator.qml|it probes the attached file with file and identify to learn its type and size, so both values come from live processes
@@ -85,10 +91,12 @@ modules/ii/background/widgets/visualizer/VisualizerWidget.qml|it binds the widge
 modules/ii/background/widgets/weather/WeatherWidget.qml|the layout mode comes from the drag on the live widget canvas and the data shown is the live weather service's
 modules/ii/background/widgets/worldclock/WorldClockWidget.qml|the times it draws come from the live WorldClock service
 modules/ii/bar/AiUsagePopup.qml|it formats the token counts and reset countdown that the live Claude usage service reports
+modules/ii/bar/BarGroup.qml|it renders the widget the live bar layout names and the style it applies is written back into the bar configuration of the user, so the colour and the radius it resolves are the ones of that configuration
 modules/ii/bar/BarGroupStylePopup.qml|it closes the popup and lets the live bar group service apply the style the user picked
 modules/ii/bar/BatteryPopup.qml|it prints the charge time that the live battery service reports
 modules/ii/bar/BluetoothPopup.qml|it lists the devices the live BlueZ stack reports and the battery levels those devices expose
 modules/ii/bar/ClockWidgetPopup.qml|it prints the todos and the uptime that the live Todo service and the running kernel report
+modules/ii/bar/HyprlandXkbIndicator.qml|it shows the keyboard layout the running compositor reports, so the flag it draws is the one of the live session
 modules/ii/bar/NetworkSpeedPopup.qml|it formats the rates and totals that the live Network service samples from nmcli
 modules/ii/bar/NetworkSpeed.qml|it samples /proc/net/dev on the running machine and shows the deltas between the samples
 modules/ii/bar/ResourcesPopup.qml|it prints the RAM, CPU, swap and disk figures that the live ResourceUsage service samples, and its formatter only divides by 1024 twice
@@ -124,8 +132,9 @@ modules/ii/settings/DashboardMediaPage.qml|it drives the live MPRIS player that 
 modules/ii/settings/DashboardMediaState.qml|it caches the cover art of the live track and derives its dominant colour
 modules/ii/settings/DashboardPresetDetail.qml|it acts on the live preset the user owns, renaming and exporting it through the Presets services
 modules/ii/settings/DashboardSettingsCatalog.qml|it is a declarative table of dashboard controls bound to live Hyprland options and config paths
-modules/ii/settings/DashboardSettingsPage.qml|it packs the visible dashboard cards into the user's dashboard layout, driven by the live config and compositor state, and its search scoring reuses the Wallpapers scorer that tst_wallpapers.qml asserts
+modules/ii/settings/DashboardSettingsPage.qml|it packs the visible dashboard cards into the user's dashboard layout, driven by the live config and compositor state, and its search scoring reuses the scorer of the live wallpaper service
 modules/ii/settings/DashboardSpinCard.qml|it steps a numeric quick control that the live SettingsQuickControls service exposes, clamping to the from and to bounds that control declares
+modules/ii/settings/Settings.qml|it is the settings panel of the running session: its functions open and close the live layer-shell window, and the only state it owns is the global open flag of that session
 modules/ii/settings/pages/About.qml|it shows the live system information and triggers the real update scripts
 modules/ii/settings/pages/BarConfig.qml|it edits the live bar layout and monitor configuration
 modules/ii/settings/pages/HyprlandConfig.qml|it applies the Hyprland options to the live compositor, and the idle duration it converts is written straight back to that compositor
@@ -137,3 +146,4 @@ modules/ii/sidebarRight/quickToggles/AndroidQuickPanel.qml|it lays the user's co
 modules/ii/sidebarRight/quickToggles/androidStyle/AndroidQuickToggleButton.qml|it drags and resizes the toggles the user configured, and the sibling search runs over the live scene graph
 modules/ii/sidebarRight/todo/TodoWidget.qml|it adds tasks to the live Todo service
 modules/ii/verticalBar/VerticalBarContent.qml|it repeats the horizontal bar's widget resolution for its own orientation, but with its own path prefix and its own pill blacklist, so it is a separate unit from the BarContent that tst_bar_content.qml asserts
+modules/ii/wallpaperSelector/WallpaperDirectoryItem.qml|it shows one entry of the wallpaper folder of the user and the thumbnail it displays is generated from the live filesystem, so the name and the icon it draws are the ones of that folder

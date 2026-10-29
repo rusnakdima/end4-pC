@@ -43,12 +43,10 @@ ShellRoot {
         "tst_dates.qml", "tst_objects.qml", "tst_notifications.qml", "tst_shapes.qml",
         "tst_fuzzy.qml", "tst_levenshtein.qml", "tst_keycombos.qml", "tst_translation.qml",
         "tst_appearance.qml", "tst_images.qml", "tst_config.qml", "tst_hyprland_config.qml",
-        "tst_hyprland_keybinds.qml", "tst_wallpapers.qml", "tst_notifications_model.qml",
-        "tst_updates.qml", "tst_weather.qml", "tst_mpris.qml", "tst_presets.qml",
+        "tst_mpris.qml", "tst_presets.qml",
         "tst_settings_search.qml", "tst_online_wallpapers.qml", "tst_ai.qml",
-        "tst_speech_to_text.qml", "tst_bar_content.qml", "tst_bar_group.qml",
-        "tst_thumbnail_image.qml", "tst_wallpaper_item.qml", "tst_settings_card.qml",
-        "tst_xkb_indicator.qml", "tst_global_states.qml", "tst_persistent.qml",
+        "tst_speech_to_text.qml", "tst_bar_content.qml",
+        "tst_thumbnail_image.qml", "tst_persistent.qml",
         "tst_directories.qml"
     ]
 
