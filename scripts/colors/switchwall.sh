@@ -197,15 +197,63 @@ VIDEO_WALLPAPER_SCRIPT="$RESTORE_SCRIPT_DIR/__video_wallpaper.sh"
 THUMBNAIL_DIR="$RESTORE_SCRIPT_DIR/mpvpaper_thumbnails"
 LAST_THUMBNAIL="$THUMBNAIL_DIR/.last-good.jpg"
 MPVPAPER_FLAGS="-p -a max"
-VIDEO_OPTS="no-audio loop hwdec=auto scale=bilinear interpolation=no video-sync=display-resample panscan=1.0 video-scale-x=1.0 video-scale-y=1.0 video-align-x=0.5 video-align-y=0.5 load-scripts=no"
 # One control socket per output, so the shell can pause and resume the live
 # wallpaper instead of only being able to kill it.
 MPV_SOCKET_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 MPV_SOCKET_PREFIX="$MPV_SOCKET_DIR/mpvpaper-"
 
+# mpvpaper's -o option is unusable here: mpvpaper writes it to
+# /tmp/mpvpaper_<pid>.config with an unchecked fopen(). When /tmp is not
+# writable by the user, fopen() returns NULL and mpvpaper segfaults on
+# startup, so the wallpaper never appears and every restart burns a core.
+# The options are passed through a private mpv configuration directory
+# instead, which mpv reads from $XDG_CONFIG_HOME/mpv/mpv.conf.
+MPV_CONF_ROOT="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/mpvpaper-conf"
+
+# Writes the mpv configuration for one mpvpaper instance.
+write_mpv_conf() {
+    local dir="$1"
+    local socket="$2"
+    mkdir -p "$dir/mpv" || return 1
+    {
+        # mpv config syntax: one option per line, no leading dashes.
+        printf '%s\n' "no-audio" "loop=inf" "hwdec=auto" "scale=bilinear"
+        printf '%s\n' "interpolation=no" "video-sync=display-resample"
+        printf '%s\n' "panscan=1.0" "video-scale-x=1.0" "video-scale-y=1.0"
+        printf '%s\n' "video-align-x=0.5" "video-align-y=0.5" "load-scripts=no"
+        printf 'input-ipc-server=%s\n' "$socket"
+    } >"$dir/mpv/mpv.conf" || return 1
+    return 0
+}
+
 is_video() {
     local extension="${1##*.}"
     [[ "$extension" == "mp4" || "$extension" == "webm" || "$extension" == "mkv" || "$extension" == "avi" || "$extension" == "mov" || "$extension" == "gif" || "$extension" == "m4v" || "$extension" == "wmv" || "$extension" == "flv" || "$extension" == "ogv" || "$extension" == "3gp" || "$extension" == "qt" ]] && return 0 || return 1
+}
+
+# Deploys the video wallpaper supervisor.
+#
+# The supervisor owns the mpvpaper process, the proxy encoding and the
+# session re-derivation. It lives next to the restore script in the user's
+# own custom directory, so it is installed from the shell's script directory.
+install_video_wallpaper_supervisor() {
+    local src="$SCRIPT_DIR/../wallpapers/__video_wallpaper.sh"
+    [[ -f "$src" ]] || return 1
+    mkdir -p "$RESTORE_SCRIPT_DIR" || return 1
+    # The supervisor is user-owned once it is deployed, so an existing copy
+    # is only replaced when it is still the one this shell shipped.
+    if [[ -f "$VIDEO_WALLPAPER_SCRIPT" ]] && ! cmp -s "$src" "$VIDEO_WALLPAPER_SCRIPT"; then
+        if ! grep -q "MPVCONF_DIR" "$VIDEO_WALLPAPER_SCRIPT" 2>/dev/null; then
+            # An older supervisor: it passes the mpv options with -o, which
+            # segfaults mpvpaper when /tmp is not writable. It is replaced.
+            install -m 755 "$src" "$VIDEO_WALLPAPER_SCRIPT.tmp" 2>/dev/null &&
+                mv -f "$VIDEO_WALLPAPER_SCRIPT.tmp" "$VIDEO_WALLPAPER_SCRIPT" || return 1
+        fi
+        return 0
+    fi
+    install -m 755 "$src" "$VIDEO_WALLPAPER_SCRIPT.tmp" 2>/dev/null &&
+        mv -f "$VIDEO_WALLPAPER_SCRIPT.tmp" "$VIDEO_WALLPAPER_SCRIPT" || return 1
+    return 0
 }
 
 # The compositor is not always running: the greeter, a systemd unit or a
@@ -234,16 +282,21 @@ kill_existing_mpvpaper() {
 
 start_video_wallpaper() {
     local video="$1"
+    # Make sure the supervisor on disk is the one this shell ships: an older
+    # one passes the mpv options with -o and makes mpvpaper crash.
+    install_video_wallpaper_supervisor || true
     if [[ -x "$VIDEO_WALLPAPER_SCRIPT" ]]; then
         "$VIDEO_WALLPAPER_SCRIPT" "$video" || true
         return
     fi
     # Fallback without the supervisor: one mpvpaper per monitor.
-    local monitors
+    local monitors monitor conf_dir
     monitors=$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | .name')
     rm -f "$MPV_SOCKET_PREFIX"*.sock
     for monitor in $monitors; do
-        mpvpaper $MPVPAPER_FLAGS -o "$VIDEO_OPTS input-ipc-server=$MPV_SOCKET_PREFIX$monitor.sock" "$monitor" "$video" &
+        conf_dir="$MPV_CONF_ROOT/$monitor"
+        write_mpv_conf "$conf_dir" "$MPV_SOCKET_PREFIX$monitor.sock" || continue
+        XDG_CONFIG_HOME="$conf_dir" mpvpaper $MPVPAPER_FLAGS "$monitor" "$video" &
         sleep 0.1
     done
 }
@@ -314,9 +367,31 @@ esac
 pkill -f -9 mpvpaper 2>/dev/null || true
 rm -f "$MPV_SOCKET_PREFIX"*.sock
 
+# mpvpaper's -o option writes to /tmp/mpvpaper_<pid>.config with an unchecked
+# fopen(). When /tmp is not writable by the user, mpvpaper segfaults on
+# startup, so the options are passed through a private mpv configuration
+# directory instead: mpv reads \$XDG_CONFIG_HOME/mpv/mpv.conf.
+MPV_CONF_ROOT="$MPV_CONF_ROOT"
+
+write_mpv_conf() {
+    local dir="\$1"
+    local socket="\$2"
+    mkdir -p "\$dir/mpv" || return 1
+    {
+        printf '%s\n' "no-audio" "loop=inf" "hwdec=auto" "scale=bilinear"
+        printf '%s\n' "interpolation=no" "video-sync=display-resample"
+        printf '%s\n' "panscan=1.0" "video-scale-x=1.0" "video-scale-y=1.0"
+        printf '%s\n' "video-align-x=0.5" "video-align-y=0.5" "load-scripts=no"
+        printf 'input-ipc-server=%s\n' "\$socket"
+    } >"\$dir/mpv/mpv.conf" || return 1
+    return 0
+}
+
 if command -v hyprctl >/dev/null 2>&1; then
     for monitor in \$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | .name'); do
-        mpvpaper $MPVPAPER_FLAGS -o "$VIDEO_OPTS input-ipc-server=$MPV_SOCKET_PREFIX\$monitor.sock" "\$monitor" "\$wallpaper" &
+        conf_dir="\$MPV_CONF_ROOT/\$monitor"
+        write_mpv_conf "\$conf_dir" "$MPV_SOCKET_PREFIX\$monitor.sock" || continue
+        XDG_CONFIG_HOME="\$conf_dir" mpvpaper $MPVPAPER_FLAGS "\$monitor" "\$wallpaper" &
         sleep 0.1
     done
 fi
