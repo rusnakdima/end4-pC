@@ -13,7 +13,8 @@ Item {
 
     required property var fileModelData
     property bool isDirectory: fileModelData ? Boolean(fileModelData.fileIsDir) : false
-    property bool useThumbnail: fileModelData ? Images.isValidImageByName(fileModelData.fileName) : false
+    readonly property bool isVideoSource: fileModelData ? Images.isVideoPath(fileModelData.fileName) : false
+    property bool useThumbnail: fileModelData ? (!root.isDirectory && Images.isValidImageByName(fileModelData.fileName)) : false
     property alias colBackground: background.color
     property alias colText: wallpaperItemName.color
     property alias radius: background.radius
@@ -77,7 +78,7 @@ Item {
                     ThumbnailImage {
                         id: thumbnailImage
                         anchors.fill: parent
-                        generateThumbnail: false
+                        generateThumbnail: root.isVideoSource
                         sourcePath: (fileModelData && fileModelData.filePath) ? fileModelData.filePath : ""
                         cache: false
                         fillMode: Image.PreserveAspectCrop
@@ -92,8 +93,7 @@ Item {
                                 if (FileUtils.parentDirectory(thumbnailImage.sourcePath) !== FileUtils.trimFileProtocol(directory))
                                     return ;
 
-                                thumbnailImage.source = "";
-                                thumbnailImage.source = thumbnailImage.thumbnailPath;
+                                thumbnailImage.reload();
                             }
 
                             function onThumbnailGeneratedFile(filePath) {
@@ -103,8 +103,7 @@ Item {
                                 if (Qt.resolvedUrl(thumbnailImage.sourcePath) !== Qt.resolvedUrl(filePath))
                                     return ;
 
-                                thumbnailImage.source = "";
-                                thumbnailImage.source = thumbnailImage.thumbnailPath;
+                                thumbnailImage.reload();
                             }
 
                             target: Wallpapers

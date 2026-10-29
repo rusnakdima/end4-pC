@@ -81,6 +81,72 @@ ContentPage {
         }
 
         ContentSection {
+            icon: "record_voice_over"
+            shape: MaterialShape.Shape.Oval
+            title: Translation.tr("Speech to Text")
+
+            GroupedList {
+                ConfigSwitch {
+                    buttonIcon: "record_voice_over"
+                    text: Translation.tr("Enable speech to text")
+                    checked: Config.options.stt.enabled
+                    onCheckedChanged: {
+                        Config.options.stt.enabled = checked;
+                    }
+                }
+                ConfigComboBox {
+                    Layout.fillWidth: true
+                    buttonIcon: "model_training"
+                    text: Translation.tr("Model")
+                    fieldWidth: 200
+                    fixedWidth: true
+                    model: SettingsQuickControls.sttModels
+                    currentValue: Config.options.stt.model
+                    onSelected: newValue => {
+                        Config.options.stt.model = newValue;
+                    }
+                }
+                ConfigComboBox {
+                    Layout.fillWidth: true
+                    buttonIcon: "language"
+                    text: Translation.tr("Language")
+                    fieldWidth: 200
+                    fixedWidth: true
+                    searchable: true
+                    model: SettingsQuickControls.sttLanguages
+                    currentValue: Config.options.stt.language
+                    onSelected: newValue => {
+                        Config.options.stt.language = newValue;
+                    }
+                }
+                ConfigComboBox {
+                    Layout.fillWidth: true
+                    buttonIcon: "memory"
+                    text: Translation.tr("Device")
+                    fieldWidth: 200
+                    fixedWidth: true
+                    model: SettingsQuickControls.sttDevices
+                    currentValue: Config.options.stt.device
+                    onSelected: newValue => {
+                        Config.options.stt.device = newValue;
+                    }
+                }
+                ConfigComboBox {
+                    Layout.fillWidth: true
+                    buttonIcon: "speed"
+                    text: Translation.tr("Compute type")
+                    fieldWidth: 200
+                    fixedWidth: true
+                    model: SettingsQuickControls.sttComputeTypes
+                    currentValue: Config.options.stt.computeType
+                    onSelected: newValue => {
+                        Config.options.stt.computeType = newValue;
+                    }
+                }
+            }
+        }
+
+        ContentSection {
             icon: "file_open"
             shape: MaterialShape.Shape.Slanted
             title: Translation.tr("Save paths")

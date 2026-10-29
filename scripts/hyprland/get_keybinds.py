@@ -16,12 +16,13 @@ reading_line = 0
 
 
 class KeyBinding(dict):
-    def __init__(self, mods, key, dispatcher, params, comment):
+    def __init__(self, mods, key, dispatcher, params, comment, action=""):
         self["mods"]       = mods
         self["key"]        = key
         self["dispatcher"] = dispatcher
         self["params"]     = params
         self["comment"]    = comment
+        self["action"]     = action
 
 
 class Section(dict):
@@ -41,7 +42,8 @@ def read_content(path: str) -> str:
 
 def parse_key_string(key_str: str):
     """Parse 'SUPER + SHIFT + Q' into (['SUPER', 'SHIFT'], 'Q')"""
-    known_mods = {"SUPER", "SHIFT", "CTRL", "ALT", "META", "SUPER_L", "SUPER_R"}
+    # SUPER_L/SUPER_R are keys, not modifiers.
+    known_mods = {"SUPER", "SHIFT", "CTRL", "ALT", "META"}
     parts = [p.strip() for p in key_str.split("+")]
     mods, key = [], ""
     for p in parts:
@@ -70,16 +72,27 @@ def parse_lua_bind(line: str, override_comment: str = "") -> Optional[KeyBinding
     Handles:
       hl.bind("SUPER + Q", hl.dsp.window.close(), {description = "Close"})
       hl.bind("SUPER + Q", function() ... end, {description = "..."})
+      bindAction("SUPER + Q", "actionName", hl.dsp.global("quickshell:actionName"), {description = "..."})
     """
     if is_hidden(line):
         return None
 
-    m = re.match(r'\s*hl\.bind\s*\(\s*"([^"]+)"\s*,\s*(.*)', line, re.DOTALL)
+    m = re.match(r'\s*(hl\.bind|bindAction)\s*\(\s*"([^"]+)"\s*,\s*(.*)', line, re.DOTALL)
     if not m:
         return None
 
-    key_str = m.group(1).strip()
-    rest    = m.group(2)
+    key_str = m.group(2).strip()
+    rest    = m.group(3)
+    action  = ""
+
+    # bindAction takes the action name as its second argument, right before
+    # the dispatcher.
+    if m.group(1) == "bindAction":
+        am = re.match(r'\s*"([^"]*)"\s*,\s*(.*)', rest, re.DOTALL)
+        if not am:
+            return None
+        action = am.group(1)
+        rest   = am.group(2)
 
     # Extract description from options table
     desc_match = re.search(r'description\s*=\s*"([^"]+)"', rest)
@@ -109,7 +122,7 @@ def parse_lua_bind(line: str, override_comment: str = "") -> Optional[KeyBinding
         return None  # Skip binds with no useful description
 
     mods, key = parse_key_string(key_str)
-    return KeyBinding(mods, key, dispatcher, params, comment)
+    return KeyBinding(mods, key, dispatcher, params, comment, action)
 
 
 def get_binds_recursive(current_content: Section, scope: int) -> Section:
@@ -149,8 +162,8 @@ def get_binds_recursive(current_content: Section, scope: int) -> Section:
                 if is_hidden(comment_part):
                     reading_line += 1
                     continue
-            # Try to parse as hl.bind if it starts with hl.bind
-            if rest.startswith("hl.bind"):
+            # Try to parse as hl.bind/bindAction if it starts with one
+            if rest.startswith("hl.bind") or rest.startswith("bindAction"):
                 kb = parse_lua_bind(rest, override_comment=comment_part)
                 if kb:
                     current_content["keybinds"].append(kb)
@@ -164,8 +177,8 @@ def get_binds_recursive(current_content: Section, scope: int) -> Section:
             reading_line += 1
             continue
 
-        # ── Normal hl.bind(...) ───────────────────────────────────────
-        if re.match(r'\s*hl\.bind\s*\(', line):
+        # ── Normal hl.bind(...) / bindAction(...) ─────────────────────
+        if re.match(r'\s*(hl\.bind|bindAction)\s*\(', line):
             # Handle multiline binds by collecting until closing paren+bracket
             full_line = line
             depth = full_line.count("(") - full_line.count(")")

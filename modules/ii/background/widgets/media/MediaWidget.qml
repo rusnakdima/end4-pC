@@ -83,7 +83,6 @@ AbstractBackgroundWidget {
     }
 
     property bool downloaded: false
-    property bool showLyrics: false
 
     property string displayedArtFilePath: {
         if (!root.downloaded) return ""
@@ -132,7 +131,7 @@ AbstractBackgroundWidget {
         implicitWidth: root.widgetWidth
         implicitHeight: (root.sizeMode === "2x3" || root.sizeMode === "2x2")
             ? root.doubleCardHeight
-            : (root.cardHeight + (root.sizeMode === "1x3" && root.showLyrics ? 264 : 0))
+            : root.cardHeight
         clip: true
 
         Behavior on implicitHeight {
@@ -646,28 +645,6 @@ AbstractBackgroundWidget {
                                 anchors.centerIn: parent
                                 spacing: 2
                         
-                                RippleButton {
-                                    implicitWidth: root.buttonSize
-                                    implicitHeight: root.buttonSize
-                                    buttonRadius: Appearance.rounding?.full ?? 999
-                                    colBackground: root.showLyrics
-                                        ? Appearance.colors.colPrimary
-                                        : "transparent"
-                                    colBackgroundHover: Appearance.colors.colPrimaryContainerHover
-                                    colRipple: Appearance.colors.colPrimaryContainerActive
-                                    downAction: () => { root.showLyrics = !root.showLyrics }
-
-                                    MaterialSymbol {
-                                        anchors.centerIn: parent
-                                        text: "lyrics"
-                                        iconSize: root.buttonIconSize
-                                        fill: root.showLyrics ? 1 : 0
-                                        color: root.showLyrics
-                                            ? Appearance.colors.colOnPrimary
-                                            : Appearance.colors.colOnPrimaryContainer
-                                    }
-                                }
-
                                 MaterialShapeWrappedMaterialSymbol {
                                     shape: MaterialShape.Shape.Cookie12Sided
                                     color: Appearance.colors.colPrimary
@@ -706,44 +683,6 @@ AbstractBackgroundWidget {
                     }
                 }
 
-                // Divisor
-                Item {
-                    width: parent.width
-                    height: root.showLyrics ? 2 : 0
-                    visible: root.showLyrics
-
-                    Rectangle {
-                        anchors.centerIn: parent
-                        width: parent.width - 48
-                        height: 1
-                        gradient: Gradient {
-                            orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: "transparent" }
-                            GradientStop { position: 0.2; color: Appearance.colors.colOnPrimaryContainer }
-                            GradientStop { position: 0.8; color: Appearance.colors.colOnPrimaryContainer }
-                            GradientStop { position: 1.0; color: "transparent" }
-                        }
-                        opacity: 0.15
-                    }
-                }
-
-                Item {
-                    width: parent.width
-                    height: root.showLyrics ? 250 : 0
-                    visible: root.showLyrics
-
-                    Lyrics {
-                        anchors.fill: parent
-                        anchors.leftMargin: 16
-                        anchors.rightMargin: 16
-                        textAlignment: Text.AlignHCenter
-                        textColor: Appearance.colors.colOnPrimaryContainer
-                        activeColor: Appearance.colors.colPrimary
-                        dimColor: Appearance.colors.colSubtext
-                        indicatorColor: Appearance.colors.colPrimary
-                        indicatorShapeColor: Appearance.colors.colOnPrimary
-                    }
-                }
             }
         }
 
@@ -758,12 +697,12 @@ AbstractBackgroundWidget {
                 Rectangle {
                     id: labelArea
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 82
+                    Layout.fillHeight: true
                     color: Appearance.colors.colSurfaceContainerLow
                     topLeftRadius: card.radius
                     topRightRadius: card.radius
-                    bottomLeftRadius: 0
-                    bottomRightRadius: 0
+                    bottomLeftRadius: card.radius
+                    bottomRightRadius: card.radius
 
                     RowLayout {
                         anchors {
@@ -863,28 +802,6 @@ AbstractBackgroundWidget {
                                 }
                             }
                         }
-                    }
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    color: ColorUtils.transparentize(Appearance.colors.colOnPrimaryContainer, 0.88)
-                    topLeftRadius: 0
-                    topRightRadius: 0
-                    bottomLeftRadius: card.radius
-                    bottomRightRadius: card.radius
-                    clip: true
-
-                    Lyrics {
-                        anchors.fill: parent
-                        anchors.margins: 10
-                        textAlignment: Text.AlignHCenter
-                        textColor: Appearance.colors.colOnPrimaryContainer
-                        activeColor: Appearance.colors.colPrimary
-                        dimColor: Appearance.colors.colSubtext
-                        indicatorColor: Appearance.colors.colPrimary
-                        indicatorShapeColor: Appearance.colors.colOnPrimary
                     }
                 }
             }

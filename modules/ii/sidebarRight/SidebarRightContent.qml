@@ -258,7 +258,7 @@ Item {
                                 fillMode: Image.PreserveAspectCrop
                                 source: Config.options.sidebar.bannerImage !== "" 
                                     ? Config.options.sidebar.bannerImage 
-                                    : Config.options.background.wallpaperPath
+                                    : Wallpapers.displayPathFor(Config.options.background.wallpaperPath)
                                 cache: false
                                 antialiasing: true
                                 sourceSize.width: wallpaperRect.width * 2
@@ -491,7 +491,6 @@ Item {
                     anchors.fill: parent
                     anchors.margins: -Appearance.sizes.elevationMargin
                     player: root.activePlayer
-                    allowLyrics: false
                     visualizerPoints: GlobalStates.visualizerPoints
                     radius: Appearance.rounding.normal
                 }

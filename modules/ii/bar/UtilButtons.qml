@@ -78,7 +78,7 @@ Item {
         }
 
         Loader {
-            active: Config.options.bar.utilButtons.showScreenRecord
+            active: Config.options.bar.utilButtons.showScreenRecord || (Persistent.states.record?.enable ?? false)
             visible: active
             sourceComponent: isMaterial ? screenRecordM3 : legacyScreenRecord
         }
@@ -134,7 +134,7 @@ Item {
                     anchors.left: btn.right
                     anchors.leftMargin: 8
                     anchors.verticalCenter: btn.verticalCenter
-                    reveal: recordingItem.isRecording && !root.vertical && !GlobalStates.dynamicIslandEnabled
+                    reveal: recordingItem.isRecording && !root.vertical
 
                     StyledText {
                         width: implicitWidth
@@ -156,6 +156,45 @@ Item {
                 iconText: Persistent.states.record.enable ? "stop_circle" : "screen_record"
                 forceHovered: Persistent.states.record.enable
                 onClicked: Quickshell.execDetached([Directories.recordScriptPath])
+            }
+        }
+
+        Loader {
+            active: Config.options.bar.utilButtons.showSttToggle ?? false
+            visible: active
+            sourceComponent: isMaterial ? sttM3 : legacyStt
+        }
+        Component {
+            id: sttM3
+            UtilButton {
+                iconText: SpeechToText.enabled ? (SpeechToText.recording ? "stop_circle" : "mic") : "mic_off"
+                forceHovered: SpeechToText.recording
+                onClicked: {
+                    if (!SpeechToText.enabled) {
+                        Config.options.stt.enabled = true;
+                    } else {
+                        SpeechToText.toggleRecording();
+                    }
+                }
+            }
+        }
+        Component {
+            id: legacyStt
+            CircleUtilButton {
+                onClicked: {
+                    if (!SpeechToText.enabled) {
+                        Config.options.stt.enabled = true;
+                    } else {
+                        SpeechToText.toggleRecording();
+                    }
+                }
+                MaterialSymbol {
+                    horizontalAlignment: Qt.AlignHCenter
+                    fill: SpeechToText.recording ? 1 : 0
+                    text: SpeechToText.enabled ? (SpeechToText.recording ? "stop_circle" : "mic") : "mic_off"
+                    iconSize: Appearance.font.pixelSize.large
+                    color: SpeechToText.recording ? Appearance.colors.colPrimary : root.contentColor
+                }
             }
         }
 

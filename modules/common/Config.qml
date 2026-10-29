@@ -13,34 +13,44 @@ Singleton {
     property int readWriteDelay: 50 // milliseconds
     property bool blockWrites: false
 
+    // Sets a nested config value by dotted path.
+    // Returns false when the path does not exist or an intermediate segment is not an
+    // object, so a typo can never inject a plain {} into a typed JsonObject property.
     function setNestedValue(nestedKey, value) {
-        let keys = nestedKey.split(".");
-        let obj = root.options;
-        let parents = [obj];
-
-        // Traverse and collect parent objects
-        for (let i = 0; i < keys.length - 1; ++i) {
-            if (!obj[keys[i]] || typeof obj[keys[i]] !== "object") {
-                obj[keys[i]] = {};
-            }
-            obj = obj[keys[i]];
-            parents.push(obj);
+        if (typeof nestedKey !== "string" || nestedKey.length === 0) {
+            return false;
         }
 
-        // Convert value to correct type using JSON.parse when safe
+        let keys = nestedKey.split(".");
+        let obj = root.options;
+
+        // Traverse to the parent of the target key
+        for (let i = 0; i < keys.length - 1; ++i) {
+            if (!obj[keys[i]] || typeof obj[keys[i]] !== "object") {
+                return false;
+            }
+            obj = obj[keys[i]];
+        }
+
+        const lastKey = keys[keys.length - 1];
+        if (lastKey === "" || !(lastKey in obj)) {
+            return false;
+        }
+
+        // Only coerce boolean strings; numeric/text strings must stay as-is
+        // to avoid corrupting text fields that happen to contain digits.
         let convertedValue = value;
         if (typeof value === "string") {
             let trimmed = value.trim();
-            if (trimmed === "true" || trimmed === "false" || !isNaN(Number(trimmed))) {
-                try {
-                    convertedValue = JSON.parse(trimmed);
-                } catch (e) {
-                    convertedValue = value;
-                }
+            if (trimmed === "true" || trimmed === "false") {
+                convertedValue = trimmed === "true";
+            } else if (trimmed === "null") {
+                convertedValue = null;
             }
         }
 
-        obj[keys[keys.length - 1]] = convertedValue;
+        obj[lastKey] = convertedValue;
+        return true;
     }
 
     Timer {
@@ -88,6 +98,7 @@ Singleton {
             property JsonObject ai: JsonObject {
                 property string systemPrompt: "## Style\n- Use casual tone, don't be formal!\n- Always be brief and to the point, unless asked otherwise\n- Don't repeat the user's question\n- Be approachable: Avoid using overly complicated, domain-specific terms and provide analogies when asked to explain a concept\n\n## Context (ignore when irrelevant)\n- You are a helpful and inspiring sidebar assistant on a {DISTRO} Linux system\n- Desktop environment: {DE}\n- Current date & time: {DATETIME}\n- Focused app: {WINDOWCLASS}\n\n## Presentation\n- Use Markdown features in your response: \n  - **Bold** text to **highlight keywords** in your response\n  - **Split long information into small sections** with h2 headers and a relevant emoji at the start of it (for example `## 🐧 Linux`). Bullet points are preferred over long paragraphs, unless you're offering writing support or instructed otherwise by the user.\n- Asked to compare different options? You should firstly use a table to compare the main aspects, then elaborate or include relevant comments from online forums *after* the table. Make sure to provide a final recommendation for the user's use case!\n- Use LaTeX formatting for mathematical and scientific notations whenever appropriate. Enclose all LaTeX '$$' delimiters. NEVER generate LaTeX code in a latex block unless the user explicitly asks for it. DO NOT use LaTeX for regular documents (resumes, letters, essays, CVs, etc.).\n\nThanks!\n"
                 property string tool: "functions" // search, functions, or none
+                property int ollamaNumCtx: 32768
                 property string vllmEndpoint: "http://localhost:8000"
                 property list<var> extraModels: [
                     {
@@ -103,6 +114,14 @@ Singleton {
                         "requires_key": true
                     }
                 ]
+            }
+
+            property JsonObject stt: JsonObject {
+                property bool enabled: false
+                property string model: "base" // tiny, base, small, medium, large-v3
+                property string language: "auto" // auto or an ISO 639-1 code
+                property string device: "cpu" // cpu, cuda
+                property string computeType: "int8" // int8, float16
             }
 
             property JsonObject appearance: JsonObject {
@@ -136,12 +155,14 @@ Singleton {
                     }
                 }
                 property JsonObject palette: JsonObject {
-                    property string type: "auto" // Allowed: auto, scheme-content, scheme-expressive, scheme-fidelity, scheme-fruit-salad, scheme-monochrome, scheme-neutral, scheme-rainbow, scheme-tonal-spot
+                    property string type: "auto" // Allowed: auto, scheme-content, scheme-expressive, scheme-fidelity, scheme-fruit-salad, scheme-monochrome, scheme-neutral, scheme-rainbow, scheme-rose-water
                     property string accentColor: ""
                     property string namedScheme: "" // "" = from wallpaper. Allowed: any file name in scripts/colors/schemes (gruvbox)
                     property string namedSchemePrimary: ""
                     property string namedSchemeSecondary: ""
                 }
+                // Material You components that must not be recoloured by matugen.
+                property list<string> matugenDisabled: []
             }
 
             property JsonObject audio: JsonObject {
@@ -182,10 +203,6 @@ Singleton {
                         property int size: 1
                         property int passes: 3
                     }
-                    property JsonObject shadow: JsonObject {
-                        property bool enabled: true
-                        property int range: 4
-                    }
                 }
                 property JsonObject general: JsonObject {
                     property int borderSize: 1
@@ -224,15 +241,20 @@ Singleton {
                 property JsonObject misc: JsonObject {
                     property bool focusOnActivate: false
                 }
+                // Mirror of the live compositor options managed by services/HyprlandOptions.qml.
+                // Each entry is { "key": "<hyprland option key>", "value": <scalar> }.
+                property list<var> hyprOptions: []
             }
 
             property JsonObject apps: JsonObject {
-                property string bluetooth: "kcmshell6 kcm_bluetooth"
+                // The Plasma KCMs are not installed on this machine, so every
+                // launcher points at an application that actually exists.
+                property string bluetooth: "blueman-manager"
                 property string changePassword: "kitty -1 --hold=yes fish -i -c 'passwd'"
-                property string network: "kcmshell6 kcm_networkmanagement"
-                property string manageUser: "kcmshell6 kcm_users"
-                property string networkEthernet: "kcmshell6 kcm_networkmanagement"
-                property string taskManager: "plasma-systemmonitor --page-name Processes"
+                property string network: "nm-connection-editor"
+                property string manageUser: "kitty -1 --hold=yes fish -i -c 'passwd'"
+                property string networkEthernet: "nm-connection-editor"
+                property string taskManager: "missioncenter"
                 property string terminal: "kitty -1" // This is only for shell actions
                 property string update: "kitty -1 --hold=yes fish -i -c 'pkexec pacman -Syu'"
                 property string volumeMixer: `~/.config/hypr/hyprland/scripts/launch_first_available.sh "pavucontrol-qt" "pavucontrol"`
@@ -289,7 +311,6 @@ Singleton {
                             property string dateStyle: "bubble"       // Options: "border", "rect", "bubble" , "hide"
                             property bool timeIndicators: true
                             property bool hourMarks: false
-                            property bool dateInClock: true
                             property bool constantlyRotate: false
                             property bool useSineCookie: false
                         }
@@ -322,7 +343,6 @@ Singleton {
                         property real y: 100
                         property real z: 0
                         property string sizeMode: "1x3"
-                        property bool expanded: false
                     }
 
                     property JsonObject calendar: JsonObject {
@@ -414,7 +434,6 @@ Singleton {
 
                     property JsonObject sticker: JsonObject {
                         property bool enable: false
-                        property list<var> items: [] // if someone sees this and wants to add more stickers, make a PR too lazy 
                         property string placementStrategy: "free"
                         property real x: 400
                         property real y: 100
@@ -446,10 +465,6 @@ Singleton {
 
                     property JsonObject media: JsonObject {
                         property bool enable: false
-                        property bool showControls: true
-                        property bool showLyrics: false
-                        property bool showTitles: true
-                        property string backgroundShape: "Cookie4Sided"
                         property string placementStrategy: "free" // "free", "leastBusy", "mostBusy"
                         property real x: 800
                         property real y: 500
@@ -478,19 +493,12 @@ Singleton {
                 property int centeredWallpaperSize: 400
                 property string centeredWallpaperColor: "primaryContainer"
                 property bool centeredWallpaperOnlyWhenLocked: false
+                property bool centeredWallpaperShapeCycle: true
                 property string centeredWallpaperImage: ""
                 property string wallpaperAnimation: "magic"
                 property bool enableWallpaperPreview: false
                 property string thumbnailPath: ""
                 property bool hideWhenFullscreen: true
-                property JsonObject parallax: JsonObject {
-                    property bool vertical: false
-                    property bool autoVertical: false
-                    property bool enableWorkspace: true
-                    property real workspaceZoom: 1.0 // Relative to wallpaper size
-                    property bool enableSidebar: true
-                    property real widgetsFactor: 1.2
-                }
             }
 
             property JsonObject bar: JsonObject {
@@ -511,10 +519,8 @@ Singleton {
                 property bool bottom: false // Instead of top
                 property int cornerStyle: 0 // 0: Hug | 1: Float | 2: Plain rectangle | 3: M3 | 4: M3 Hug | 5: Panel | 6: Split Hug
                 property string groupColor: "layer1"
-                property bool floatStyleShadow: true // Show shadow behind bar when cornerStyle == 1 (Float)
                 property string borderless: "pills"
                 property list<var> widgetStyles: []
-                property string topLeftIcon: "spark" // Options: "distro" or any icon name in ~/.config/quickshell/ii/assets/icons
                 property bool showBackground: true
                 property bool verbose: true
                 property bool vertical: false
@@ -535,12 +541,16 @@ Singleton {
                     property int tokenLimit: 1000000
                     property int updateInterval: 60
                 }
-
+                // Legacy schema kept only so existing user config files still load; carries no behaviour.
                 property JsonObject dynamicIsland: JsonObject {
                     property string visualizerStyle: "dots" // "dots", "wave", "none"
                     property bool showMediaControls: false
                     property string leftWidget: "none"
                     property string rightWidget: "none"
+                    property string idleContent: "auto" // "auto", "clock", "weather"
+                    property bool suppressNotificationPopup: true
+                    property bool expandedIsland: true
+                    property list<string> expandedProviders: ["recording", "media", "audio", "song", "stt", "clipboard", "battery", "timer"]
                 }
                 property JsonObject divider: JsonObject {
                     property string style: "rect" // rect - dot - space
@@ -562,8 +572,8 @@ Singleton {
                     property bool showWallpaperToggle: true
                     property bool showDarkModeToggle: false
                     property bool showPerformanceProfileToggle: false
-                    property bool showScreenRecord: false       
-                    property bool isRecording: false
+                    property bool showScreenRecord: false
+                    property bool showSttToggle: false
                 }
 
                 property JsonObject workspaces: JsonObject {
@@ -573,12 +583,10 @@ Singleton {
                     property string indicatorStyle: "dot" // "dot" or "icon"
                     property string style: "default" // "default", "gnome", "dots", "ticks"
                     property bool alwaysShowNumbers: true
-                    property int showNumberDelay: 300 // milliseconds
                     property list<string> numberMap: ["1", "2"] // Characters to show instead of numbers on workspace indicator
                     property bool useNerdFont: false
                 }
                 property JsonObject weather: JsonObject {
-                    property bool enable: false
                     property bool enableGPS: true // gps based location
                     property string city: "" // When 'enableGPS' is false
                     property bool useUSCS: false // Instead of metric (SI) units
@@ -600,7 +608,6 @@ Singleton {
                     property bool onlyTitle: false
                     property int maxWidth: 280
                     property int minWidth: 100
-                    property bool showLyrics: false
                 }
             }
 
@@ -617,6 +624,18 @@ Singleton {
 
             property JsonObject calendar: JsonObject {
                 property string locale: "en-GB"
+            }
+
+            property JsonObject cheatsheet: JsonObject {
+                property string superKey: ""
+                property bool useMacSymbol: false
+                property bool splitButtons: false
+                property bool useMouseSymbol: false
+                property bool useFnSymbol: false
+                property JsonObject fontSize: JsonObject {
+                    property int key: 0 // 0 = auto
+                    property int comment: 0 // 0 = auto
+                }
             }
 
             property JsonObject conflictKiller: JsonObject {
@@ -857,7 +876,6 @@ Singleton {
                     property bool enable: true
                     property bool artColors: false
                     property string artShape: "Oval"
-                    property bool showLyrics: true
                     property bool shapeArt: false
                     property bool blurredBackground: false
                 }
@@ -866,8 +884,6 @@ Singleton {
                     property bool textFadeIn: false
                 }
                 property JsonObject booru: JsonObject {
-                    property bool allowNsfw: false
-                    property string defaultProvider: "yandere"
                     property int limit: 20
                     property JsonObject zerochan: JsonObject {
                         property string username: "[unset]"
@@ -936,6 +952,7 @@ Singleton {
             property JsonObject time: JsonObject {
                 // https://doc.qt.io/qt-6/qtime.html#toString
                 property string format: "hh:mm"
+                property int firstDayOfWeek: 0 // 0 = Monday, 6 = Sunday
                 property bool showDate: true
                 property string shortDateFormat: "dd/MM"
                 property string dateWithYearFormat: "dd/MM/yyyy"
@@ -995,7 +1012,26 @@ Singleton {
                 property JsonObject triggerCondition: JsonObject {
                     property list<string> networkNameKeywords: ["airport", "cafe", "college", "company", "eduroam", "free", "guest", "public", "school", "university"]
                     property list<string> fileKeywords: ["anime", "booru", "ecchi", "hentai", "yande.re", "konachan", "breast", "nipples", "pussy", "nsfw", "spoiler", "girl"]
-                    property list<string> linkKeywords: ["hentai", "porn", "sukebei", "hitomi.la", "rule34", "gelbooru", "fanbox", "dlsite"]
+                    property list<string> linkKeywords: ["hentai", "sukebei", "hitomi.la", "rule34", "fanbox", "dlsite"]
+                }
+            }
+
+            // Settings of the "waffle" panel family (Windows 11 style).
+            property JsonObject waffles: JsonObject {
+                property JsonObject tweaks: JsonObject {
+                    property bool switchHandlePositionFix: true
+                    property bool smootherMenuAnimations: true
+                    property bool smootherSearchBar: true
+                }
+                property JsonObject bar: JsonObject {
+                    property bool bottom: true
+                    property bool leftAlignApps: false
+                }
+                property JsonObject actionCenter: JsonObject {
+                    property list<string> toggles: ["network", "bluetooth", "easyEffects", "powerProfile", "idleInhibitor", "nightLight", "darkMode", "antiFlashbang", "cloudflareWarp", "mic", "musicRecognition", "notifications", "onScreenKeyboard", "gameMode", "screenSnip", "colorPicker"]
+                }
+                property JsonObject calendar: JsonObject {
+                    property bool force2CharDayOfWeek: true
                 }
             }
         }

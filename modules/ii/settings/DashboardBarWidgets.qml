@@ -25,7 +25,6 @@ QtObject {
         { id: "hyprlandXkbIndicator", name: Translation.tr("Keyboard Layout"), icon: "keyboard" },
         { id: "divisor", name: Translation.tr("Divider"), icon: "horizontal_distribute" },
         { id: "launcherButton", name: Translation.tr("Launcher Button"), icon: "search" },
-        { id: "dynamicIsland", name: Translation.tr("Dynamic Island"), icon: "nest_wifi_pro" },
         { id: "aiUsage", name: Translation.tr("AI Usage"), icon: "neurology" },
         { id: "avatar", name: Translation.tr("Avatar"), icon: "account_circle" }
     ]

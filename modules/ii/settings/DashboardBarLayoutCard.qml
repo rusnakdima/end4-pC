@@ -126,13 +126,10 @@ DashboardCard {
 
     function canExist(id) {
         if (id === "divisor" && barConfig.borderless !== "transparent") return false;
-        if (id === "dynamicIsland" && barConfig.vertical) return false;
         return !usedIds.includes(id) || widgets.multipleAllowed.includes(id);
     }
 
     function canPlace(id, laneId) {
-        if (id === "dynamicIsland" && laneId !== "middle") return false;
-        if (laneId === "middle" && middleList.includes("dynamicIsland") && id !== "dynamicIsland") return false;
         return true;
     }
 

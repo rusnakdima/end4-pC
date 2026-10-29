@@ -111,13 +111,14 @@ QtObject {
         "interface:Dock/Border width": { type: "spin", get: () => Config.options.dock.borderWidth, set: v => { Config.options.dock.borderWidth = v; }, from: 1, to: 10, stepSize: 1 },
         "interface:Dock/Border color": { type: "select", get: () => Config.options.dock.borderColor, set: v => { Config.options.dock.borderColor = v; }, get options() { return ["layer0Border", "primary", "secondary", "tertiary", "primaryContainer", "secondaryContainer", "tertiaryContainer", "layer1", "black"].map(name => ({ value: name, color: roleColor(name) })); } },
         "interface:UI background": { type: "select", get: () => Config.options.appearance.uiBackground, set: v => { Config.options.appearance.uiBackground = v; }, options: [{ displayName: Translation.tr("Themed"), icon: "palette", value: "themed" }, { displayName: "OLED", icon: "contrast", value: "oled" }] },
-        "interface:Palette type": { type: "select", get: () => Config.options.appearance.palette.type, set: v => { Config.options.appearance.palette.type = v; Quickshell.execDetached(["bash", "-c", `${Directories.wallpaperSwitchScriptPath} --noswitch`]); }, options: [{ displayName: Translation.tr("Auto"), icon: "auto_awesome", value: "auto" }, { displayName: Translation.tr("Content"), icon: "image", value: "scheme-content" }, { displayName: Translation.tr("Expressive"), icon: "palette", value: "scheme-expressive" }, { displayName: Translation.tr("Fidelity"), icon: "equal", value: "scheme-fidelity" }, { displayName: Translation.tr("Fruit Salad"), icon: "nutrition", value: "scheme-fruit-salad" }, { displayName: Translation.tr("Monochrome"), icon: "invert_colors", value: "scheme-monochrome" }, { displayName: Translation.tr("Neutral"), icon: "tonality", value: "scheme-neutral" }, { displayName: Translation.tr("Rainbow"), icon: "gradient", value: "scheme-rainbow" }, { displayName: Translation.tr("Tonal Spot"), icon: "lens", value: "scheme-tonal-spot" }] },
+        "interface:Palette type": { type: "select", get: () => Config.options.appearance.palette.type, set: v => { Config.options.appearance.palette.type = v; ColorSchemes.regenerateTheme(); }, options: [{ displayName: Translation.tr("Auto"), icon: "auto_awesome", value: "auto" }, { displayName: Translation.tr("Content"), icon: "image", value: "scheme-content" }, { displayName: Translation.tr("Expressive"), icon: "palette", value: "scheme-expressive" }, { displayName: Translation.tr("Fidelity"), icon: "equal", value: "scheme-fidelity" }, { displayName: Translation.tr("Fruit Salad"), icon: "nutrition", value: "scheme-fruit-salad" }, { displayName: Translation.tr("Monochrome"), icon: "invert_colors", value: "scheme-monochrome" }, { displayName: Translation.tr("Neutral"), icon: "tonality", value: "scheme-neutral" }, { displayName: Translation.tr("Rainbow"), icon: "gradient", value: "scheme-rainbow" }, { displayName: Translation.tr("Tonal Spot"), icon: "lens", value: "scheme-tonal-spot" }] },
         "desktop:Same wallpaper": { type: "switch", get: () => Config.options.background.lockWall === "", set: v => { if (v) Config.options.background.lockWall = ""; } },
         "desktop:Transitions": { type: "select", get: () => Config.options.background.wallpaperAnimation, set: v => { Config.options.background.wallpaperAnimation = v; }, options: [{ displayName: Translation.tr("None"), icon: "block", value: "" }, { displayName: Translation.tr("Circle"), icon: "circle", value: "circleSelect" }, { displayName: Translation.tr("Circle Pit"), icon: "blur_circular", value: "circlePit" }, { displayName: Translation.tr("Magic"), icon: "auto_awesome", value: "magic" }, { displayName: Translation.tr("Doom"), icon: "whatshot", value: "Doom" }, { displayName: Translation.tr("Peel"), icon: "layers", value: "Peel" }, { displayName: Translation.tr("Fade"), icon: "gradient", value: "transition" }, { displayName: Translation.tr("Pixelate"), icon: "grain", value: "pixelate" }, { displayName: Translation.tr("Stripes"), icon: "texture_minus", value: "stripes" }, { displayName: Translation.tr("CRT"), icon: "tv", value: "crt" }, { displayName: Translation.tr("Dissolve"), icon: "blur_on", value: "dissolve" }, { displayName: Translation.tr("Glitch"), icon: "bug_report", value: "glitch" }, { displayName: Translation.tr("Ripple"), icon: "water", value: "ripple" }, { displayName: Translation.tr("Shatter"), icon: "broken_image", value: "shatter" }, { displayName: Translation.tr("Random"), icon: "shuffle", value: "random" }] },
         "desktop:Centered shape": { type: "select", get: () => Config.options.background.centeredWallpaperShape, set: v => { Config.options.background.centeredWallpaperShape = v; }, options: ["Circle", "Square", "Slanted", "Arch", "Arrow", "SemiCircle", "Oval", "Pill", "Triangle", "Diamond", "ClamShell", "Pentagon", "Gem", "Sunny", "VerySunny", "Cookie4Sided", "Cookie6Sided", "Cookie7Sided", "Cookie9Sided", "Cookie12Sided", "Ghostish", "Clover4Leaf", "Clover8Leaf", "Burst", "SoftBurst", "Flower", "Puffy", "PuffyDiamond", "PixelCircle", "Bun", "Heart"] },
         "desktop:Image shape": { type: "select", get: () => Config.options.background.widgets.customImage.shape, set: v => { Config.options.background.widgets.customImage.shape = v; }, options: ["Circle", "Square", "Slanted", "Arch", "Arrow", "SemiCircle", "Oval", "Pill", "Triangle", "Diamond", "ClamShell", "Pentagon", "Gem", "Sunny", "VerySunny", "Cookie4Sided", "Cookie6Sided", "Cookie7Sided", "Cookie9Sided", "Cookie12Sided", "Ghostish", "Clover4Leaf", "Clover8Leaf", "Burst", "SoftBurst", "Flower", "Puffy", "PuffyDiamond", "PixelCircle", "Bun", "Heart"] },
         "desktop:Image card layout": { type: "select", get: () => Config.options.background.widgets.imageCard.sizeMode, set: v => { Config.options.background.widgets.imageCard.sizeMode = v; }, options: [ { displayName: "1x1", icon: "crop_square", value: "1x1" }, { displayName: "1x2", icon: "crop_landscape", value: "1x2" }, { displayName: "1x3", icon: "crop_16_9", value: "1x3" }, { displayName: "2x2", icon: "grid_view", value: "2x2" }, { displayName: "2x3", icon: "view_module", value: "2x3" }] },
         "desktop:Centered color": { type: "select", get: () => Config.options.background.centeredWallpaperColor, set: v => { Config.options.background.centeredWallpaperColor = v; }, get options() { return ["primary", "secondary", "tertiary", "primaryContainer", "secondaryContainer", "tertiaryContainer", "layer1", "layer0"].map(name => ({ value: name, color: Appearance.getColorFromName(name) })); } },
+        "desktop:Centered shape cycle": { type: "switch", get: () => Config.options.background.centeredWallpaperShapeCycle, set: v => { Config.options.background.centeredWallpaperShapeCycle = v; } },
         "desktop:Collage enable": { type: "switch", get: () => Config.options.background.collage.enable, set: v => { if (v && !Config.options.background.collage.enable) Collage.reset(); Config.options.background.collage.enable = v; } },
         "desktop:Collage gap": { type: "spin", get: () => Config.options.background.collage.gap, set: v => { Config.options.background.collage.gap = v; }, from: 0, to: 80, stepSize: 2 },
         "desktop:Collage margin": { type: "spin", get: () => Config.options.background.collage.margin, set: v => { Config.options.background.collage.margin = v; }, from: 0, to: 120, stepSize: 2 },
@@ -197,14 +198,6 @@ QtObject {
             ]
         },
         {
-            page: Translation.tr("Bar"), title: Translation.tr("Dynamic Island"), icon: "nest_wifi_pro", requires: "dynamicIsland", cards: [
-                { type: "select", key: "bar:Left widget", title: Translation.tr("Left widget"), icon: "right_panel_open" },
-                { type: "select", key: "bar:Right widget", title: Translation.tr("Right widget"), icon: "left_panel_open" },
-                { type: "select", key: "bar:Visualizer style", title: Translation.tr("Visualizer style"), icon: "graphic_eq" },
-                { type: "toggle", key: "bar:Show media controls", title: Translation.tr("Media controls"), icon: "play_circle" }
-            ]
-        },
-        {
             page: Translation.tr("Bar"), title: Translation.tr("Notifications"), icon: "notifications", cards: [
                 { type: "toggle", key: "bar:Unread indicator: show count", title: Translation.tr("Unread count"), icon: "counter_1" },
                 { type: "spin", key: "bar:Timeout duration (if not defined by notification) (ms)", title: Translation.tr("Popup timeout (ms)"), icon: "timer" },
@@ -240,6 +233,7 @@ QtObject {
                 { type: "toggle", key: "bar:Dark/Light toggle", title: Translation.tr("Dark/Light toggle"), icon: "dark_mode" },
                 { type: "toggle", key: "bar:Performance Profile", title: Translation.tr("Performance profile"), icon: "speed" },
                 { type: "toggle", key: "bar:Record Screen", title: Translation.tr("Record screen"), icon: "screen_record" },
+                { type: "toggle", key: "bar:Speech to Text", title: Translation.tr("Speech to text"), icon: "mic" },
                 { type: "toggle", key: "bar:Wallpapers Toggle", title: Translation.tr("Wallpapers toggle"), icon: "wallpaper" }
             ]
         },
@@ -413,7 +407,8 @@ QtObject {
                 { type: "toggle", key: "desktop:Wallpaper/Centered wallpaper/Show only when locked", title: Translation.tr("Only when locked"), icon: "lock" },
                 { type: "slider", key: "desktop:Wallpaper/Centered wallpaper/Size", title: Translation.tr("Size"), icon: "aspect_ratio", percent: false },
                 { type: "swatch", key: "desktop:Centered color", title: Translation.tr("Background color"), icon: "palette", w: 2 },
-                { type: "shape", key: "desktop:Centered shape", title: Translation.tr("Shape"), icon: "shapes" }
+                { type: "shape", key: "desktop:Centered shape", title: Translation.tr("Shape"), icon: "shapes" },
+                { type: "toggle", key: "desktop:Centered shape cycle", title: Translation.tr("Cycle shape with scroll"), icon: "cycle" }
             ]
         },
         {
@@ -701,6 +696,15 @@ QtObject {
             page: Translation.tr("Services"), title: Translation.tr("Music Recognition"), icon: "music_cast", cards: [
                 { type: "spin", key: "services:Total duration timeout (s)", title: Translation.tr("Timeout (s)"), icon: "timer_off" },
                 { type: "spin", key: "services:Polling interval (s)", title: Translation.tr("Polling interval (s)"), icon: "av_timer" }
+            ]
+        },
+        {
+            page: Translation.tr("Services"), title: Translation.tr("Speech to Text"), icon: "record_voice_over", cards: [
+                { type: "toggle", key: "services:Speech to Text/Enable speech to text", title: Translation.tr("Enable speech to text"), icon: "record_voice_over" },
+                { type: "combo", key: "services:Speech to Text/Model", title: Translation.tr("Model"), icon: "model_training" },
+                { type: "combo", key: "services:Speech to Text/Language", title: Translation.tr("Language"), icon: "language" },
+                { type: "combo", key: "services:Speech to Text/Device", title: Translation.tr("Device"), icon: "memory" },
+                { type: "combo", key: "services:Speech to Text/Compute type", title: Translation.tr("Compute type"), icon: "speed" }
             ]
         },
         {

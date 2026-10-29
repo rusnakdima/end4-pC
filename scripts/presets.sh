@@ -35,10 +35,80 @@ BLACKLIST_FILTER='del(._presetMeta)
   | walk(if type == "object" then with_entries(select(.key | test("^(.*api[-_]?key|secret|password|token|username|e-?mail)$"; "i") | not)) else . end)'
 
 SHARE_FILTER='with_entries(select(.key as $k | ["appearance","background","bar","calendar","crosshair","dock","interactions","launcher","light","lock","media","notifications","osd","osk","overlay","overview","panelFamily","profile","regionSelector","resources","settings","sidebar","tray","wallpaperSelector","windows","hyprland"] | index($k)))
-  | if (.hyprland | type) == "object" then .hyprland |= with_entries(select(.key as $k | ["decoration","gaps","animations","general"] | index($k))) else . end'
+  | if (.hyprland | type) == "object" then .hyprland |= with_entries(select(.key as $k | ["decoration","gaps","animations","general","hyprOptions"] | index($k))) else . end'
 
 action="$1"
 shift
+
+# Push the Hyprland options carried by a preset to the running compositor and
+# to the persistent overrides file.
+#
+# Two stores are handled:
+#   * hyprland.hyprOptions - the mirror of the live compositor options
+#   * hyprland.*           - the classic shell options (rounding, blur, gaps, ...)
+#
+# Booleans must be sent as 1/0: hyprconfigurator.py treats every string other
+# than "0" as "true" for the keys in its BOOL_KEYS set.
+push_hyprland_options() {
+    [ -f "$CONFIG_FILE" ] || return 0
+    command -v hyprctl >/dev/null 2>&1 || return 0
+    [ -f "$SCRIPT_DIR/hyprland/hyprconfigurator.py" ] || return 0
+
+    local pairs
+    pairs=$(jq -r '
+      def asval: if type == "boolean" then (if . then 1 else 0 end) else tostring end;
+      (
+        (.hyprland.hyprOptions // [])[]
+        | select(.key != null and .value != null)
+        | [ .key, (.value | asval) ]
+      ),
+      (
+        .hyprland as $h
+        | [
+            [ "decoration:rounding",                 $h.decoration.rounding ],
+            [ "decoration:blur:enabled",             $h.decoration.blur.enabled ],
+            [ "decoration:blur:size",                $h.decoration.blur.size ],
+            [ "decoration:blur:passes",              $h.decoration.blur.passes ],
+            [ "decoration:active_opacity",           $h.decoration.activeOpacity ],
+            [ "decoration:inactive_opacity",         $h.decoration.inactiveOpacity ],
+            [ "general:border_size",                 $h.general.borderSize ],
+            [ "general:gaps_in",                     $h.general.gapsIn ],
+            [ "general:gaps_out",                    $h.general.gapsOut ],
+            [ "general:layout",                      $h.general.layout ],
+            [ "animations:enabled",                  $h.animations.enable ],
+            [ "input:kb_layout",                     $h.input.kbLayout ],
+            [ "input:numlock_by_default",            $h.input.numlock ],
+            [ "input:repeat_delay",                  $h.input.repeatDelay ],
+            [ "input:repeat_rate",                   $h.input.repeatRate ],
+            [ "input:follow_mouse",                  $h.input.followMouse ],
+            [ "input:touchpad:natural_scroll",       $h.input.touchpad.naturalScroll ],
+            [ "input:touchpad:disable_while_typing", $h.input.touchpad.disableWhileTyping ],
+            [ "input:touchpad:clickfinger_behavior", $h.input.touchpad.clickfingerBehavior ],
+            [ "input:touchpad:scroll_factor",        $h.input.touchpad.scrollFactor ],
+            [ "misc:focus_on_activate",              $h.misc.focusOnActivate ]
+          ][]
+        | select(.[1] != null)
+        | [ .[0], (.[1] | asval) ]
+      )
+      | @tsv
+    ' "$CONFIG_FILE" 2>/dev/null)
+
+    [ -n "$pairs" ] || return 0
+
+    local hypr_args=()
+    local IFS=$'\n'
+    for pair in $pairs; do
+        [ -n "$pair" ] || continue
+        hypr_args+=(--set "${pair%%$'\t'*}" "${pair#*$'\t'}")
+    done
+    unset IFS
+
+    [ ${#hypr_args[@]} -gt 0 ] || return 0
+
+    python3 "$SCRIPT_DIR/hyprland/hyprconfigurator.py" \
+        --file "$HOME/.config/hypr/hyprland/shellOverrides/main.lua" \
+        "${hypr_args[@]}"
+}
 
 online=false
 args=()
@@ -173,6 +243,7 @@ case "$action" in
         jq "$BLACKLIST_FILTER" "$preset_file" > "$tmp"
         jq -s '.[0] * .[1] | del(._presetMeta)' "$CONFIG_FILE" "$tmp" | config_json_replace "$CONFIG_FILE"
         rm -f "$tmp"
+        push_hyprland_options
         "$SWITCHWALL" --noswitch
         ;;
     --install)

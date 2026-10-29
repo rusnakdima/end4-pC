@@ -133,7 +133,6 @@ for ((i=0;i<${#ARGS[@]};i++)); do
 done
 
 if pgrep wf-recorder > /dev/null; then
-    notify-send "Recording Stopped" "Stopped" -a 'Recorder' &
     pkill wf-recorder &
     set_recording_state false
 else
@@ -160,7 +159,6 @@ else
         RECORDER_ARGS+=("--audio=$AUDIO_SOURCE")
     fi
 
-    notify-send "Starting recording" "recording_$(getdate).mp4" -a 'Recorder' & disown
     set_recording_state true
     wf-recorder "${RECORDER_ARGS[@]}"
     set_recording_state false

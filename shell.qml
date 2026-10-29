@@ -49,16 +49,65 @@ ShellRoot {
         Cliphist.refresh()
         Wallpapers.load()
         Updates.load()
-        LyricsService.restartLyrics()
     }
     
+    // Panel families
+    property list<string> families: ["ii", "waffle"]
+    function cyclePanelFamily() {
+        const currentIndex = families.indexOf(Config.options.panelFamily)
+        const nextIndex = (currentIndex + 1) % families.length
+        Config.options.panelFamily = families[nextIndex]
+    }
+
+    component PanelFamilyLoader: LazyLoader {
+        required property string identifier
+        property bool extraCondition: true
+        active: Config.ready && Config.options.panelFamily === identifier && extraCondition
+    }
+
     PanelFamilyLoader {
         identifier: "ii"
         component: IllogicalImpulseFamily {}
     }
 
-    component PanelFamilyLoader: LazyLoader {
-        required property string identifier
-        active: Config.ready && Config.options.panelFamily === identifier
+    PanelFamilyLoader {
+        identifier: "waffle"
+        component: WaffleFamily {}
+    }
+
+    // Shortcuts
+    IpcHandler {
+        target: "panelFamily"
+
+        function cycle(): void {
+            root.cyclePanelFamily()
+        }
+    }
+
+    // Waffle family sidebars use their own flags and their own namespaced IPC
+    // targets, so they never fight the end4-pC sidebars for the same state.
+
+    CompositorGlobalShortcut {
+        name: "panelFamilyCycle"
+        description: "Cycles panel family"
+
+        onPressed: root.cyclePanelFamily()
+    }
+
+    // Registered here, and not in the service, because shell.qml is the one
+    // file that is always loaded. Reading SpeechToText creates the
+    // singleton.
+    CompositorGlobalShortcut {
+        name: "sttToggle"
+        description: "Toggles speech to text"
+
+        onPressed: {
+            if (!SpeechToText.enabled) {
+                Quickshell.execDetached(["notify-send", "Speech to text",
+                    "Enable speech to text in the settings", "-a", "Hyprland"]);
+                return;
+            }
+            SpeechToText.toggleRecording();
+        }
     }
 }

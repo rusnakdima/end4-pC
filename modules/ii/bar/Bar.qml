@@ -60,6 +60,9 @@ Scope {
                 }
 
                 onMustShowChanged: {
+                    // The music line under the island pill belongs to the bar,
+                    // so it has to know when the bar is hidden.
+                    GlobalStates.barHidden = Config.options.bar.autoHide.enable && !mustShow;
                     if (!Config.options.bar.autoHide.enable) return;
                     if (mustShow) {
                         cornerRevealTimer.restart()
@@ -132,6 +135,7 @@ Scope {
                 // Include in focus grab
                 Component.onCompleted: {
                     GlobalFocusGrab.addPersistent(barRoot);
+                    GlobalStates.barHidden = Config.options.bar.autoHide.enable && !mustShow;
                 }
                 Component.onDestruction: {
                     GlobalFocusGrab.removePersistent(barRoot);

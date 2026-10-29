@@ -78,6 +78,49 @@ Singleton {
         return root.select(access.get, access.set, options);
     }
 
+
+    // Speech-to-text options. Shared with the classic settings page and the
+    // dashboard so every UI always offers the same values.
+    readonly property var sttModels: [
+        { displayName: "tiny", icon: "memory", value: "tiny" },
+        { displayName: "base", icon: "memory", value: "base" },
+        { displayName: "small", icon: "memory", value: "small" },
+        { displayName: "medium", icon: "memory", value: "medium" },
+        { displayName: "large-v3", icon: "memory", value: "large-v3" }
+    ]
+
+    readonly property var sttLanguages: [
+        { displayName: Translation.tr("Auto"), icon: "language", value: "auto" },
+        { displayName: "en", icon: "language", value: "en" },
+        { displayName: "es", icon: "language", value: "es" },
+        { displayName: "fr", icon: "language", value: "fr" },
+        { displayName: "de", icon: "language", value: "de" },
+        { displayName: "it", icon: "language", value: "it" },
+        { displayName: "pt", icon: "language", value: "pt" },
+        { displayName: "ru", icon: "language", value: "ru" },
+        { displayName: "zh", icon: "language", value: "zh" },
+        { displayName: "ja", icon: "language", value: "ja" },
+        { displayName: "ko", icon: "language", value: "ko" },
+        { displayName: "nl", icon: "language", value: "nl" },
+        { displayName: "pl", icon: "language", value: "pl" },
+        { displayName: "tr", icon: "language", value: "tr" },
+        { displayName: "ar", icon: "language", value: "ar" },
+        { displayName: "hi", icon: "language", value: "hi" }
+    ]
+
+    readonly property var sttDevices: [
+        { displayName: "cpu", icon: "memory", value: "cpu" },
+        { displayName: "cuda", icon: "memory", value: "cuda" },
+        { displayName: "auto", icon: "memory", value: "auto" }
+    ]
+
+    readonly property var sttComputeTypes: [
+        { displayName: "int8", icon: "speed", value: "int8" },
+        { displayName: "int8_float16", icon: "speed", value: "int8_float16" },
+        { displayName: "float16", icon: "speed", value: "float16" },
+        { displayName: "float32", icon: "speed", value: "float32" }
+    ]
+
     readonly property var controls: ({
         "desktop:Preview wallpaper": root.optionSwitch("background.enableWallpaperPreview"),
         "desktop:Blur wall": root.optionSwitch("background.showBlur"),
@@ -276,7 +319,6 @@ Singleton {
         "bar:Show Background": root.optionSwitch("bar.showBackground"),
         "bar:Overlap windows when center-only": root.optionSwitch("bar.centerOnlyReserveFrame"),
         "bar:Follow Frame Color": root.optionSwitch("bar.followFrameColor"),
-        "bar:Show media controls": root.optionSwitch("bar.dynamicIsland.showMediaControls"),
         "bar:Unread indicator: show count": root.optionSwitch("bar.indicators.notifications.showUnreadCount"),
         "bar:Make icons pinned by default": root.optionSwitch("tray.invertPinnedItems"),
         "bar:Tint icons": root.optionSwitch("tray.monochromeIcons"),
@@ -287,6 +329,7 @@ Singleton {
         "bar:Dark/Light toggle": root.optionSwitch("bar.utilButtons.showDarkModeToggle"),
         "bar:Performance Profile": root.optionSwitch("bar.utilButtons.showPerformanceProfileToggle"),
         "bar:Record Screen": root.optionSwitch("bar.utilButtons.showScreenRecord"),
+        "bar:Speech to Text": root.optionSwitch("bar.utilButtons.showSttToggle"),
         "bar:Wallpapers Toggle": root.optionSwitch("bar.utilButtons.showWallpaperToggle"),
         "bar:Always show numbers": root.optionSwitch("bar.workspaces.alwaysShowNumbers"),
         "bar:Show app icons": root.optionSwitch("bar.workspaces.showAppIcons"),
@@ -326,23 +369,6 @@ Singleton {
         "bar:Autohide": root.optionSelect("bar.autoHide.enable", [
             { displayName: Translation.tr("No"), icon: "close", value: false },
             { displayName: Translation.tr("Yes"), icon: "check", value: true }
-        ]),
-        "bar:Left widget": root.optionSelect("bar.dynamicIsland.leftWidget", [
-            { displayName: Translation.tr(""), icon: "block", value: "none" },
-            { displayName: Translation.tr("Clock"), icon: "schedule", value: "clockWidget" },
-            { displayName: Translation.tr("Weather"), icon: "partly_cloudy_day", value: "weatherBar" },
-            { displayName: Translation.tr("Updates"), icon: "update", value: "updatesCount" }
-        ]),
-        "bar:Right widget": root.optionSelect("bar.dynamicIsland.rightWidget", [
-            { displayName: Translation.tr(""), icon: "block", value: "none" },
-            { displayName: Translation.tr("System icons"), icon: "settings", value: "systemIcons" },
-            { displayName: Translation.tr("Tray"), icon: "apps", value: "sysTray" },
-            { displayName: Translation.tr("Util buttons"), icon: "widgets", value: "utilButtons" }
-        ]),
-        "bar:Visualizer style": root.optionSelect("bar.dynamicIsland.visualizerStyle", [
-            { displayName: Translation.tr(""), icon: "block", value: "none" },
-            { displayName: Translation.tr("Dots"), icon: "steppers", value: "dots" },
-            { displayName: Translation.tr("Wave"), icon: "ssid_chart", value: "wave" }
         ]),
         "bar:Divider/Style": root.optionSelect("bar.divider.style", [
             { displayName: Translation.tr("Line"), icon: "more_vert", value: "rect" },
@@ -415,6 +441,12 @@ Singleton {
         "services:Enable update checks": root.toggle(() => Config.options.updates.enableCheck, v => Config.options.updates.enableCheck = v),
         "services:Enable GPS based location": root.toggle(() => Config.options.bar.weather.enableGPS, v => Config.options.bar.weather.enableGPS = v),
         "services:Fahrenheit unit": root.toggle(() => Config.options.bar.weather.useUSCS, v => Config.options.bar.weather.useUSCS = v),
+
+        "services:Speech to Text/Enable speech to text": root.optionSwitch("stt.enabled"),
+        "services:Speech to Text/Model": root.optionSelect("stt.model", root.sttModels),
+        "services:Speech to Text/Language": root.optionSelect("stt.language", root.sttLanguages),
+        "services:Speech to Text/Device": root.optionSelect("stt.device", root.sttDevices),
+        "services:Speech to Text/Compute type": root.optionSelect("stt.computeType", root.sttComputeTypes),
 
         "services:Total duration timeout (s)": root.spin(() => Config.options.musicRecognition.timeout, v => Config.options.musicRecognition.timeout = v, 10, 100, 2),
         "services:Polling interval (s)": root.spin(() => Config.options.musicRecognition.interval, v => Config.options.musicRecognition.interval = v, 2, 10, 1),

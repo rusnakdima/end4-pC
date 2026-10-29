@@ -1464,19 +1464,28 @@ ContentPage {
                     buttonIcon: "hardware"
                     text: Translation.tr("Shell & utilities")
                     checked: Config.options.appearance.wallpaperTheming.enableAppsAndShell
-                    onCheckedChanged: { Config.options.appearance.wallpaperTheming.enableAppsAndShell = checked }
+                    onCheckedChanged: {
+                        Config.options.appearance.wallpaperTheming.enableAppsAndShell = checked
+                        ColorSchemes.regenerateTheme()
+                    }
                 }
                 ConfigSwitch {
                     buttonIcon: "tv_options_input_settings"
                     text: Translation.tr("Qt apps")
                     checked: Config.options.appearance.wallpaperTheming.enableQtApps
-                    onCheckedChanged: { Config.options.appearance.wallpaperTheming.enableQtApps = checked }
+                    onCheckedChanged: {
+                        Config.options.appearance.wallpaperTheming.enableQtApps = checked
+                        ColorSchemes.regenerateTheme()
+                    }
                 }
                 ConfigSwitch {
                     buttonIcon: "terminal"
                     text: Translation.tr("Terminal")
                     checked: Config.options.appearance.wallpaperTheming.enableTerminal
-                    onCheckedChanged: { Config.options.appearance.wallpaperTheming.enableTerminal = checked }
+                    onCheckedChanged: {
+                        Config.options.appearance.wallpaperTheming.enableTerminal = checked
+                        ColorSchemes.regenerateTheme()
+                    }
                 }
                 ConfigRow {
                     uniform: true
@@ -1484,7 +1493,10 @@ ContentPage {
                         buttonIcon: "dark_mode"
                         text: Translation.tr("Force dark mode in terminal")
                         checked: Config.options.appearance.wallpaperTheming.terminalGenerationProps.forceDarkMode
-                        onCheckedChanged: { Config.options.appearance.wallpaperTheming.terminalGenerationProps.forceDarkMode = checked }
+                        onCheckedChanged: {
+                            Config.options.appearance.wallpaperTheming.terminalGenerationProps.forceDarkMode = checked
+                            ColorSchemes.regenerateTheme()
+                        }
                     }
                 }
                 ConfigSpinBox {
@@ -1492,21 +1504,30 @@ ContentPage {
                     text: Translation.tr("Terminal: Harmony (%)")
                     value: Config.options.appearance.wallpaperTheming.terminalGenerationProps.harmony * 100
                     from: 0; to: 100; stepSize: 10
-                    onValueChanged: { Config.options.appearance.wallpaperTheming.terminalGenerationProps.harmony = value / 100 }
+                    onValueChanged: {
+                        Config.options.appearance.wallpaperTheming.terminalGenerationProps.harmony = value / 100
+                        ColorSchemes.regenerateTheme()
+                    }
                 }
                 ConfigSpinBox {
                     icon: "gradient"
                     text: Translation.tr("Terminal: Harmonize threshold")
                     value: Config.options.appearance.wallpaperTheming.terminalGenerationProps.harmonizeThreshold
                     from: 0; to: 100; stepSize: 10
-                    onValueChanged: { Config.options.appearance.wallpaperTheming.terminalGenerationProps.harmonizeThreshold = value }
+                    onValueChanged: {
+                        Config.options.appearance.wallpaperTheming.terminalGenerationProps.harmonizeThreshold = value
+                        ColorSchemes.regenerateTheme()
+                    }
                 }
                 ConfigSpinBox {
                     icon: "format_color_text"
                     text: Translation.tr("Terminal: Foreground boost (%)")
                     value: Config.options.appearance.wallpaperTheming.terminalGenerationProps.termFgBoost * 100
                     from: 0; to: 100; stepSize: 10
-                    onValueChanged: { Config.options.appearance.wallpaperTheming.terminalGenerationProps.termFgBoost = value / 100 }
+                    onValueChanged: {
+                        Config.options.appearance.wallpaperTheming.terminalGenerationProps.termFgBoost = value / 100
+                        ColorSchemes.regenerateTheme()
+                    }
                 }
             }
         }

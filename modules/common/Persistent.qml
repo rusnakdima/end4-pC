@@ -29,6 +29,48 @@ Singleton {
         }
     }
 
+    // Periodic refresh to catch file replacements (mv) that inotify
+    // might miss when the inode changes.
+    Timer {
+        id: periodicRefreshTimer
+        interval: 500
+        repeat: true
+        running: true
+        onTriggered: {
+            persistentStatesFileView.reload()
+        }
+    }
+
+    // Watch the states file with inotifywait for immediate updates when
+    // the recording state changes (the record script replaces the file via mv).
+    Process {
+        id: inotifyWatchProcess
+        running: true
+        command: ["bash", "-c", `inotifywait -m -e close_write,moved_to --format '%f' '$(dirname '${root.filePath}')' 2>/dev/null | while read f; do if [ \"\$f\" = \"$(basename '${root.filePath}')\" ]; then echo 'reload'; fi; done`]
+        stdout: SplitParser {
+            onRead: line => {
+                if (line.trim() === "reload") {
+                    persistentStatesFileView.reload()
+                }
+            }
+        }
+        onExited: (exitCode, exitStatus) => {
+            // Restart the watcher if it exits
+            if (exitCode !== 0) {
+                inotifyRestartTimer.restart()
+            }
+        }
+    }
+
+    Timer {
+        id: inotifyRestartTimer
+        interval: 2000
+        repeat: false
+        onTriggered: {
+            inotifyWatchProcess.running = true
+        }
+    }
+
     Timer {
         id: fileWriteTimer
         interval: 100

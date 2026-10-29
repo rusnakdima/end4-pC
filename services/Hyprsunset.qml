@@ -28,8 +28,8 @@ Singleton {
     property int toHour: Number(to.split(":")[0])
     property int toMinute: Number(to.split(":")[1])
 
-    property int clockHour: DateTime.clock.hours
-    property int clockMinute: DateTime.clock.minutes
+    property int clockHour: DateTime.hour24
+    property int clockMinute: DateTime.minute
 
     property var manualActive
     property int manualActiveHour

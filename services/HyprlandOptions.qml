@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.modules.common
 
 Singleton {
     id: root
@@ -39,6 +40,29 @@ Singleton {
         if (typeof value === "boolean") sent = value ? 1 : 0
         else if (value === "") sent = "[[EMPTY]]"
         HyprlandConfig.set(key, sent)
+        root.saveToConfig(key, value)
+    }
+
+    // Mirror of the live compositor option into config.json, so presets and the
+    // shared gallery can carry it. The raw value is stored (not the hyprctl
+    // conversion), so a boolean stays a boolean in the config file.
+    function saveToConfig(key: string, value: var) {
+        const list = Config.options?.hyprland?.hyprOptions ?? []
+        const index = list.findIndex(entry => entry && entry.key === key)
+        const next = list.slice()
+        const entry = { "key": key, "value": value }
+        if (index === -1) next.push(entry)
+        else next[index] = entry
+        Config.options.hyprland.hyprOptions = next
+    }
+
+    // Push every mirrored option back to the compositor. Unknown keys are skipped.
+    function applyAllFromConfig() {
+        const list = Config.options?.hyprland?.hyprOptions ?? []
+        for (const entry of list) {
+            if (!entry || !entry.key || !root.keys.includes(entry.key)) continue
+            HyprlandConfig.set(entry.key, entry.value)
+        }
     }
 
     function refresh() {

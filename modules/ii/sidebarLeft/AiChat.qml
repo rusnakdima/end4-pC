@@ -20,8 +20,41 @@ Item {
     property var suggestionQuery: ""
     property var suggestionList: []
 
+    property string lastInsertedTranscript: ""
+
+    readonly property string sttTooltipText: {
+        if (SpeechToText.error?.length > 0)
+            return SpeechToText.error;
+        if (SpeechToText.recording)
+            return Translation.tr("Recording... %1 s").arg(SpeechToText.elapsedSeconds);
+        if (SpeechToText.transcribing)
+            return Translation.tr("Transcribing...");
+        return Translation.tr("Speech to text");
+    }
+
+    function insertTranscript(text) {
+        if (!text || text.length === 0)
+            return;
+        if (text === root.lastInsertedTranscript)
+            return;
+        root.lastInsertedTranscript = text;
+
+        const current = messageInputField.text ?? "";
+        const separator = current.length === 0 || current.endsWith(" ") || current.endsWith("\n") ? "" : " ";
+        messageInputField.text = current + separator + text;
+        messageInputField.cursorPosition = messageInputField.text.length;
+        messageInputField.forceActiveFocus();
+    }
+
     Component.onCompleted: {
         Ai.refreshLocalModels();
+    }
+
+    Connections {
+        target: SpeechToText
+        function onTranscriptReady(text) {
+            root.insertTranscript(text);
+        }
     }
 
     onFocusChanged: focus => {
@@ -706,6 +739,42 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         }
                     }
                 }
+                RippleButton { // Speech to text button
+                    id: sttButton
+                    Layout.alignment: Qt.AlignBottom
+                    Layout.rightMargin: 2
+                    implicitWidth: 40
+                    implicitHeight: 40
+                    buttonRadius: Appearance.rounding.small
+                    visible: SpeechToText.enabled
+                    enabled: SpeechToText.enabled
+                    toggled: SpeechToText.recording
+
+                    onClicked: {
+                        if (!SpeechToText.recording)
+                            root.lastInsertedTranscript = "";
+                        SpeechToText.toggleRecording();
+                    }
+
+                    contentItem: Item {
+                        MaterialSymbol {
+                            anchors.centerIn: parent
+                            horizontalAlignment: Text.AlignHCenter
+                            iconSize: 22
+                            text: SpeechToText.recording ? "stop_circle" : (SpeechToText.transcribing ? "graphic_eq" : "mic")
+                            color: SpeechToText.recording ? Appearance.m3colors.m3onPrimary :
+                                (SpeechToText.transcribing ? Appearance.colors.colPrimary : Appearance.colors.colOnLayer2)
+                            animateChange: true
+                        }
+                    }
+
+                    StyledToolTip {
+                        text: root.sttTooltipText
+                        extraVisibleCondition: root.sttTooltipText.length > 0
+                        alternativeVisibleCondition: SpeechToText.error?.length > 0
+                    }
+                }
+
                 RippleButton { // Send button
                     id: sendButton
                     Layout.alignment: Qt.AlignBottom
@@ -732,6 +801,102 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         iconSize: 22
                         color: sendButton.enabled ? Appearance.m3colors.m3onPrimary : Appearance.colors.colOnLayer2Disabled
                         text: "arrow_upward"
+                    }
+                }
+            }
+
+            // Recording history (shown when there are recordings)
+            Rectangle {
+                id: recordingHistoryContainer
+                visible: SpeechToText.recordings.length > 0
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(recordingHistoryListView.contentHeight + 10, 120)
+                color: Appearance.colors.colLayer2
+                radius: Appearance.rounding.small
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 5
+                    spacing: 2
+
+                    StyledText {
+                        text: Translation.tr("Recording history")
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        font.weight: Font.Medium
+                        color: Appearance.colors.colOnLayer2
+                    }
+
+                    ListView {
+                        id: recordingHistoryListView
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        spacing: 2
+                        model: SpeechToText.recordings
+
+                        delegate: Rectangle {
+                            width: recordingHistoryListView.width
+                            height: 28
+                            radius: Appearance.rounding.small
+                            color: recordingMouseArea.containsMouse ? Appearance.colors.colLayer2Hover : "transparent"
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 6
+                                anchors.rightMargin: 6
+                                spacing: 6
+
+                                MaterialSymbol {
+                                    text: {
+                                        switch (modelData.state) {
+                                            case "recording": return "mic";
+                                            case "transcribing": return "graphic_eq";
+                                            case "done": return "check_circle";
+                                            case "error": return "error";
+                                            default: return "mic";
+                                        }
+                                    }
+                                    iconSize: 16
+                                    color: modelData.state === "error" ? Appearance.colors.colError :
+                                           (modelData.state === "done" ? Appearance.colors.colPrimary : Appearance.colors.colOnLayer2)
+                                }
+
+                                StyledText {
+                                    Layout.fillWidth: true
+                                    text: {
+                                        const d = new Date(modelData.timestamp);
+                                        const time = d.toLocaleTimeString();
+                                        const status = modelData.state === "done" ? Translation.tr("Done") :
+                                                       (modelData.state === "error" ? Translation.tr("Error") :
+                                                       (modelData.state === "recording" ? Translation.tr("Recording...") :
+                                                       (modelData.state === "transcribing" ? Translation.tr("Transcribing...") : modelData.state)));
+                                        return `${time} - ${status}`;
+                                    }
+                                    font.pixelSize: Appearance.font.pixelSize.small
+                                    color: Appearance.colors.colOnLayer2
+                                    elide: Text.ElideRight
+                                }
+
+                                MaterialSymbol {
+                                    text: "content_copy"
+                                    iconSize: 14
+                                    color: Appearance.colors.colOnLayer2
+                                    visible: modelData.state === "done" && modelData.transcript.length > 0
+                                }
+                            }
+
+                            MouseArea {
+                                id: recordingMouseArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (modelData.transcript.length > 0) {
+                                        Quickshell.clipboardText = modelData.transcript;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

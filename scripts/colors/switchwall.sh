@@ -15,26 +15,6 @@ terminalscheme="$SCRIPT_DIR/terminal/scheme-base.json"
 # shellcheck source=../lib/config.sh
 source "$SCRIPT_DIR/../lib/config.sh"
 
-handle_kde_material_you_colors() {
-    if [ -f "$SHELL_CONFIG_FILE" ]; then
-        enable_qt_apps=$(jq -r '.appearance.wallpaperTheming.enableQtApps' "$SHELL_CONFIG_FILE")
-        if [ "$enable_qt_apps" == "false" ]; then
-            return
-        fi
-    fi
-
-    local kde_scheme_variant=""
-    case "$type_flag" in
-        scheme-content|scheme-expressive|scheme-fidelity|scheme-fruit-salad|scheme-monochrome|scheme-neutral|scheme-rainbow|scheme-tonal-spot)
-            kde_scheme_variant="$type_flag"
-            ;;
-        *)
-            kde_scheme_variant="scheme-tonal-spot"
-            ;;
-    esac
-    "$XDG_CONFIG_HOME"/matugen/templates/kde/kde-material-you-colors-wrapper.sh --scheme-variant "$kde_scheme_variant"
-}
-
 pre_process() {
     local mode_flag="$1"
     if [[ "$mode_flag" == "dark" ]]; then
@@ -60,7 +40,6 @@ post_process() {
         return
     fi
 
-    handle_kde_material_you_colors &
     "$SCRIPT_DIR/code/material-code-set-color.sh" &
 }
 
@@ -98,8 +77,8 @@ check_and_prompt_upscale() {
     if [ -f "$SHELL_CONFIG_FILE" ] && [ "$(jq -r '.background.collage.enable // false' "$SHELL_CONFIG_FILE")" == "true" ]; then
         return
     fi
-    min_width_desired="$(hyprctl monitors -j | jq '([.[].width] | max)' | xargs)"
-    min_height_desired="$(hyprctl monitors -j | jq '([.[].height] | max)' | xargs)"
+    min_width_desired="$(monitor_value '([.[].width] | max)' 1920)"
+    min_height_desired="$(monitor_value '([.[].height] | max)' 1080)"
 
     if command -v identify &>/dev/null && [ -f "$img" ]; then
         local img_width img_height
@@ -140,7 +119,9 @@ check_and_prompt_upscale() {
 CUSTOM_DIR="$XDG_CONFIG_HOME/hypr/custom"
 RESTORE_SCRIPT_DIR="$CUSTOM_DIR/scripts"
 RESTORE_SCRIPT="$RESTORE_SCRIPT_DIR/__restore_video_wallpaper.sh"
+VIDEO_WALLPAPER_SCRIPT="$RESTORE_SCRIPT_DIR/__video_wallpaper.sh"
 THUMBNAIL_DIR="$RESTORE_SCRIPT_DIR/mpvpaper_thumbnails"
+LAST_THUMBNAIL="$THUMBNAIL_DIR/.last-good.jpg"
 MPVPAPER_FLAGS="-p -a max"
 VIDEO_OPTS="--no-audio --loop=inf --hwdec=auto"
 
@@ -149,23 +130,97 @@ is_video() {
     [[ "$extension" == "mp4" || "$extension" == "webm" || "$extension" == "mkv" || "$extension" == "avi" || "$extension" == "mov" || "$extension" == "gif" || "$extension" == "m4v" || "$extension" == "wmv" || "$extension" == "flv" || "$extension" == "ogv" || "$extension" == "3gp" || "$extension" == "qt" ]] && return 0 || return 1
 }
 
+# The compositor is not always running: the greeter, a systemd unit or a
+# plain shell have no monitors to query. The queries have to fail softly.
+monitor_value() {
+    local query="$1"
+    local default="$2"
+    local out=""
+    if command -v hyprctl >/dev/null 2>&1; then
+        out=$(hyprctl monitors -j 2>/dev/null | jq "$query" 2>/dev/null | xargs)
+    fi
+    [[ -n "$out" && "$out" != "null" ]] || out="$default"
+    printf '%s' "$out"
+}
+
 kill_existing_mpvpaper() {
-    pkill -f -9 mpvpaper || true
+    # The video wallpaper is supervised: the supervisor owns the mpvpaper
+    # process, the proxy encoding and the session re-derivation, so it has to
+    # be stopped through it.
+    if [[ -x "$VIDEO_WALLPAPER_SCRIPT" ]]; then
+        "$VIDEO_WALLPAPER_SCRIPT" --stop 2>/dev/null || true
+    else
+        pkill -f -9 mpvpaper || true
+    fi
+}
+
+start_video_wallpaper() {
+    local video="$1"
+    if [[ -x "$VIDEO_WALLPAPER_SCRIPT" ]]; then
+        "$VIDEO_WALLPAPER_SCRIPT" "$video" || true
+        return
+    fi
+    # Fallback without the supervisor: one mpvpaper per monitor.
+    local monitors
+    monitors=$(hyprctl monitors -j | jq -r '.[] | .name')
+    for monitor in $monitors; do
+        mpvpaper $MPVPAPER_FLAGS -o "$VIDEO_OPTS" "$monitor" "$video" &
+        sleep 0.1
+    done
+}
+
+# Renders the preview image of a video wallpaper.
+#
+# The first frame of a clip is usually black (fade in) and would look like a
+# broken preview, so a frame a few seconds in is used. When even that fails,
+# the last preview that worked is reused, and as a last resort a flat image
+# is written: the preview must never be empty.
+generate_video_thumbnail() {
+    local video="$1"
+    local out="$2"
+
+    for seek in 00:00:03 00:00:01 00:00:00; do
+        ffmpeg -y -ss "$seek" -i "$video" -frames:v 1 \
+            -vf "scale=1280:1280:force_original_aspect_ratio=decrease" \
+            "$out" >/dev/null 2>&1
+        if [[ -s "$out" ]]; then
+            cp -f "$out" "$LAST_THUMBNAIL" 2>/dev/null || true
+            return 0
+        fi
+    done
+
+    if [[ -s "$LAST_THUMBNAIL" ]]; then
+        cp -f "$LAST_THUMBNAIL" "$out" 2>/dev/null || true
+        return 0
+    fi
+
+    magick -size 64x64 "xc:#202020" "$out" >/dev/null 2>&1
+    [[ -s "$out" ]]
 }
 
 create_restore_script() {
-    local video_path=$1
+    # The wallpaper is resolved from the shell config when the script runs, so
+    # no path is baked in and the script stays valid when the wallpaper
+    # changes.
     cat > "$RESTORE_SCRIPT.tmp" << EOF
 #!/bin/bash
 # Generated by switchwall.sh - Don't modify it by yourself.
 # Time: $(date)
 
-pkill -f -9 mpvpaper
+set -u
+SCRIPT_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="\${XDG_CONFIG_HOME:-\$HOME/.config}/illogical-impulse/config.json"
 
-for monitor in \$(hyprctl monitors -j | jq -r '.[] | .name'); do
-    mpvpaper $MPVPAPER_FLAGS -o "$VIDEO_OPTS" "\$monitor" "$video_path" &
-    sleep 0.1
-done
+wallpaper=""
+if [[ -f "\$CONFIG_FILE" ]]; then
+    wallpaper=\$(jq -r '.background.wallpaperPath // ""' "\$CONFIG_FILE" 2>/dev/null)
+fi
+
+if [[ -z "\$wallpaper" || ! -f "\$wallpaper" ]]; then
+    exit 0
+fi
+
+exec "\$SCRIPT_DIR/__video_wallpaper.sh" "\$wallpaper"
 EOF
     mv "$RESTORE_SCRIPT.tmp" "$RESTORE_SCRIPT"
     chmod +x "$RESTORE_SCRIPT"
@@ -212,10 +267,14 @@ switch() {
         categorize_wallpaper "$imgpath" &
     fi
 
-    read scale screenx screeny screensizey < <(hyprctl monitors -j | jq '.[] | select(.focused) | .scale, .x, .y, .height' | xargs)
-    cursorposx=$(hyprctl cursorpos -j | jq '.x' 2>/dev/null) || cursorposx=960
+    read scale screenx screeny screensizey < <(hyprctl monitors -j 2>/dev/null | jq '.[] | select(.focused) | .scale, .x, .y, .height' 2>/dev/null | xargs)
+    scale="${scale:-1}"
+    screenx="${screenx:-0}"
+    screeny="${screeny:-0}"
+    screensizey="${screensizey:-1080}"
+    cursorposx=$(hyprctl cursorpos -j 2>/dev/null | jq '.x' 2>/dev/null) || cursorposx=960
     cursorposx=$(bc <<< "scale=0; ($cursorposx - $screenx) * $scale / 1")
-    cursorposy=$(hyprctl cursorpos -j | jq '.y' 2>/dev/null) || cursorposy=540
+    cursorposy=$(hyprctl cursorpos -j 2>/dev/null | jq '.y' 2>/dev/null) || cursorposy=540
     cursorposy=$(bc <<< "scale=0; ($cursorposy - $screeny) * $scale / 1")
     cursorposy_inverted=$((screensizey - cursorposy))
 
@@ -266,27 +325,21 @@ switch() {
 
             if [[ -z "$colors_only_flag" ]]; then
                 set_wallpaper_path "$imgpath"
-
-                local video_path="$imgpath"
-                monitors=$(hyprctl monitors -j | jq -r '.[] | .name')
-                for monitor in $monitors; do
-                    mpvpaper $MPVPAPER_FLAGS -o "$VIDEO_OPTS" "$monitor" "$video_path" &
-                    sleep 0.1
-                done
+                start_video_wallpaper "$imgpath"
             fi
 
             thumbnail="$THUMBNAIL_DIR/$(basename "$imgpath").jpg"
-            ffmpeg -y -i "$imgpath" -vframes 1 "$thumbnail" 2>/dev/null
+            generate_video_thumbnail "$imgpath" "$thumbnail"
 
             if [[ -z "$colors_only_flag" ]]; then
                 set_thumbnail_path "$thumbnail"
             fi
 
-            if [ -f "$thumbnail" ]; then
+            if [[ -s "$thumbnail" ]]; then
                 matugen_args+=(image "$thumbnail")
                 generate_colors_material_args=(--path "$thumbnail")
                 if [[ -z "$colors_only_flag" ]]; then
-                    create_restore_script "$video_path"
+                    create_restore_script
                 fi
             else
                 echo "Cannot create image to colorgen"
@@ -300,6 +353,9 @@ switch() {
             generate_colors_material_args=(--path "$imgpath")
             if [[ -z "$colors_only_flag" ]]; then
                 set_wallpaper_path "$imgpath"
+                # The preview of a still wallpaper is the wallpaper itself, so
+                # the thumbnail never points at a stale video frame.
+                set_thumbnail_path "$imgpath"
                 remove_restore
             fi
         fi
@@ -360,6 +416,7 @@ switch() {
         "$colors_json_path"
         "$XDG_CONFIG_HOME/gtk-3.0/gtk.css"
         "$XDG_CONFIG_HOME/gtk-4.0/gtk.css"
+        "$XDG_CONFIG_HOME/hypr/hyprland/colors.lua"
     )
     colors_lock_backups=()
     if [[ -n "$colors_lock_flag" ]]; then
@@ -374,6 +431,13 @@ switch() {
     fi
 
     matugen "${matugen_args[@]}"
+
+    if [[ -z "$colors_lock_flag" ]]; then
+        # matugen rewrites ~/.config/hypr/hyprland/colors.lua atomically, and
+        # Hyprland's config watcher only reacts to IN_CLOSE_WRITE, so the new
+        # palette stays invisible until the compositor re-reads its config.
+        hyprctl reload >/dev/null 2>&1 || true
+    fi
 
     if [[ -n "$colors_lock_flag" ]]; then
         if [[ -f "$colors_json_path" ]]; then
@@ -404,8 +468,8 @@ switch() {
         "$SCRIPT_DIR"/applycolor.sh
     fi
 
-    max_width_desired="$(hyprctl monitors -j | jq '([.[].width] | min)' | xargs)"
-    max_height_desired="$(hyprctl monitors -j | jq '([.[].height] | min)' | xargs)"
+    max_width_desired="$(monitor_value '([.[].width] | min)' 1920)"
+    max_height_desired="$(monitor_value '([.[].height] | min)' 1080)"
     post_process "$max_width_desired" "$max_height_desired" "$imgpath" "$colors_lock_flag"
 }
 

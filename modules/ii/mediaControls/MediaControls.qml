@@ -86,13 +86,10 @@ Scope {
         id: cavaProc
         running: (GlobalStates.mediaControlsOpen ||
             GlobalStates.sidebarRightOpen ||
-            (GlobalStates.sidebarLeftOpen && !GlobalStates.mediaLyricsVisible) ||
+            GlobalStates.sidebarLeftOpen ||
             GlobalStates.equalizerOpen ||
             Config.options.bar.layouts.leftLayout.includes("visualizer") ||
             Config.options.bar.layouts.middleLayout.includes("visualizer") ||
-            (Config.options.bar.layouts.middleLayout.includes("dynamicIsland") &&
-                (Config.options.bar.dynamicIsland.visualizerStyle === "wave" ||
-                (Config.options.bar.dynamicIsland.visualizerStyle === "dots" && !Config.options.bar.dynamicIsland.showMediaControls))) ||
             Config.options.bar.layouts.rightLayout.includes("visualizer") ||
             Config.options.background.widgets.visualizer.enable)
             && (MprisController.activePlayer?.isPlaying ?? false)
@@ -201,11 +198,11 @@ Scope {
                     delegate: Player {
                         id: playerDelegate
                         required property MprisPlayer modelData
-                        readonly property real targetHeight: showLyrics ? 290 : Appearance.sizes.mediaControlsHeight
+                        readonly property real targetHeight: Appearance.sizes.mediaControlsHeight
                         player: modelData
                         visualizerPoints: GlobalStates.visualizerPoints  
                         implicitWidth: root.widgetWidth
-                        implicitHeight: root.meaningfulPlayers.length === 1 ? 290 : targetHeight
+                        implicitHeight: targetHeight
                         designHeight: targetHeight
                         radius: root.popupRounding
                         animateResize: true

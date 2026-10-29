@@ -22,8 +22,8 @@ Variants {
         id: bgRoot
 
         required property var modelData
-        property string currentWallpaperSource: Config.options.background.wallpaperPath
-        property string previousWallpaperSource: Config.options.background.wallpaperPath
+        property string currentWallpaperSource: Wallpapers.displayPathFor(Config.options.background.wallpaperPath)
+        property string previousWallpaperSource: Wallpapers.displayPathFor(Config.options.background.wallpaperPath)
         property bool videoRevealed: false
 
         readonly property real splitFraction: {
@@ -58,7 +58,9 @@ Variants {
         }
 
         property bool wallpaperIsVideo: bgRoot.effectiveWallpaperPath.endsWith(".mp4") || bgRoot.effectiveWallpaperPath.endsWith(".webm") || bgRoot.effectiveWallpaperPath.endsWith(".mkv") || bgRoot.effectiveWallpaperPath.endsWith(".avi") || bgRoot.effectiveWallpaperPath.endsWith(".mov") || bgRoot.effectiveWallpaperPath.endsWith(".gif") || bgRoot.effectiveWallpaperPath.endsWith(".m4v") || bgRoot.effectiveWallpaperPath.endsWith(".wmv") || bgRoot.effectiveWallpaperPath.endsWith(".flv") || bgRoot.effectiveWallpaperPath.endsWith(".ogv") || bgRoot.effectiveWallpaperPath.endsWith(".3gp") || bgRoot.effectiveWallpaperPath.endsWith(".qt")
-        property string wallpaperPath: wallpaperIsVideo ? Config.options.background.thumbnailPath : bgRoot.effectiveWallpaperPath
+        property string wallpaperPath: wallpaperIsVideo
+            ? (Config.options.background.thumbnailPath || Wallpapers.displayPathFor(bgRoot.effectiveWallpaperPath))
+            : bgRoot.effectiveWallpaperPath
         property bool wallpaperSafetyTriggered: {
             const enabled = Config.options.workSafety.enable.wallpaper;
             const sensitiveWallpaper = (CF.StringUtils.stringListContainsSubstring(wallpaperPath.toLowerCase(), Config.options.workSafety.triggerCondition.fileKeywords));

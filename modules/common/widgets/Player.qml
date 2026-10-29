@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 import qs.modules.common
 import qs.modules.common.models
 import qs.modules.common.widgets
-import qs.services
 import qs.modules.common.functions
 import Qt5Compat.GraphicalEffects
 import QtQuick
@@ -28,10 +27,8 @@ Item {
     property real maxVisualizerValue: 1000
     property int visualizerSmoothing: 2
     property real radius
-    property bool allowLyrics: true
     property bool animateResize: false
     property string growFrom: "top"
-    property bool showLyrics: allowLyrics && Config.options.bar.media.showLyrics
 
     readonly property real cardMargin: Appearance.sizes.elevationMargin
     property real designHeight: root.height
@@ -196,13 +193,6 @@ Item {
             player: root.player
             blendedColors: root.blendedColors
             displayedArtFilePath: root.displayedArtFilePath
-            artDominantColor: root.artDominantColor
-            lyricsMode: root.showLyrics
-            lyricsAllowed: root.allowLyrics
-            onToggleLyrics: {
-                root.showLyrics = !root.showLyrics
-                Config.options.bar.media.showLyrics = root.showLyrics
-            }
         }
     }
 }

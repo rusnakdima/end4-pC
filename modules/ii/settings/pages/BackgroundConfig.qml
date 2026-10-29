@@ -321,6 +321,16 @@ ContentPage {
                         }
                         enabled: Config.options.background.centeredWallpaper && WM.compositor !== "niri"
                     }
+                    ConfigSwitch {
+                        Layout.fillWidth: true
+                        buttonIcon: "cycle"
+                        text: Translation.tr("Cycle shape with scroll wheel")
+                        checked: Config.options.background.centeredWallpaperShapeCycle
+                        onCheckedChanged: {
+                            Config.options.background.centeredWallpaperShapeCycle = checked;
+                        }
+                        enabled: Config.options.background.centeredWallpaper && WM.compositor !== "niri"
+                    }
                 }
 
                 GroupedList {

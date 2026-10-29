@@ -573,7 +573,7 @@ ContentPage {
                                     return;
                                 }
                                 Config.options.appearance.palette.type = value;
-                                Quickshell.execDetached(["bash", "-c", `${Directories.wallpaperSwitchScriptPath} --noswitch`]);
+                                ColorSchemes.regenerateTheme();
                             }
                         }
                     }

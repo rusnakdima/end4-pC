@@ -11,11 +11,19 @@ Singleton {
     id: root
     signal requestBluetoothDialog()
     property bool barOpen: true
+    // True while the bar is hidden by its auto hide, so that everything the
+    // bar draws below itself (the music line under the island pill) can go
+    // away with it.
+    property bool barHidden: false
     property bool barStyleEditorOpen: false
     property bool crosshairOpen: false
     property bool equalizerOpen: false
     property bool sidebarLeftOpen: false
     property bool sidebarRightOpen: false
+    // The waffle family drives its own sidebars, so it never fights the
+    // end4-pC sidebars for the same state.
+    property bool waffleSidebarLeftOpen: false
+    property bool waffleSidebarRightOpen: false
     property bool mediaControlsOpen: false
     property bool osdBrightnessOpen: false
     property bool settingsOpen: false
@@ -68,7 +76,6 @@ Singleton {
     function isFrameHovered(screenName, side) {
         return root.frameHover[`${screenName}:${side}`] ?? false;
     }
-    property bool diSessionOpen: false
     property bool startupLockPending: true
 
     Timer {
@@ -77,9 +84,6 @@ Singleton {
         onTriggered: root.startupLockPending = false
     }
 
-    readonly property bool dynamicIslandEnabled: Config.options.bar.layouts.leftLayout.includes("dynamicIsland")
-        || Config.options.bar.layouts.middleLayout.includes("dynamicIsland")
-        || Config.options.bar.layouts.rightLayout.includes("dynamicIsland")
 
     signal centeredWallpaperThumpRequested()
 

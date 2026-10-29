@@ -19,16 +19,21 @@ Singleton {
         }
     }
 
-    property string time: Qt.locale().toString(clock.date, Config.options?.time.format ?? "hh:mm")
-    property string shortDate: Qt.locale().toString(clock.date, Config.options?.time.shortDateFormat ?? "dd/MM")
-    property string date: Qt.locale().toString(clock.date, Config.options?.time.dateWithYearFormat ?? "dd/MM/yyyy")
-    property string longDate: Qt.locale().toString(clock.date, Config.options?.time.dateFormat ?? "dddd, dd/MM")
-    property string collapsedCalendarFormat: Qt.locale().toString(clock.date, "dddd, MMMM dd")
+    // clock.date is undefined for a moment after a configuration reload, so
+    // every binding that reads it has to be guarded.
+    readonly property bool clockReady: clock.date !== undefined && clock.date !== null
+    property string time: clockReady ? Qt.locale().toString(clock.date, Config.options?.time.format ?? "hh:mm") : ""
+    property string shortDate: clockReady ? Qt.locale().toString(clock.date, Config.options?.time.shortDateFormat ?? "dd/MM") : ""
+    property string date: clockReady ? Qt.locale().toString(clock.date, Config.options?.time.dateWithYearFormat ?? "dd/MM/yyyy") : ""
+    property string longDate: clockReady ? Qt.locale().toString(clock.date, Config.options?.time.dateFormat ?? "dddd, dd/MM") : ""
+    property string collapsedCalendarFormat: clockReady ? Qt.locale().toString(clock.date, "dddd, MMMM dd") : ""
     readonly property bool use12HourFormat: (Config.options?.time.format ?? "hh:mm").toLowerCase().indexOf("ap") !== -1
-    readonly property int hour24: clock.date.getHours()
+    readonly property int hour24: clockReady ? clock.date.getHours() : 0
+    readonly property int minute: clockReady ? clock.date.getMinutes() : 0
+    readonly property int second: clockReady ? clock.date.getSeconds() : 0
     readonly property int hour12: (hour24 % 12 === 0) ? 12 : hour24 % 12
     readonly property string hourStr: (use12HourFormat ? hour12 : hour24).toString().padStart(2, "0")
-    readonly property string minuteStr: Qt.locale().toString(clock.date, "mm")
+    readonly property string minuteStr: clockReady ? Qt.locale().toString(clock.date, "mm") : ""
     readonly property string digitH0: hourStr.charAt(0)
     readonly property string digitH1: hourStr.charAt(1)
     readonly property string digitM0: minuteStr.charAt(0)

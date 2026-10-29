@@ -34,8 +34,8 @@ Item {
 
     readonly property list<string> clockNumbers: DateTime.time.split(/[: ]/)
     readonly property int clockHour: parseInt(clockNumbers[0]) % 12
-    readonly property int clockMinute: DateTime.clock.minutes
-    readonly property int clockSecond: DateTime.clock.seconds
+    readonly property int clockMinute: DateTime.minute
+    readonly property int clockSecond: DateTime.second
 
     implicitWidth: implicitSize
     implicitHeight: implicitSize

@@ -3,7 +3,6 @@ import qs
 import qs.modules.common
 import qs.modules.common.models
 import qs.modules.common.widgets
-import qs.services
 import qs.modules.common.functions
 import Qt5Compat.GraphicalEffects
 import QtQuick
@@ -15,40 +14,17 @@ Item {
     required property MprisPlayer player
     required property QtObject blendedColors
     required property string displayedArtFilePath
-    required property color artDominantColor
-    property bool lyricsMode: false
-    property bool lyricsAllowed: true
-    signal toggleLyrics()
 
     readonly property real pad: 13
     readonly property real gap: 15
-    property real t: root.lyricsMode ? 1 : 0
 
-    readonly property real artSize: lerp(114, 150)
-    readonly property real textX: lerp(pad + 114 + gap, pad)
+    readonly property real artSize: 114
+    readonly property real textX: pad + 114 + gap
     readonly property real textWidth: Math.max(0, width - textX - pad)
-    readonly property real bottomPad: lerp(13, 12)
+    readonly property real bottomPad: 13
     readonly property real rowSpacing: 5
     readonly property real rowHeight: Math.max(24, progressBarContainer.implicitHeight)
     readonly property real rowY: root.height - root.bottomPad - root.rowHeight
-    readonly property real lyricsTitleY: root.height - 12 - root.rowHeight - trackTime.implicitHeight - 2 - (trackArtist.implicitHeight - 2) - trackTitle.implicitHeight
-
-    Behavior on t {
-        enabled: root.lyricsAllowed
-        SpringAnimation {
-            spring: 3.2
-            damping: 0.3
-            epsilon: 0.002
-        }
-    }
-
-    function lerp(a, b) {
-        return a + (b - a) * root.t
-    }
-
-    function restartLyrics() {
-        if (lyricsLoader.item) lyricsLoader.item.restartLyrics()
-    }
 
     component TrackChangeButton: RippleButton {
         implicitWidth: 24
@@ -75,7 +51,7 @@ Item {
         y: root.pad
         width: root.artSize
         height: root.artSize
-        radius: root.lerp(Appearance.rounding.verysmall, 16)
+        radius: Appearance.rounding.verysmall
         color: ColorUtils.transparentize(root.blendedColors.colLayer1, 0.5)
 
         layer.enabled: true
@@ -83,7 +59,7 @@ Item {
             maskSource: Rectangle {
                 width: artBackground.width
                 height: artBackground.height
-                radius: artBackground.radius + 6 * (1 - root.t)
+                radius: artBackground.radius + 6
             }
         }
 
@@ -99,13 +75,12 @@ Item {
 
         HoverHandler {
             id: artHover
-            enabled: root.t < 0.5
         }
 
         Rectangle {
             anchors.fill: parent
             color: "black"
-            opacity: artHover.hovered && root.t < 0.5 ? 0.6 : 0.0
+            opacity: artHover.hovered ? 0.6 : 0.0
 
             Behavior on opacity {
                 NumberAnimation {
@@ -121,7 +96,7 @@ Item {
             iconSize: Appearance.font.pixelSize.normal
             color: root.blendedColors.colOnLayer0
             text: (root.player?.volume ?? 0) === 0 ? "volume_off" : ((root.player?.volume ?? 0) < 0.5 ? "volume_down" : "volume_up")
-            opacity: artHover.hovered && root.t < 0.5 ? 1.0 : 0.0
+            opacity: artHover.hovered ? 1.0 : 0.0
 
             Behavior on opacity {
                 NumberAnimation {
@@ -135,12 +110,11 @@ Item {
         MaterialDial {
             anchors.fill: parent
             anchors.margins: 14
-            enabled: root.t < 0.5
             colPrimary: root.blendedColors.colPrimary
             colSecondary: root.blendedColors.colSecondaryContainer
             value: root.player?.volume ?? 0
             waveAmplitude: 3.2 * (root.player?.volume ?? 0)
-            opacity: artHover.hovered && root.t < 0.5 ? 1.0 : 0.0
+            opacity: artHover.hovered ? 1.0 : 0.0
 
             Behavior on opacity {
                 NumberAnimation {
@@ -157,64 +131,10 @@ Item {
         }
     }
 
-    Loader {
-        id: lyricsLoader
-        active: root.lyricsAllowed
-        x: root.pad + root.artSize + root.gap
-        y: root.pad
-        width: Math.max(0, root.width - x - root.pad)
-        height: 150
-        opacity: Math.max(0, Math.min(1, (root.t - 0.35) / 0.65))
-        visible: opacity > 0.01
-
-        sourceComponent: Lyrics {
-            textColor: root.blendedColors.colOnLayer0
-            activeColor: root.blendedColors.colPrimary
-            dimColor: root.blendedColors.colSubtext
-            indicatorColor: {
-                let c = root.blendedColors.colPrimaryContainer
-                return (c && c != "#000000" && c != "transparent") ? c : root.artDominantColor
-            }
-            indicatorShapeColor: {
-                let c = root.blendedColors.colOnPrimaryContainer
-                if (c && c != "#000000" && c != "#ffffff" && c != "transparent") return c
-                return root.blendedColors.colPrimary || Appearance.colors.colPrimary
-            }
-        }
-    }
-
-    StyledText {
-        id: trackTitle
-        x: root.textX
-        y: root.lerp(root.pad, root.lyricsTitleY)
-        width: root.textWidth
-        font.pixelSize: Appearance.font.pixelSize.large
-        color: root.blendedColors.colOnLayer0
-        elide: Text.ElideRight
-        text: StringUtils.cleanMusicTitle(root.player?.trackTitle) || "Untitled"
-        animateChange: true
-        animationDistanceX: 6
-        animationDistanceY: 0
-    }
-
-    StyledText {
-        id: trackArtist
-        x: root.textX
-        y: trackTitle.y + trackTitle.implicitHeight + root.lerp(2, -2)
-        width: root.textWidth
-        font.pixelSize: Appearance.font.pixelSize.smaller
-        color: root.blendedColors.colSubtext
-        elide: Text.ElideRight
-        text: root.player?.trackArtist
-        animateChange: true
-        animationDistanceX: 6
-        animationDistanceY: 0
-    }
-
     StyledText {
         id: trackTime
         x: root.textX
-        y: root.rowY - height - root.lerp(5, 0)
+        y: root.rowY - height - 5
         font.pixelSize: Appearance.font.pixelSize.small
         color: root.blendedColors.colSubtext
         elide: Text.ElideRight
@@ -250,7 +170,6 @@ Item {
                 value: root.player?.position / root.player?.length
                 onMoved: {
                     root.player.position = value * root.player.length
-                    root.restartLyrics()
                 }
             }
         }
@@ -281,12 +200,6 @@ Item {
         TrackChangeButton {
             iconName: "skip_next"
             downAction: () => root.player?.next()
-        }
-
-        TrackChangeButton {
-            iconName: "lyrics"
-            visible: root.lyricsAllowed && (root.lyricsMode || !GlobalStates.sidebarRightOpen)
-            downAction: () => root.toggleLyrics()
         }
 
         TrackChangeButton {

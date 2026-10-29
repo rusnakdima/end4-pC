@@ -18,8 +18,10 @@ Singleton {
             { id: "interface", name: Translation.tr("Interface"), icon: "bottom_app_bar", file: "InterfaceConfig.qml" },
             { id: "services",  name: Translation.tr("Services"),  icon: "settings",       file: "ServicesConfig.qml" },
         ];
-        if (WM.compositor === "hyprland")
+        if (WM.compositor === "hyprland") {
+            list.push({ id: "keybinds", name: Translation.tr("Keybinds"), icon: "keyboard", file: "KeybindsConfig.qml" });
             list.push({ id: "hyprland", name: Translation.tr("Hyprland"), icon: "select_window_2", file: "HyprlandConfig.qml" });
+        }
         if (WM.compositor === "niri")
             list.push({ id: "niri", name: Translation.tr("Niri"), icon: "select_window_2", file: "NiriConfig.qml" });
         list.push({ id: "about", name: Translation.tr("About"), icon: "info", file: "About.qml" });

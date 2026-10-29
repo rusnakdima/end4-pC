@@ -47,12 +47,6 @@ generate_thumbnail() {
     local src="$1"
     local abs_path
     abs_path="$(realpath "$src")"
-    # Skip files with multiple frames (GIFs, videos, etc.)
-    case "${abs_path,,}" in
-        *.gif|*.mp4|*.webm|*.mkv|*.avi|*.mov)
-            return
-            ;;
-    esac
     local encoded_path
     encoded_path="$(urlencode "$abs_path")"
     local uri
@@ -61,10 +55,35 @@ generate_thumbnail() {
     hash="$(md5 "$uri")"
     local out="$CACHE_DIR/$hash.png"
     mkdir -p "$CACHE_DIR"
-    if [ -f "$out" ]; then
+    # A cached thumbnail that is older than the file itself is stale and gets
+    # rendered again.
+    if [ -f "$out" ] && [ "$out" -nt "$abs_path" ]; then
         return
     fi
-    magick "$abs_path" -resize "${THUMBNAIL_SIZE}x${THUMBNAIL_SIZE}" "$out"
+    # Videos get a poster frame, everything else is rendered by ImageMagick.
+    case "${abs_path,,}" in
+        *.mp4|*.webm|*.mkv|*.avi|*.mov|*.m4v|*.wmv|*.flv|*.ogv|*.3gp|*.qt)
+            # The first frame of a clip is usually black (fade in), so a frame
+            # a few seconds in is used.
+            rendered=0
+            for seek in 00:00:03 00:00:01 00:00:00; do
+                if ffmpeg -y -ss "$seek" -i "$abs_path" -frames:v 1 \
+                    -vf "scale=${THUMBNAIL_SIZE}:${THUMBNAIL_SIZE}:force_original_aspect_ratio=decrease" \
+                    -f image2 "$out" >/dev/null 2>&1; then
+                    rendered=1
+                    break
+                fi
+                rm -f "$out"
+            done
+            if [ "$rendered" -eq 0 ]; then
+                # A flat placeholder, so the preview is never an empty cell.
+                magick -size "${THUMBNAIL_SIZE}x${THUMBNAIL_SIZE}" "xc:#202020" "$out" >/dev/null 2>&1 || rm -f "$out"
+            fi
+            ;;
+        *)
+            magick "$abs_path" -auto-orient -resize "${THUMBNAIL_SIZE}x${THUMBNAIL_SIZE}" "$out"
+            ;;
+    esac
 }
 
 # Parse arguments
@@ -96,7 +115,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 THUMBNAIL_SIZE="$(get_thumbnail_size "$SIZE_NAME")"
-CACHE_DIR="$HOME/.cache/thumbnails/$SIZE_NAME"
+# The shell reads the cache through StandardPaths.GenericCacheLocation, so the
+# same root has to be used here.
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/thumbnails/$SIZE_NAME"
 
 if [ -z "$MODE" ] || [ -z "$TARGET" ]; then
     usage

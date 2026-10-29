@@ -18,7 +18,6 @@ Item {
     property var player: Mpris.players.values[root.currentPlayerIndex] ?? Mpris.players.values[0]
     property var artUrl: player?.trackArtUrl ?? ""
     property string artDownloadLocation: Directories.coverArt
-    property bool showLyrics: Config.options.sidebar.media.showLyrics ?? true
     property string artFileName: Qt.md5(artUrl)
     property string artFilePath: `${artDownloadLocation}/${artFileName}`
     property color artDominantColor: Config.options.sidebar.media.artColors
@@ -255,36 +254,14 @@ Item {
                 }
             }
 
-            // ── Lyrics ──
+            // ── Visualizer ──
             Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
 
-                Lyrics {
-                    id: lyricsComp
-                    anchors.fill: parent
-                    opacity: (MprisController.activePlayer !== null && Config.options.sidebar.media.showLyrics) ? 1 : 0
-                    textAlignment: Text.AlignHCenter
-                    textColor: blendedColors.colOnLayer0
-                    activeColor: blendedColors.colPrimary
-                    dimColor: blendedColors.colSubtext
-                    indicatorColor: {
-                        let c = blendedColors.colPrimaryContainer
-                        return (c && c != "#000000" && c != "transparent") ? c : root.artDominantColor
-                    }
-                    indicatorShapeColor: {
-                        let c = blendedColors.colOnPrimaryContainer
-                        if (c && c != "#000000" && c != "#ffffff" && c != "transparent") return c
-                        return blendedColors.colPrimary || Appearance.colors.colPrimary
-                    }
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
-                }
-
                 Loader {
                     anchors.fill: parent
-                    active: !Config.options.sidebar.media.showLyrics
-                    opacity: active ? 1 : 0
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                    active: true
 
                     sourceComponent: Visualizer {
                         vertical: false
@@ -396,7 +373,6 @@ Item {
                                     value: (sliderLoader.player?.position ?? 0) / (sliderLoader.player?.length ?? 1)
                                     onMoved: {
                                         sliderLoader.player.position = value * sliderLoader.player.length
-                                        lyricsComp.restartLyrics()
                                     }
                                 }
                             }
@@ -444,31 +420,11 @@ Item {
                 }
             }
 
-            // ── Lyrics toggle Volume & settings  ──
+            // ── Volume & settings  ──
             RowLayout {
                 Layout.fillWidth: true
                 Layout.topMargin: 20
                 spacing: 8
-
-                RippleButton {
-                    property real baseSize: Math.max(36, parent.parent.height * 0.05)
-                    implicitWidth: baseSize
-                    implicitHeight: baseSize
-                    buttonRadius: Appearance.rounding.large
-                    colBackground: ColorUtils.transparentize(blendedColors.colSecondaryContainer, 0.7)
-                    colBackgroundHover: blendedColors.colSecondaryContainerHover
-                    colRipple: blendedColors.colSecondaryContainerActive
-                    downAction: () => {
-                        Config.options.sidebar.media.showLyrics = !Config.options.sidebar.media.showLyrics
-                    }
-                    contentItem: MaterialSymbol {
-                        iconSize: 18
-                        fill: Config.options.sidebar.media.showLyrics ? 1 : 0
-                        horizontalAlignment: Text.AlignHCenter
-                        color: blendedColors.colOnSecondaryContainer
-                        text: "lyrics"
-                    }
-                }
 
                 RippleButton {
                     property real baseSize: Math.max(36, parent.parent.height * 0.05)

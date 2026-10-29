@@ -334,7 +334,7 @@ Item {
                         Image {
                             id: ovBgSource
                             anchors.fill: parent
-                            source: Config.options.background.wallpaperPath
+                            source: Wallpapers.displayPathFor(Config.options.background.wallpaperPath)
                             fillMode: Image.PreserveAspectCrop
                             asynchronous: true
                             cache: true

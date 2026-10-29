@@ -58,7 +58,6 @@ Item {
         ParallelAnimation {
             NumberAnimation { target: infoColumn; property: "opacity"; to: 0; duration: 160; easing.type: Easing.InQuad }
             NumberAnimation { target: infoShift; property: "x"; to: -40; duration: 160; easing.type: Easing.InQuad }
-            NumberAnimation { target: lyricsView; property: "opacity"; to: 0; duration: 160; easing.type: Easing.InQuad }
         }
         ScriptAction {
             script: {
@@ -70,7 +69,6 @@ Item {
         ParallelAnimation {
             NumberAnimation { target: infoColumn; property: "opacity"; to: 1; duration: 260; easing.type: Easing.OutQuad }
             NumberAnimation { target: infoShift; property: "x"; to: 0; duration: 420; easing.type: Easing.OutBack }
-            NumberAnimation { target: lyricsView; property: "opacity"; to: 1; duration: 420; easing.type: Easing.OutQuad }
         }
     }
 
@@ -381,20 +379,6 @@ Item {
             animIndex: 3
             travelX: 320
             travelY: -60
-
-            Lyrics {
-                id: lyricsView
-                anchors.fill: parent
-                fontScale: 1.8
-                animateTransitions: true
-                lineSpacing: 28
-                textAlignment: Text.AlignHCenter
-                textColor: root.fg
-                activeColor: root.colors.colPrimary
-                dimColor: root.fgDim
-                indicatorColor: root.colors.colSecondaryContainer
-                indicatorShapeColor: root.colors.colOnSecondaryContainer
-            }
 
             StyledComboBoxSearch {
                 id: playerSelector

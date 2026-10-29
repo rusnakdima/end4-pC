@@ -13,7 +13,7 @@ Item {
     property real angleStep: 12 * Math.PI / 180
     property string dateText: Qt.locale().toString(DateTime.clock.date, "ddd dd")
     
-    readonly property int clockSecond: DateTime.clock.seconds
+    readonly property int clockSecond: DateTime.second
     readonly property string dialStyle: Config.options.background.widgets.clock.cookie.dialNumberStyle
     readonly property bool timeIndicators: Config.options.background.widgets.clock.cookie.timeIndicators
 

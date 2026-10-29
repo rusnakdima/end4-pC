@@ -3,36 +3,45 @@ import QtQuick.Layouts
 import qs
 import qs.services
 import qs.modules.common
-import qs.modules.common.models
 import qs.modules.common.widgets
-import Quickshell.Io
-import Quickshell.Wayland
-import Quickshell.Hyprland
 
-Loader {
+MouseArea {
     id: root
-    property color contentColor: Appearance.colors.colOnLayer0
+    acceptedButtons: Qt.NoButton
+    hoverEnabled: true
+
+    property color contentColor: Appearance.colors.colOnLayer1
     property bool contentColorOverridden: false
-    property bool vertical: false
-    property color color: Appearance.colors.colOnSurfaceVariant
+    property bool vertical: Config.options.bar.vertical
 
-    sourceComponent: Item {
-        implicitWidth: root.vertical ? null : rowLayout.implicitWidth + 8
-        implicitHeight: root.vertical ? rowLayout.implicitHeight + 6 : null
+    readonly property string layoutCode: KeyboardLayouts.currentLayoutCode
+    readonly property string layoutName: KeyboardLayouts.currentLayoutName
+    readonly property bool hasLayout: layoutCode.length > 0
 
-        RowLayout {
-            id: rowLayout
-            anchors.centerIn: parent
-            spacing: 5
+    implicitWidth: vertical
+        ? Appearance.sizes.verticalBarWidth
+        : (layoutText.implicitWidth + 8)
+    implicitHeight: vertical
+        ? (layoutText.implicitHeight + 6)
+        : Appearance.sizes.barHeight
 
-            StyledText {
-                id: layoutCodeText
-                horizontalAlignment: Text.AlignHCenter
-                text: WM.compositor === "niri" ? NiriXkb.currentLayoutCode : HyprlandXkb.currentLayoutCode
-                font.pixelSize: Appearance.font.pixelSize.small
-                color: root.contentColor
-                animateChange: true
-            }
-        }
+    visible: root.hasLayout
+
+    StyledText {
+        id: layoutText
+        anchors.centerIn: parent
+        horizontalAlignment: Text.AlignHCenter
+        text: root.layoutCode
+        font.pixelSize: root.vertical
+            ? Appearance.font.pixelSize.smaller
+            : Appearance.font.pixelSize.small
+        color: root.contentColorOverridden
+            ? root.contentColor
+            : Appearance.colors.colOnLayer1
+        animateChange: true
+    }
+
+    StyledToolTip {
+        text: root.layoutName.length > 0 ? root.layoutName : root.layoutCode
     }
 }

@@ -886,13 +886,20 @@ Singleton {
             addFunctionOutputMessage(name, JSON.stringify(configJson));
             requester.makeRequest();
         } else if (name === "set_shell_config") {
-            if (!args.key || !args.value) {
+            if (args.key === undefined || args.key === null || args.key === ""
+                || args.value === undefined) {
                 addFunctionOutputMessage(name, Translation.tr("Invalid arguments. Must provide `key` and `value`."));
+                requester.makeRequest();
                 return;
             }
             const key = args.key;
             const value = args.value;
-            Config.setNestedValue(key, value);
+            if (Config.setNestedValue(key, value)) {
+                addFunctionOutputMessage(name, Translation.tr("Config updated: %1").arg(key));
+            } else {
+                addFunctionOutputMessage(name, Translation.tr("Unknown config key: %1").arg(key));
+            }
+            requester.makeRequest();
         } else if (name === "run_shell_command") {
             if (!args.command || args.command.length === 0) {
                 addFunctionOutputMessage(name, Translation.tr("Invalid arguments. Must provide `command`."));

@@ -40,42 +40,21 @@ Scope {
         WlrLayershell.keyboardFocus: GlobalStates.settingsOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
         color: "transparent"
 
+        // Only the card is interactive. Without a mask the whole screen
+        // sized surface would swallow every click, so nothing underneath
+        // could be used while the panel is open.
+        mask: Region {
+            item: settingsWindow
+        }
+
         anchors {
             top: true
             bottom: true
             left: true
             right: true
         }
-
         onVisibleChanged: {
-            if (visible) {
-                GlobalFocusGrab.addDismissable(panelWindow);
-                settingsWindow.userMoved = false;
-            } else {
-                GlobalFocusGrab.removeDismissable(panelWindow);
-            }
-        }
-
-        Connections {
-            target: GlobalFocusGrab
-            function onDismissed() {
-                panelWindow.hide();
-            }
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            color: "transparent"
-            opacity: GlobalStates.settingsOpen ? 1 : 0
-            z: 0
-            Behavior on opacity {
-                NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
-            }
-            MouseArea {
-                anchors.fill: parent
-                propagateComposedEvents: false
-                onClicked: panelWindow.hide()
-            }
+            if (visible) settingsWindow.userMoved = false;
         }
 
         Rectangle {
@@ -89,7 +68,12 @@ Scope {
             z: 1
 
             property bool userMoved: false
-            anchors.centerIn: userMoved ? undefined : parent
+            property real movedX: 0
+            property real movedY: 0
+            readonly property real centeredX: (parent.width - width) / 2
+            readonly property real centeredY: (parent.height - height) / 2
+            x: settingsWindow.userMoved ? settingsWindow.movedX : settingsWindow.centeredX
+            y: settingsWindow.userMoved ? settingsWindow.movedY : settingsWindow.centeredY
 
             opacity: GlobalStates.settingsOpen ? 1 : 0
             scale: GlobalStates.settingsOpen ? 1 : 0.95
@@ -147,10 +131,48 @@ Scope {
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.SizeAllCursor
-                    drag.target: settingsWindow
-                    drag.axis: Drag.XAndYAxis
-                    onPressed: settingsWindow.userMoved = true
+                    property real grabOffsetX: 0
+                    property real grabOffsetY: 0
+
+                    onPressed: (event) => {
+                        const origin = settingsWindow.mapToItem(null, 0, 0);
+                        grabOffsetX = event.scenePosition.x - origin.x;
+                        grabOffsetY = event.scenePosition.y - origin.y;
+                    }
+                    onPositionChanged: (event) => {
+                        if (!pressed) return;
+                        const parentOrigin = settingsWindow.parent.mapToItem(null, 0, 0);
+                        const newSceneX = event.scenePosition.x - grabOffsetX;
+                        const newSceneY = event.scenePosition.y - grabOffsetY;
+                        settingsWindow.movedX = Math.max(0, Math.min(settingsWindow.parent.width - settingsWindow.width, newSceneX - parentOrigin.x));
+                        settingsWindow.movedY = Math.max(0, Math.min(settingsWindow.parent.height - settingsWindow.height, newSceneY - parentOrigin.y));
+                        settingsWindow.userMoved = true;
+                    }
                     onDoubleClicked: settingsWindow.userMoved = false
+                }
+            }
+
+            RippleButton {
+                id: closeButton
+                implicitWidth: 40
+                implicitHeight: 40
+                buttonRadius: Appearance.rounding.full
+                anchors {
+                    top: parent.top
+                    right: parent.right
+                    topMargin: 8
+                    rightMargin: 12
+                }
+                // Above the drag handle, whose mouse area would swallow the click.
+                z: 3
+
+                onClicked: panelWindow.hide()
+
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    horizontalAlignment: Text.AlignHCenter
+                    font.pixelSize: Appearance.font.pixelSize.title
+                    text: "close"
                 }
             }
 

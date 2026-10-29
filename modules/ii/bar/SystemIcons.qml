@@ -16,9 +16,7 @@ Item {
     property bool showDate: Config.options.bar.verbose
     property bool vertical: Config.options.bar.vertical
     property bool isMaterial: Config.options.bar.cornerStyle === 3 || Config.options.bar.cornerStyle === 4
-    property bool isDi: GlobalStates.dynamicIslandEnabled && Config.options.bar.dynamicIsland.rightWidget === "systemIcons" 
-
-    readonly property color iconColor: root.contentColorOverridden ? root.contentColor : (root.isDi ? Appearance.colors.colOnLayer1 : (root.isMaterial ? Appearance.colors.colOnPrimary : Appearance.colors.colOnLayer1))
+    readonly property color iconColor: root.contentColorOverridden ? root.contentColor : (root.isMaterial ? Appearance.colors.colOnPrimary : Appearance.colors.colOnLayer1)
 
     implicitWidth: root.vertical ? 32 : flow.implicitWidth + (root.isMaterial ? 12 : 4)
     implicitHeight: root.vertical ? flow.implicitHeight + 4 : 32
@@ -124,8 +122,24 @@ Item {
             }
         }
         Loader {
+            id: xkbLoader
+            width: item?.implicitWidth ?? 0
+            height: item?.implicitHeight ?? 0
+            implicitWidth: item?.implicitWidth ?? 0
+            implicitHeight: item?.implicitHeight ?? 0
             source: "HyprlandXkbIndicator.qml"
-            onLoaded: item.color = root.iconColor
+            Binding {
+                target: xkbLoader.item
+                property: "contentColor"
+                value: root.iconColor
+                when: xkbLoader.item !== null
+            }
+            Binding {
+                target: xkbLoader.item
+                property: "contentColorOverridden"
+                value: true
+                when: xkbLoader.item !== null
+            }
         }
         MaterialSymbol {
             text: Network.materialSymbol

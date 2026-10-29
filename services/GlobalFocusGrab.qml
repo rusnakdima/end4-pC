@@ -9,8 +9,13 @@ import qs.services
  * Manages a HyprlandFocusGrab that's to be shared by all windows.
  * "Persistent" is for windows that should always be included but not closed on dismiss, like bar and onscreen keyboard.
  * "Dismissable" is for stuff like sidebars.
+ *
+ * The settings panel is deliberately not part of this grab. A layer shell
+ * surface in the grab takes every key press away from the window the user is
+ * actually working in, which made Escape and plain letters disappear while
+ * the panel was open.
  **/
- 
+
 Singleton {
     id: root
 

@@ -22,6 +22,32 @@ Singleton {
         return FileUtils.trimFileProtocol(path.toString()).replace(/\/+$/, "");
     }
 
+    // A plain Image cannot decode a video, so every surface that shows the
+    // wallpaper as an image resolves the path first. Videos are shown through
+    // the thumbnail of the current wallpaper, every other video through the
+    // freedesktop thumbnail cache. Both paths are derived at runtime, nothing
+    // is hardcoded.
+    function displayPathFor(path: string): string {
+        if (!path) return "";
+        if (!Images.isVideoPath(path)) return path;
+
+        const trimmed = FileUtils.trimFileProtocol(path);
+        const current = FileUtils.trimFileProtocol(Config.options?.background?.wallpaperPath ?? "");
+        if (trimmed === current) {
+            const thumb = FileUtils.trimFileProtocol(Config.options?.background?.thumbnailPath ?? "");
+            if (thumb) return thumb;
+        }
+        return freedesktopThumbnailPath(trimmed);
+    }
+
+    // The freedesktop thumbnail cache is filled on demand by ThumbnailImage.
+    function freedesktopThumbnailPath(path: string): string {
+        const resolved = FileUtils.trimFileProtocol(`${Qt.resolvedUrl(path)}`);
+        const encoded = resolved.split("/").map(part => encodeURIComponent(part)).join("/");
+        const hash = Qt.md5(`file://${encoded}`);
+        return `${Directories.genericCache}/thumbnails/large/${hash}.png`;
+    }
+
     property alias directory: folderModel.folder
     readonly property string effectiveDirectory: getCleanDirPath(folderModel.folder)
     property url defaultFolder: Qt.resolvedUrl(`${Directories.pictures}/Wallpapers`)
@@ -108,7 +134,14 @@ Singleton {
     function randomFromCurrentFolder(darkMode = Appearance.m3colors.darkmode) {
         const count = wallpaperModel.count > 0 ? wallpaperModel.count : folderModel.count;
         if (count === 0) return;
-        const randomIndex = Math.floor(Math.random() * count);
+        const indices = [];
+        for (let i = 0; i < count; i++) {
+            const item = wallpaperModel.count > 0 ? wallpaperModel.get(i) : null;
+            const isDir = item ? Boolean(item.fileIsDir) : Boolean(folderModel.get(i, "fileIsDir"));
+            if (!isDir) indices.push(i);
+        }
+        if (indices.length === 0) return;
+        const randomIndex = indices[Math.floor(Math.random() * indices.length)];
         const item = wallpaperModel.count > 0 ? wallpaperModel.get(randomIndex) : null;
         const filePath = item ? item.filePath : folderModel.get(randomIndex, "filePath");
         print("Randomly selected wallpaper:", filePath);
@@ -122,6 +155,8 @@ Singleton {
         const candidates = [];
         for (let i = 0; i < count; i++) {
             const item = wallpaperModel.count > 0 ? wallpaperModel.get(i) : null;
+            const isDir = item ? Boolean(item.fileIsDir) : Boolean(folderModel.get(i, "fileIsDir"));
+            if (isDir) continue;
             const path = item ? item.filePath : (folderModel.get(i, "filePath") || FileUtils.trimFileProtocol(folderModel.get(i, "fileURL")));
             if (path && path.length && FileUtils.trimFileProtocol(path) !== excludeClean) {
                 candidates.push(path);
@@ -461,7 +496,7 @@ Singleton {
         }
 
         root.syncModel(sorted);
-        root.wallpapers = sorted.filter(item => item.filePath && item.filePath.length).map(item => item.filePath);
+        root.wallpapers = sorted.filter(item => !item.fileIsDir && item.filePath && item.filePath.length).map(item => item.filePath);
         root.resultsUpdated();
     }
 

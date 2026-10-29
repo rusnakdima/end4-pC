@@ -42,7 +42,11 @@ apply_kitty() {
   done
 
   # Reload
-  kill -SIGUSR1 $(pidof kitty)
+  local kitty_pids
+  kitty_pids=$(pidof kitty 2>/dev/null || true)
+  if [ -n "$kitty_pids" ]; then
+    kill -SIGUSR1 $kitty_pids 2>/dev/null || true
+  fi
 }
 
 apply_anyterm() {

@@ -1,5 +1,6 @@
 pragma Singleton
 import Quickshell
+import "KeyCombos.js" as KeyCombos
 
 Singleton {
     id: root
@@ -294,5 +295,21 @@ Singleton {
             return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
             }
         );
+    }
+
+    /**
+     * Qt key codes mapped to the key names Hyprland uses.
+     */
+    readonly property var keyNames: KeyCombos.keyNames()
+
+    /**
+     * Converts a key event into a Hyprland key combination ("SUPER + ALT + V").
+     * Returns "" when the key has no name Hyprland would understand, so the
+     * caller can ignore the press.
+     * @param { object } event
+     * @returns { string }
+     */
+    function keyEventToCombo(event) {
+        return KeyCombos.keyEventToCombo(event);
     }
 }

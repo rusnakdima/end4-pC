@@ -46,7 +46,7 @@ Item {
 
     function shouldPaintMaterialPill(name) {
         if (!root.isMaterial) return false;
-        const blacklist = ["workspaces", "divisor", "powerButton", "media", "docktoPanel", "leftSidebarButton", "dynamicIsland", "avatar"];
+        const blacklist = ["workspaces", "divisor", "powerButton", "media", "docktoPanel", "leftSidebarButton", "avatar"];
         if (blacklist.includes(name)) {
             return false;
         }
@@ -287,7 +287,7 @@ Item {
                             vertical: true
                             currentIndex: index
                             widgetName: modelData
-                            paintBackground: modelData !== "dynamicIsland"
+                            paintBackground: true
                             totalCount: root.effectiveMiddleLayout.length
                             paintMaterialPill: root.shouldPaintMaterialPill(modelData)
                             bgColor: root.getMaterialPillColor(modelData)
@@ -334,7 +334,7 @@ Item {
                         vertical: true
                         currentIndex: index
                         widgetName: modelData
-                        paintBackground: modelData !== "dynamicIsland"
+                        paintBackground: true
                         totalCount: root.effectiveMiddleLayout.length
                         Loader {
                             Layout.fillWidth: true

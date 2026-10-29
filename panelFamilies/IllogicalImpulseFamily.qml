@@ -6,6 +6,7 @@ import qs.modules.common
 import qs.modules.ii.background
 import qs.modules.ii.bar
 import qs.modules.ii.dock
+
 import qs.modules.ii.equalizer
 import qs.modules.ii.lock
 import qs.modules.ii.mediaControls
@@ -35,6 +36,7 @@ Scope {
     PanelLoader { component: EqualizerPopup {} }
     PanelLoader { component: Lock {} }
     PanelLoader { component: MediaControls {} }
+
     PanelLoader { component: NotificationPopup {} }
     PanelLoader { component: OnScreenDisplay {} }
     PanelLoader { component: OnScreenKeyboard {} }

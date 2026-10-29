@@ -42,7 +42,7 @@ Item {
         Image {
             id: backdropImage
             anchors.fill: parent
-            source: Collage.primaryImage
+            source: Wallpapers.displayPathFor(Collage.primaryImage)
             sourceSize.width: 256
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
@@ -186,7 +186,7 @@ Item {
                 id: tileImage
                 anchors.fill: parent
                 onStatusChanged: tile.checkImage()
-                source: tile.decodeWidth > 0 ? tile.modelData.src : ""
+                source: tile.decodeWidth > 0 ? Wallpapers.displayPathFor(tile.modelData.src) : ""
                 sourceSize.width: tile.decodeWidth
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true

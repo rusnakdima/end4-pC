@@ -248,15 +248,13 @@ Item {
 
                                 function onThumbnailGenerated(directory) {
                                     if (thumb.status !== Image.Error) return;
-                                    thumb.source = "";
-                                    thumb.source = thumb.thumbnailPath;
+                                    thumb.reload();
                                 }
 
                                 function onThumbnailGeneratedFile(filePath) {
                                     if (thumb.status !== Image.Error) return;
                                     if (Qt.resolvedUrl(thumb.sourcePath) !== Qt.resolvedUrl(filePath)) return;
-                                    thumb.source = "";
-                                    thumb.source = thumb.thumbnailPath;
+                                    thumb.reload();
                                 }
                             }
                         }

@@ -74,6 +74,21 @@ Singleton {
         onTriggered: Quickshell.execDetached(["bash", FileUtils.trimFileProtocol(Directories.wallpaperSwitchScriptPath), "--noswitch", ...root.pendingArgs])
     }
 
+    // Re-runs the wallpaper/theme generation with the values currently stored in
+    // the config. The delay is deliberate: Config debounces its file write by
+    // 50 ms and switchwall.sh reads config.json with jq, so the script has to
+    // run after the new value has landed on disk.
+    function regenerateTheme() {
+        root.pendingArgs = []
+        themeApplyTimer.restart()
+    }
+
+    Timer {
+        id: themeApplyTimer
+        interval: 300
+        onTriggered: Quickshell.execDetached(["bash", FileUtils.trimFileProtocol(Directories.wallpaperSwitchScriptPath), "--noswitch"])
+    }
+
     function setScheme(id, closeSettings = true) {
         root.run(["--scheme-name", id === "" ? "clear" : id], closeSettings)
     }

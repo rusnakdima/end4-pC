@@ -243,6 +243,19 @@ ContentPage {
                         Config.options.time.dateFormat = value;
                     }
                 }
+
+                ConfigSelectionArray {
+                    text: Translation.tr("First day of week")
+                    icon: "calendar_view_week"
+                    currentValue: String(Config.options.time.firstDayOfWeek)
+                    onSelected: newValue => {
+                        Config.options.time.firstDayOfWeek = Number(newValue);
+                    }
+                    options: [
+                        { displayName: Translation.tr("Monday"), icon: "calendar_view_week", value: "0" },
+                        { displayName: Translation.tr("Sunday"), icon: "wb_sunny", value: "6" }
+                    ]
+                }
             }
         }
 

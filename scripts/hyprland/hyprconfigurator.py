@@ -2,7 +2,9 @@
 import argparse
 import os
 import re
+import subprocess
 import tempfile
+from datetime import datetime
 
 BOOL_KEYS = {
     "decoration:blur:enabled",
@@ -10,6 +12,7 @@ BOOL_KEYS = {
     "decoration:dim_inactive",
     "animations:enabled",
     "general:resize_on_border",
+    "general:extend_border_grab_area",
     "general:allow_tearing",
     "input:numlock_by_default",
     "input:force_no_accel",
@@ -29,14 +32,32 @@ BOOL_KEYS = {
     "misc:enable_swallow",
     "misc:middle_click_paste",
     "misc:close_special_on_empty",
+    "cursor:no_hardware_cursors",
     "cursor:hide_on_key_press",
+    "cursor:warp_on_change_workspace",
     "dwindle:preserve_split",
     "dwindle:smart_split",
+    "dwindle:force_split",
+    "master:new_status",
     "xwayland:force_zero_scaling",
     "binds:workspace_back_and_forth",
     "binds:allow_workspace_cycles",
     "group:auto_group",
 }
+
+STATE_DIR = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "quickshell", "user")
+LOG_PATH = os.path.join(STATE_DIR, "hyprconfigurator.log")
+
+
+def log(message: str) -> None:
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        with open(LOG_PATH, "a") as f:
+            f.write(f"{stamp} {message}\n")
+    except OSError:
+        pass
+
 
 ANIM_PRESETS = {
     "fast": """\
@@ -92,6 +113,11 @@ hl.animation({ leaf = "specialWorkspaceOut", enabled = true, speed = 4, bezier =
 }
 
 
+def lua_quote(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
+    return f'"{escaped}"'
+
+
 def to_lua_value(key, value):
     if key in BOOL_KEYS:
         return "false" if value == "0" else "true"
@@ -103,7 +129,7 @@ def to_lua_value(key, value):
         return str(float(value))
     except ValueError:
         pass
-    return f'"{value}"'
+    return lua_quote(value)
 
 
 def to_lua_line(key, value):
@@ -143,7 +169,53 @@ def write_atomic(path, content):
         raise e
 
 
-def edit_lua(file_path, set_pairs, reset_keys):
+def hyprctl(args):
+    """Run hyprctl and return (returncode, combined output). Never raises."""
+    try:
+        proc = subprocess.run(["hyprctl", *args], capture_output=True, text=True, timeout=10)
+    except FileNotFoundError:
+        return 127, "hyprctl not found"
+    except subprocess.TimeoutExpired:
+        return 124, "hyprctl timed out"
+    return proc.returncode, (proc.stdout + proc.stderr).strip()
+
+
+def apply_live(key: str, value: str, snippet: str) -> bool:
+    """Apply one setting to the running compositor.
+
+    The config provider is Lua (Hyprland 0.46+), where `hyprctl keyword` is a
+    documented no-op; `hyprctl eval` is the supported live channel.
+    """
+    code, out = hyprctl(["eval", snippet])
+    if code == 0 and (out == "" or out.lower().startswith("ok")):
+        log(f"applied {key} = {value}")
+        return True
+
+    # Fallback for a legacy (hyprlang) provider: keyword uses ':' as separator.
+    if "unknown" in out.lower() and "eval" in out.lower():
+        legacy_key = key.replace("-", "_")
+        code, out = hyprctl(["keyword", legacy_key, value])
+        if code == 0:
+            log(f"applied (legacy keyword) {legacy_key} = {value}")
+            return True
+
+    log(f"FAILED {key} = {value}: rc={code} {out}")
+    print(f"Failed to apply {key} = {value}: {out}")
+    return False
+
+
+def reload_compositor() -> bool:
+    """Re-read the whole compositor config (used after a reset)."""
+    code, out = hyprctl(["reload"])
+    if code == 0:
+        log("reloaded compositor config")
+        return True
+    log(f"FAILED reload: rc={code} {out}")
+    print(f"Failed to reload the compositor config: {out}")
+    return False
+
+
+def edit_lua(file_path, set_pairs, reset_keys, apply_live_enabled=True):
     try:
         with open(file_path) as f:
             lines = f.readlines()
@@ -180,6 +252,14 @@ def edit_lua(file_path, set_pairs, reset_keys):
 
     write_atomic(file_path, "".join(new_lines))
 
+    if apply_live_enabled:
+        for k, v in set_pairs:
+            apply_live(k, v, to_lua_line(k, v).strip())
+        if reset_keys:
+            # A reset drops the override, so the base config value takes over.
+            # That value only exists in the config file, hence the reload.
+            reload_compositor()
+
 
 def save_preset(anim_file, preset_name):
     content = ANIM_PRESETS.get(preset_name)
@@ -197,6 +277,7 @@ if __name__ == "__main__":
     p.add_argument("--reset", action="append", metavar="KEY")
     p.add_argument("--anim-preset", metavar="PRESET")
     p.add_argument("--anim-file", default="~/.config/hypr/hyprland/shellOverrides/animations.lua")
+    p.add_argument("--no-apply", action="store_true", help="only write the overrides file, do not touch the running compositor")
     args = p.parse_args()
 
     if args.anim_preset:
@@ -212,6 +293,6 @@ if __name__ == "__main__":
             set_pairs.append((k, v))
 
     if set_pairs or reset_keys:
-        edit_lua(os.path.expanduser(args.file), set_pairs, reset_keys)
+        edit_lua(os.path.expanduser(args.file), set_pairs, reset_keys, apply_live_enabled=not args.no_apply)
     elif not args.anim_preset:
         print("Error: specify --set, --reset, or --anim-preset")

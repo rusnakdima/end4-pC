@@ -4,6 +4,7 @@ import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
+
 import Quickshell.Hyprland
 
 ContentPage {
@@ -37,7 +38,6 @@ ContentPage {
         { id: "hyprlandXkbIndicator",   name: Translation.tr("Keyboard Layout"), icon: "keyboard" },
         { id: "divisor",            name: Translation.tr("Divider"),             icon: "horizontal_distribute" },
         { id: "launcherButton",     name: Translation.tr("Launcher Button"),     icon: "search" },
-        { id: "dynamicIsland",     name: Translation.tr("Dynamic Island"),     icon: "nest_wifi_pro" },
         { id: "aiUsage",           name: Translation.tr("AI Usage"),           icon: "neurology" },
         { id: "avatar",            name: Translation.tr("Avatar"),             icon: "account_circle" },
     ]
@@ -49,8 +49,7 @@ ContentPage {
             ...Config.options.bar.layouts.rightLayout
         ]
         if (section === "middle" && Config.options.bar.layouts.middleLayout.length > 0) {
-            return Config.options.bar.layouts.middleLayout.includes("dynamicIsland") ? [] : allWidgets.filter(w => {
-                if (w.id === "dynamicIsland") return false
+            return allWidgets.filter(w => {
                 if (w.id === "divisor" && Config.options.bar.borderless !== "transparent") return false
                 const multipleAllowed = ["visualizer", "divisor"]
                 return !used.includes(w.id) || multipleAllowed.includes(w.id)
@@ -59,7 +58,6 @@ ContentPage {
         const multipleAllowed = ["visualizer", "divisor"]
         return allWidgets.filter(w => {
             if (w.id === "divisor" && Config.options.bar.borderless !== "transparent") return false
-            if (w.id === "dynamicIsland" && (Config.options.bar.vertical || section !== "middle")) return false
             return !used.includes(w.id) || multipleAllowed.includes(w.id)
         })
     }
@@ -67,9 +65,6 @@ ContentPage {
     readonly property var usedWidgets: {
         const layouts = Config.options.bar.layouts
         const used = [...layouts.leftLayout, ...layouts.middleLayout, ...layouts.rightLayout]
-        if (used.includes("dynamicIsland")) {
-            used.push(Config.options.bar.dynamicIsland.leftWidget, Config.options.bar.dynamicIsland.rightWidget)
-        }
         return used
     }
 
@@ -78,7 +73,6 @@ ContentPage {
     }
 
     readonly property var widgetSections: ({
-        dynamicIsland: Translation.tr("Dynamic Island"),
         sysTray: Translation.tr("Tray"),
         leftSidebarButton: Translation.tr("Left sidebar button"),
         divisor: Translation.tr("Divider"),
@@ -359,64 +353,6 @@ ContentPage {
         }
 
         ContentSection {
-            icon: "nest_wifi_pro"
-            shape: MaterialShape.Shape.Cookie4Sided
-            title: Translation.tr("Dynamic Island")
-            visible: page.isUsed("dynamicIsland")
-
-            GroupedList {
-                ConfigSelectionArray {
-                    text: Translation.tr("Left widget")
-                    icon: "right_panel_open"
-                    currentValue: Config.options.bar.dynamicIsland.leftWidget
-                    onSelected: newValue => { Config.options.bar.dynamicIsland.leftWidget = newValue; }
-                    options: [
-                        { displayName: Translation.tr(""),    icon: "block",        value: "none" },
-                        { displayName: Translation.tr("Clock"),   icon: "schedule",     value: "clockWidget" },
-                        { displayName: Translation.tr("Weather"), icon: "partly_cloudy_day", value: "weatherBar" },
-                        { displayName: Translation.tr("Updates"), icon: "update",       value: "updatesCount" }
-                    ]
-                }
-                ConfigSelectionArray {
-                    text: Translation.tr("Right widget")
-                    icon: "left_panel_open"
-                    currentValue: Config.options.bar.dynamicIsland.rightWidget
-                    onSelected: newValue => { Config.options.bar.dynamicIsland.rightWidget = newValue; }
-                    options: [
-                        { displayName: Translation.tr(""),         icon: "block",        value: "none" },
-                        { displayName: Translation.tr("System icons"), icon: "settings",     value: "systemIcons" },
-                        { displayName: Translation.tr("Tray"),  icon: "apps",         value: "sysTray" },
-                        { displayName: Translation.tr("Util buttons"), icon: "widgets",   value: "utilButtons" }
-                    ]
-                }
-            }
-
-            ContentSubsection {
-                Layout.topMargin: 10
-                title: Translation.tr("Media")
-                GroupedList {
-                    ConfigSelectionArray {
-                        text: Translation.tr("Visualizer style")
-                        icon: "graphic_eq"
-                        currentValue: Config.options.bar.dynamicIsland.visualizerStyle
-                        onSelected: newValue => { Config.options.bar.dynamicIsland.visualizerStyle = newValue; }
-                        options: [
-                            { displayName: Translation.tr(""),      icon: "block",       value: "none" },
-                            { displayName: Translation.tr("Dots"),  icon: "steppers",     value: "dots" },
-                            { displayName: Translation.tr("Wave"),  icon: "ssid_chart",   value: "wave" }
-                        ]
-                    }
-                    ConfigSwitch {
-                        buttonIcon: "play_circle"
-                        text: Translation.tr("Show media controls")
-                        checked: Config.options.bar.dynamicIsland.showMediaControls
-                        onCheckedChanged: { Config.options.bar.dynamicIsland.showMediaControls = checked; }
-                    }
-                }
-            }
-        }
-
-        ContentSection {
             icon: "notifications"
             shape: MaterialShape.Shape.Bun
             title: Translation.tr("Notifications")
@@ -659,6 +595,12 @@ ContentPage {
                         text: Translation.tr("Record Screen")
                         checked: Config.options.bar.utilButtons.showScreenRecord
                         onCheckedChanged: { Config.options.bar.utilButtons.showScreenRecord = checked }
+                    }
+                    ConfigSwitch {
+                        buttonIcon: "mic"
+                        text: Translation.tr("Speech to Text")
+                        checked: Config.options.bar.utilButtons.showSttToggle
+                        onCheckedChanged: { Config.options.bar.utilButtons.showSttToggle = checked }
                     }
                     ConfigSwitch {
                         buttonIcon: "imagesmode"

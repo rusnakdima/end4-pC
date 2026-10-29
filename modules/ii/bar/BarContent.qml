@@ -26,8 +26,6 @@ Item {
     readonly property real centerPillX: centerPill.x
     readonly property real centerPillWidth: centerPill.width
     readonly property bool isPanel: Config.options.bar.cornerStyle === 5
-    readonly property var diLeftWidgets:  filterLayout(Config.options.bar.dynamicIsland.leftWidgets ?? [])
-    readonly property var diRightWidgets: filterLayout(Config.options.bar.dynamicIsland.rightWidgets ?? [])
 
     readonly property bool trayHasItems: SystemTray.items.values.length > 0
 
@@ -51,9 +49,17 @@ Item {
         return prevCount % 2 === 1
     }
 
+    // Qt 6.12 gives every QQuickItem a read-only "mirrored" property, so
+    // item.hasOwnProperty("mirrored") is true for every widget and writing to
+    // it raises "Cannot assign to read-only property". Only the widgets that
+    // declare a writable "mirrored" of their own may be mirrored.
+    function canMirror(name) {
+        return name === "visualizer";
+    }
+
     function shouldPaintMaterialPill(name) {
         if (!root.isMaterial) return false;
-        const blacklist = ["workspaces", "divisor", "powerButton", "docktoPanel", "leftSidebarButton", "activeWindow", "dynamicIsland", "avatar"];
+        const blacklist = ["workspaces", "divisor", "powerButton", "docktoPanel", "leftSidebarButton", "activeWindow", "avatar"];
         if (blacklist.includes(name)) {
             return false;
         }
@@ -139,10 +145,8 @@ Item {
         visible: centerOnly && Config.options.bar.showBackground && Config.options.bar.cornerStyle !== 2 
         anchors.verticalCenter: parent.verticalCenter
         anchors.horizontalCenter: parent.horizontalCenter
-        width: GlobalStates.dynamicIslandEnabled
-            ? (Config.options.bar.cornerStyle === 1 ? middleRow.implicitWidth + 8 : middleRow.implicitWidth - 4)
-            : middleRow.implicitWidth + 10
-        height: GlobalStates.dynamicIslandEnabled ? parent.height : parent.height - (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut * 2 : 0)
+        width: middleRow.implicitWidth + 10
+        height: parent.height - (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut * 2 : 0)
         color: root.useTabWrapper ? "transparent" : Config.options.bar.followFrameColor 
             ? Appearance.getColorFromName(Config.options.bar.frameColor)
             : Appearance.colors.colLayer0
@@ -240,7 +244,7 @@ Item {
                                 Layout.fillHeight: true
                                 source: root.getWidgetUrl(modelData)
                                 onLoaded: {
-                                    if (item && item.hasOwnProperty("mirrored"))
+                                    if (item && root.canMirror(modelData))
                                         item.mirrored = root.getMirroredForIndex(root.effectiveLeftLayout, index)
                                 }
                             }
@@ -286,7 +290,7 @@ Item {
                             Layout.fillHeight: true
                             source: root.getWidgetUrl(modelData)
                             onLoaded: {
-                                if (item && item.hasOwnProperty("mirrored"))
+                                if (item && root.canMirror(modelData))
                                     item.mirrored = root.getMirroredForIndex(root.effectiveLeftLayout, index)
                             }
                         }
@@ -301,7 +305,7 @@ Item {
                         Layout.alignment: Qt.AlignVCenter
                         source: root.getWidgetUrl(modelData)
                         onLoaded: {
-                            if (item && item.hasOwnProperty("mirrored"))
+                            if (item && root.canMirror(modelData))
                                 item.mirrored = root.getMirroredForIndex(root.effectiveLeftLayout, index)
                         }
                     }
@@ -315,26 +319,6 @@ Item {
             anchors.centerIn: parent
             width: root.useTabWrapper ? (centerMaterialPill.width + (root.hasTabs && root.effectiveMiddleLayout.length > 0 ? (centerLeftOutwardCorner.implicitSize + centerRightOutwardCorner.implicitSize) : 0)) : middleRow.implicitWidth
             height: parent.height
-
-            // Dynamic Island — left
-            Loader {
-                id: diLeftWidget
-                anchors.right: absoluteCenter.left
-                anchors.rightMargin: 8
-                anchors.verticalCenter: absoluteCenter.verticalCenter
-                active: Config.options.bar.dynamicIsland.leftWidget !== "none" && GlobalStates.dynamicIslandEnabled
-                source: active ? root.getWidgetUrl(Config.options.bar.dynamicIsland.leftWidget) : ""
-            }
-
-            // Dynamic Island — right
-            Loader {
-                id: diRightWidget
-                anchors.left: absoluteCenter.right
-                anchors.leftMargin: 8
-                anchors.verticalCenter: absoluteCenter.verticalCenter
-                active: Config.options.bar.dynamicIsland.rightWidget !== "none" && GlobalStates.dynamicIslandEnabled
-                source: active ? root.getWidgetUrl(Config.options.bar.dynamicIsland.rightWidget) : ""
-            }
 
             RoundCorner {
                 id: centerLeftOutwardCorner
@@ -378,7 +362,7 @@ Item {
                             Layout.fillHeight: true
                             currentIndex: index
                             widgetName: modelData
-                            paintBackground: modelData !== "dynamicIsland"
+                            paintBackground: true
                             totalCount: root.effectiveMiddleLayout.length
                             paintMaterialPill: root.shouldPaintMaterialPill(modelData)
                             bgColor: root.getMaterialPillColor(modelData)
@@ -386,7 +370,7 @@ Item {
                                 Layout.fillHeight: true
                                 source: root.getWidgetUrl(modelData)
                                 onLoaded: {
-                                    if (item && item.hasOwnProperty("mirrored"))
+                                    if (item && root.canMirror(modelData))
                                         item.mirrored = root.getMirroredForIndex(root.effectiveMiddleLayout, index)
                                 }
                             }
@@ -427,13 +411,13 @@ Item {
                         Layout.fillHeight: true
                         currentIndex: index
                         widgetName: modelData
-                        paintBackground: modelData !== "dynamicIsland"
+                        paintBackground: true
                         totalCount: root.effectiveMiddleLayout.length
                         Loader {
                             Layout.fillHeight: true
                             source: root.getWidgetUrl(modelData)
                             onLoaded: {
-                                if (item && item.hasOwnProperty("mirrored"))
+                                if (item && root.canMirror(modelData))
                                     item.mirrored = root.getMirroredForIndex(root.effectiveMiddleLayout, index)
                             }
                         }
@@ -447,7 +431,7 @@ Item {
                         Layout.topMargin: Config.options.bar.bottom ? -5 : 3
                         source: root.getWidgetUrl(modelData)
                         onLoaded: {
-                            if (item && item.hasOwnProperty("mirrored"))
+                            if (item && root.canMirror(modelData))
                                 item.mirrored = root.getMirroredForIndex(root.effectiveMiddleLayout, index)
                         }
                     }
@@ -515,7 +499,7 @@ Item {
                                 Layout.fillHeight: true
                                 source: root.getWidgetUrl(modelData)
                                 onLoaded: {
-                                    if (item && item.hasOwnProperty("mirrored")) {
+                                    if (item && root.canMirror(modelData)) {
                                         try {
                                             item.mirrored = root.getMirroredForIndex(root.effectiveRightLayout, index);
                                         } catch (e) {}
@@ -553,7 +537,7 @@ Item {
                             Layout.fillHeight: true
                             source: root.getWidgetUrl(modelData)
                             onLoaded: {
-                                if (item && item.hasOwnProperty("mirrored")) {
+                                if (item && root.canMirror(modelData)) {
                                     try {
                                         item.mirrored = root.getMirroredForIndex(root.effectiveRightLayout, index);
                                     } catch (e) {}
@@ -570,7 +554,7 @@ Item {
                         Layout.topMargin: Config.options.bar.bottom ? -5 : 3
                         source: root.getWidgetUrl(modelData)
                         onLoaded: {
-                            if (item && item.hasOwnProperty("mirrored")) {
+                            if (item && root.canMirror(modelData)) {
                                 try {
                                     item.mirrored = root.getMirroredForIndex(root.effectiveRightLayout, index);
                                 } catch (e) {}
