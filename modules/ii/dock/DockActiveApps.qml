@@ -8,6 +8,9 @@ Item {
     id: root
 
     property bool requestDockShow: false
+    property var contextMenu: null
+    // Owner of the shared hover state; the preview popup lives in DragApps.
+    property var appListRoot: null
     property alias media: dockMedia
     readonly property var activeUnpinned: TaskbarApps.apps.filter(
         a => !a.pinned && a.appId !== "SEPARATOR" && a.toplevels.length > 0
@@ -55,7 +58,8 @@ Item {
                 Layout.bottomMargin: DockStyle.mBottom(DockStyle.pinnedInnerMargin, 0)
                 Layout.leftMargin: DockStyle.mLeft(DockStyle.pinnedInnerMargin, 0)
                 Layout.rightMargin: DockStyle.mRight(DockStyle.pinnedInnerMargin, 0)
-                appListRoot: appListBridge
+                appListRoot: root.appListRoot ?? appListBridge
+                contextMenu: root.contextMenu
                 innerInset: DockStyle.iconInset
                 outerInset: DockStyle.iconInset
             }

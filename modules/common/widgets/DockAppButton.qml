@@ -10,11 +10,14 @@ DockButton {
     id: root
     property var appToplevel
     property var appListRoot
+    property var contextMenu
     property int lastFocused: -1
     property real iconSize: DockStyle.iconSize
     property bool appIsActive: appToplevel.toplevels.find(t => (t.activated == true)) !== undefined
 
     readonly property bool isSeparator: appToplevel.appId === "SEPARATOR"
+
+    magnifiable: !root.isSeparator
     property var desktopEntry: DesktopEntries.heuristicLookup(appToplevel.appId)
     enabled: !isSeparator
     implicitWidth: isSeparator ? 1 : naturalWidth
@@ -72,7 +75,7 @@ DockButton {
     }
 
     altAction: () => {
-        TaskbarApps.togglePin(appToplevel.appId);
+        root.contextMenu?.open(root, appToplevel.appId);
     }
 
     contentItem: Loader {

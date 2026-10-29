@@ -26,6 +26,7 @@ Item {
     property Item lastHoveredButton: null
     property bool buttonHovered: false
     property bool requestDockShow: previewPopup.show
+    property var contextMenu: null
     signal orderChanged(var newOrder)
     property var  _workOrder: pinnedApps.slice()
     property int  activeDragVisualIndex: -1
@@ -154,6 +155,7 @@ Item {
                 anchors.fill: parent
 
                 property var appToplevel: slotItem.appEntry
+                magnifiable: true
 
                 innerInset: DockStyle.iconInset
                 outerInset: DockStyle.iconInset
@@ -182,7 +184,7 @@ Item {
                 }
 
                 middleClickAction: () => { slotItem.deskEntry?.execute() }
-                altAction:         () => { TaskbarApps.togglePin(slotItem.appId) }
+                altAction:         () => { root.contextMenu?.open(dockBtn, slotItem.appId) }
 
                 contentItem: DockAppIcon {
                     anchors.centerIn: parent
@@ -253,6 +255,7 @@ Item {
         property bool shouldShow: WM.compositor === "hyprland"
                                   && (popupMouseArea.containsMouse || root.buttonHovered)
                                   && !root._dragging
+                                  && !(root.contextMenu?.isOpen ?? false)
                                   && Config.options.dock.showPreviews
                                   && appTopLevel
                                   && appTopLevel.toplevels
@@ -435,9 +438,15 @@ Item {
 
                 Rectangle {
                     id: popupBackground
+                    WindowGlass {
+                        anchors.fill: parent
+                        glassEnabled: (parent?.color.a ?? 0) > 0
+                        cardRadius: parent?.radius ?? 0
+                        tint: parent?.color ?? 'transparent'
+                    }
                     property real padding: 5
                     clip: true
-                    color: Appearance.m3colors.m3surfaceContainer
+                    color: Config.options.appearance.uiBackground === "oled" ? "#000000" : Appearance.m3colors.m3surfaceContainer
                     radius: Appearance.rounding.normal
                     anchors.bottom: DockStyle.vertical ? undefined : parent.bottom
                     anchors.bottomMargin: Appearance.sizes.elevationMargin

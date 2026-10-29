@@ -108,25 +108,36 @@ StyledImage {
             const maxSize = Images.thumbnailSizes[root.effectiveSizeName];
             const thumbPath = FileUtils.trimFileProtocol(root.thumbnailPathFor(root.effectiveSizeName));
             const source = FileUtils.trimFileProtocol(root.sourcePath);
-            const tmp = `${thumbPath}.$$.tmp.png`;
             const isVideo = Images.isVideoPath(source);
+            // Paths are passed as positional args ($1..$3), never interpolated into the
+            // script, so quotes in file names can neither break nor inject into it.
+            // Exit codes: 0 = already cached, 1 = generated, 2 = failed.
             if (isVideo) {
                 // The first frame of a clip is usually black (fade in) and would
                 // look like a broken preview, so a frame a few seconds in is
                 // used. When no frame can be rendered at all, a flat
                 // placeholder is written: the cell is never blank.
-                return ["bash", "-c",
-                    `if [ -f '${thumbPath}' ]; then exit 0; fi; ` +
-                    `for seek in 00:00:03 00:00:01 00:00:00; do ` +
-                    `ffmpeg -y -ss "$seek" -i '${source}' -frames:v 1 -vf 'scale=${maxSize}:${maxSize}:force_original_aspect_ratio=decrease' '${tmp}' >/dev/null 2>&1 && mv '${tmp}' '${thumbPath}' && exit 1; ` +
-                    `done; ` +
-                    `magick -size ${maxSize}x${maxSize} xc:'#202020' '${thumbPath}' >/dev/null 2>&1 && exit 1; exit 2;`
-                ];
+                return ["bash", "-c", `
+                    thumb="$1"; src="$2"; max="$3"
+                    [ -f "$thumb" ] && exit 0
+                    tmp="$thumb.$$.tmp.png"
+                    trap 'rm -f "$tmp"' EXIT
+                    for seek in 00:00:03 00:00:01 00:00:00; do
+                        ffmpeg -y -ss "$seek" -i "$src" -frames:v 1 -vf "scale=$max:$max:force_original_aspect_ratio=decrease" "$tmp" >/dev/null 2>&1 && mv "$tmp" "$thumb" && exit 1
+                    done
+                    magick -size "$max"x"$max" xc:'#202020' "$thumb" >/dev/null 2>&1 && exit 1
+                    exit 2
+                `, "_", thumbPath, source, `${maxSize}`];
             }
-            return ["bash", "-c",
-                `if [ -f '${thumbPath}' ]; then exit 0; fi; ` +
-                `magick '${source}' -auto-orient -resize ${maxSize}x${maxSize} '${tmp}' >/dev/null 2>&1 && mv '${tmp}' '${thumbPath}' && exit 1; exit 2;`
-            ];
+            return ["bash", "-c", `
+                thumb="$1"; src="$2"; max="$3"
+                [ -f "$thumb" ] && exit 0
+                tmp="$thumb.$$.tmp.png"
+                trap 'kill "$pid" 2>/dev/null; rm -f "$tmp"' EXIT
+                magick "$src" -auto-orient -resize "$max"x"$max" "$tmp" & pid=$!
+                wait "$pid" && mv "$tmp" "$thumb" && exit 1
+                exit 2
+            `, "_", thumbPath, source, `${maxSize}`];
         }
         onExited: (exitCode, exitStatus) => {
             if (exitCode === 1) {

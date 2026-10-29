@@ -15,6 +15,65 @@ terminalscheme="$SCRIPT_DIR/terminal/scheme-base.json"
 # shellcheck source=../lib/config.sh
 source "$SCRIPT_DIR/../lib/config.sh"
 
+handle_kde_material_you_colors() {
+    if [ -f "$SHELL_CONFIG_FILE" ]; then
+        enable_qt_apps=$(jq -r '.appearance.wallpaperTheming.enableQtApps' "$SHELL_CONFIG_FILE")
+        if [ "$enable_qt_apps" == "false" ]; then
+            return
+        fi
+    fi
+
+    local kde_scheme_variant=""
+    case "$type_flag" in
+        scheme-content|scheme-expressive|scheme-fidelity|scheme-fruit-salad|scheme-monochrome|scheme-neutral|scheme-rainbow|scheme-tonal-spot)
+            kde_scheme_variant="$type_flag"
+            ;;
+        *)
+            kde_scheme_variant="scheme-tonal-spot"
+            ;;
+    esac
+
+    # Konsole lock: the kde-material-you-colors wrapper also rewrites the
+    # Konsole profiles' [Appearance] ColorScheme/Font to the generated
+    # MaterialYou values. Snapshot the profiles first and restore them after
+    # the wrapper runs so Konsole keeps the user's own color scheme while
+    # every other app is still themed.
+    KONSOLE_DIR="$HOME/.local/share/konsole"
+    konsole_backup_dir="$STATE_DIR/user/generated/konsole-lock-backup"
+    lock_konsole="true"
+    if [ -f "$SHELL_CONFIG_FILE" ]; then
+        lock_konsole=$(jq -r '.appearance.wallpaperTheming.lockKonsoleColors // "true"' "$SHELL_CONFIG_FILE")
+    fi
+
+    konsole_lock_backup() {
+        [ ! -d "$konsole_backup_dir" ] && mkdir -p "$konsole_backup_dir"
+        find "$KONSOLE_DIR" -maxdepth 1 -name "*.profile" -type f -exec cp -f {} "$konsole_backup_dir/" \;
+    }
+
+    konsole_lock_restore() {
+        if [ -d "$konsole_backup_dir" ] && compgen -G "$konsole_backup_dir/*.profile" > /dev/null; then
+            for f in "$konsole_backup_dir"/*.profile; do
+                cp -f "$f" "$KONSOLE_DIR/$(basename "$f")" 2>/dev/null || true
+            done
+        fi
+    }
+
+    if [[ "$lock_konsole" == "true" && -d "$KONSOLE_DIR" ]]; then
+        konsole_lock_backup
+    fi
+
+    "$XDG_CONFIG_HOME"/matugen/templates/kde/kde-material-you-colors-wrapper.sh --scheme-variant "$kde_scheme_variant"
+
+    if [[ "$lock_konsole" == "true" ]]; then
+        konsole_lock_restore
+    fi
+
+    # kde-material-you-colors rewrites the KDE icon theme from its own config.
+    # Re-assert the managed theme after the wrapper, but only when the user
+    # enabled the override (the manager enforces that policy).
+    apply_icon_override_safety_net "$mode_flag"
+}
+
 pre_process() {
     local mode_flag="$1"
     if [[ "$mode_flag" == "dark" ]]; then
@@ -28,6 +87,20 @@ pre_process() {
     if [ ! -d "$CACHE_DIR"/user/generated ]; then
         mkdir -p "$CACHE_DIR"/user/generated
     fi
+}
+
+update_icon_scheme() {
+    local mode_flag="$1"
+    local manager="$SCRIPT_DIR/../theming/icon-theme-manager.sh"
+    [ -x "$manager" ] || return 0
+    bash "$manager" --sync --apply --mode "$mode_flag" --source wallpaper || true
+}
+
+apply_icon_override_safety_net() {
+    local mode_flag="$1"
+    local manager="$SCRIPT_DIR/../theming/icon-theme-manager.sh"
+    [ -x "$manager" ] || return 0
+    bash "$manager" --post-kde --mode "$mode_flag" || true
 }
 
 post_process() {
@@ -59,6 +132,7 @@ apply_named_scheme() {
             return 1
         }
     "$SCRIPT_DIR"/applycolor.sh
+    update_icon_scheme "$mode_flag"
     apply_named_qt &
     "$SCRIPT_DIR/code/material-code-set-color.sh" &
 }
@@ -123,7 +197,11 @@ VIDEO_WALLPAPER_SCRIPT="$RESTORE_SCRIPT_DIR/__video_wallpaper.sh"
 THUMBNAIL_DIR="$RESTORE_SCRIPT_DIR/mpvpaper_thumbnails"
 LAST_THUMBNAIL="$THUMBNAIL_DIR/.last-good.jpg"
 MPVPAPER_FLAGS="-p -a max"
-VIDEO_OPTS="--no-audio --loop=inf --hwdec=auto"
+VIDEO_OPTS="no-audio loop hwdec=auto scale=bilinear interpolation=no video-sync=display-resample panscan=1.0 video-scale-x=1.0 video-scale-y=1.0 video-align-x=0.5 video-align-y=0.5 load-scripts=no"
+# One control socket per output, so the shell can pause and resume the live
+# wallpaper instead of only being able to kill it.
+MPV_SOCKET_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+MPV_SOCKET_PREFIX="$MPV_SOCKET_DIR/mpvpaper-"
 
 is_video() {
     local extension="${1##*.}"
@@ -162,9 +240,10 @@ start_video_wallpaper() {
     fi
     # Fallback without the supervisor: one mpvpaper per monitor.
     local monitors
-    monitors=$(hyprctl monitors -j | jq -r '.[] | .name')
+    monitors=$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | .name')
+    rm -f "$MPV_SOCKET_PREFIX"*.sock
     for monitor in $monitors; do
-        mpvpaper $MPVPAPER_FLAGS -o "$VIDEO_OPTS" "$monitor" "$video" &
+        mpvpaper $MPVPAPER_FLAGS -o "$VIDEO_OPTS input-ipc-server=$MPV_SOCKET_PREFIX$monitor.sock" "$monitor" "$video" &
         sleep 0.1
     done
 }
@@ -233,10 +312,11 @@ case "\$wallpaper" in
 esac
 
 pkill -f -9 mpvpaper 2>/dev/null || true
+rm -f "$MPV_SOCKET_PREFIX"*.sock
 
 if command -v hyprctl >/dev/null 2>&1; then
     for monitor in \$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | .name'); do
-        mpvpaper -p -a max --no-audio --loop=inf --hwdec=auto "\$monitor" "\$wallpaper" &
+        mpvpaper $MPVPAPER_FLAGS -o "$VIDEO_OPTS input-ipc-server=$MPV_SOCKET_PREFIX\$monitor.sock" "\$monitor" "\$wallpaper" &
         sleep 0.1
     done
 fi
@@ -485,6 +565,7 @@ switch() {
 
     if [[ -z "$colors_lock_flag" ]]; then
         "$SCRIPT_DIR"/applycolor.sh
+        update_icon_scheme "$mode_flag"
     fi
 
     max_width_desired="$(monitor_value '([.[].width] | min)' 1920)"

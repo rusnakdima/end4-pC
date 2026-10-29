@@ -3,3 +3,5 @@ translations/es_MX.json
 /file:/
 /dots/
 __pycache__/
+*.pyc
+.pytest_cache/

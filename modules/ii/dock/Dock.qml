@@ -59,8 +59,11 @@ Scope {
             screen: modelData.screen
             visible: !GlobalStates.screenLocked
 
+            readonly property bool macos: DockStyle.magnifying
             readonly property bool hug: Config.options.dock.style === "hug"
             readonly property string position: modelData.position
+            readonly property bool glassHug: hug && Config.options.dock.showBackground && Config.options.background.widgets.glass.enable
+            readonly property real hugFlare: glassHug ? Appearance.rounding.screenRounding : 0
             readonly property bool vertical: position !== "bottom"
             readonly property real gap: Appearance.sizes.hyprlandGapsOut
             readonly property real shadowMargin: Appearance.sizes.elevationMargin
@@ -73,6 +76,8 @@ Scope {
             property bool fullscreenOnThisMonitor: WM.fullscreenOnMonitor(monitor?.name)
 
             property bool reveal: {
+                if (dockContextMenu.isOpen)
+                    return true
                 if (fullscreenOnThisMonitor)
                     return Config.options?.dock.hoverToReveal && dockMouseArea.containsMouse
                 return root.pinned
@@ -98,22 +103,71 @@ Scope {
                 right: dockRoot.hug && dockRoot.position === "right" ? -dockRoot.gap : 0
             }
             implicitWidth: dockRoot.vertical ? DockStyle.thickness : dockBackground.implicitWidth
-            implicitHeight: dockRoot.vertical ? dockBackground.implicitHeight : DockStyle.thickness
+            implicitHeight: dockRoot.vertical ? dockBackground.implicitHeight : DockStyle.thickness + DockStyle.headroom
             WlrLayershell.namespace: "quickshell:dock"
+
+            Binding {
+                target: GlassLayers
+                property: "dockZone"
+                value: Math.max(0, dockRoot.exclusiveZone)
+                restoreMode: Binding.RestoreBinding
+            }
+            Binding {
+                target: GlassLayers
+                property: "dockEdge"
+                value: dockRoot.position
+                restoreMode: Binding.RestoreBinding
+            }
             color: "transparent"
 
-            mask: Region { item: dockMouseArea }
+            mask: Region {
+                item: dockMouseArea
+                Region { item: riseArea }
+            }
+
+            readonly property bool magnifyHover: DockStyle.magnifying && (dockMouseArea.containsMouse || riseArea.containsMouse)
+            property real magnifyAmp: dockRoot.magnifyHover ? 1 : 0
+
+            Behavior on magnifyAmp {
+                NumberAnimation { duration: 240; easing.type: Easing.OutCubic }
+            }
+
+            onMagnifyAmpChanged: {
+                if (DockMagnify.window === dockRoot) DockMagnify.amplitude = dockRoot.magnifyAmp;
+            }
+
+            function updatePointer(item, mouseX) {
+                if (!DockStyle.magnifying) return;
+                DockMagnify.window = dockRoot;
+                DockMagnify.amplitude = dockRoot.magnifyAmp;
+                DockMagnify.pointer = item.mapToItem(null, mouseX, 0).x;
+            }
+
+            MouseArea {
+                id: riseArea
+                enabled: DockStyle.magnifying
+                hoverEnabled: true
+                acceptedButtons: Qt.NoButton
+                x: dockMouseArea.x
+                width: dockMouseArea.width
+                height: DockStyle.headroom * dockRoot.magnifyAmp
+                anchors.bottom: dockMouseArea.top
+                onPositionChanged: mouse => dockRoot.updatePointer(riseArea, mouse.x)
+                onEntered: dockRoot.updatePointer(riseArea, mouseX)
+            }
 
             MouseArea {
                 id: dockMouseArea
                 hoverEnabled: true
+                onPositionChanged: mouse => dockRoot.updatePointer(dockMouseArea, mouse.x)
+                onEntered: dockRoot.updatePointer(dockMouseArea, mouseX)
                 width: dockRoot.vertical ? parent.width : implicitWidth
-                height: dockRoot.vertical ? implicitHeight : parent.height
+                height: dockRoot.vertical ? implicitHeight : (dockRoot.macos ? DockStyle.thickness : parent.height)
                 implicitWidth: dockHoverRegion.implicitWidth + dockRoot.shadowMargin * 2
                 implicitHeight: dockHoverRegion.implicitHeight + dockRoot.shadowMargin * 2
 
                 readonly property real hiddenOffset: Config.options?.dock.hoverToReveal
-                    ? (DockStyle.thickness - Config.options.dock.hoverRegionHeight)
+                    ? (DockStyle.thickness - Config.options.dock.hoverRegionHeight - (dockRoot.hug ? dockRoot.gap : 0))
                     : (DockStyle.thickness + 1)
                 property real offset: dockRoot.reveal ? 0 : hiddenOffset
 
@@ -122,8 +176,10 @@ Scope {
                 }
 
                 anchors {
-                    top: dockRoot.vertical ? undefined : parent.top
+                    top: dockRoot.vertical || dockRoot.macos ? undefined : parent.top
                     topMargin: dockMouseArea.offset
+                    bottom: dockRoot.macos ? parent.bottom : undefined
+                    bottomMargin: dockRoot.macos ? -dockMouseArea.offset : 0
                     horizontalCenter: dockRoot.vertical ? undefined : parent.horizontalCenter
                     verticalCenter: dockRoot.vertical ? parent.verticalCenter : undefined
                     left: dockRoot.position === "left" ? parent.left : undefined
@@ -158,11 +214,24 @@ Scope {
 
                         Rectangle {
                             id: dockVisualBackground
+                            WindowGlass {
+                                anchors.fill: parent
+                                anchors.leftMargin: dockRoot.vertical ? 0 : -dockRoot.hugFlare
+                                anchors.rightMargin: dockRoot.vertical ? 0 : -dockRoot.hugFlare
+                                anchors.topMargin: dockRoot.vertical ? -dockRoot.hugFlare : 0
+                                anchors.bottomMargin: dockRoot.vertical ? -dockRoot.hugFlare : 0
+                                flareLeft: dockRoot.hugFlare
+                                flareRight: dockRoot.hugFlare
+                                edge: dockRoot.position === "left" ? 2 : dockRoot.position === "right" ? 3 : 1
+                                glassEnabled: (parent?.color.a ?? 0) > 0
+                                cardRadius: parent?.radius ?? 0
+                                tint: parent?.color ?? 'transparent'
+                            }
                             anchors.fill: parent
                             anchors.topMargin: dockRoot.position === "bottom" ? dockRoot.shadowMargin : 0
                             anchors.bottomMargin: dockRoot.position === "bottom" ? dockRoot.gap : 0
-                            anchors.leftMargin: dockRoot.position === "left" ? dockRoot.gap : dockRoot.position === "right" ? dockRoot.shadowMargin : 0
-                            anchors.rightMargin: dockRoot.position === "right" ? dockRoot.gap : dockRoot.position === "left" ? dockRoot.shadowMargin : 0
+                            anchors.leftMargin: dockRoot.macos ? -DockMagnify.totalExtra / 2 : (dockRoot.position === "left" ? dockRoot.gap : dockRoot.position === "right" ? dockRoot.shadowMargin : 0)
+                            anchors.rightMargin: dockRoot.macos ? -DockMagnify.totalExtra / 2 : (dockRoot.position === "right" ? dockRoot.gap : dockRoot.position === "left" ? dockRoot.shadowMargin : 0)
                             color: Config.options.dock.showBackground ? dockRoot.backgroundColor : "transparent"
                             border.width: dockRoot.borderWidth
                             border.color: Appearance.getColorFromName(Config.options.dock.borderColor)
@@ -174,7 +243,8 @@ Scope {
                         }
 
                         RoundCorner {
-                            visible: dockRoot.hug && Config.options.dock.showBackground
+                            glass: true
+                            visible: dockRoot.hug && Config.options.dock.showBackground && !dockRoot.glassHug
                             anchors.right: dockRoot.vertical ? (dockRoot.position === "right" ? dockVisualBackground.right : undefined) : dockVisualBackground.left
                             anchors.bottom: dockRoot.vertical ? dockVisualBackground.top : dockVisualBackground.bottom
                             anchors.left: dockRoot.position === "left" ? dockVisualBackground.left : undefined
@@ -184,7 +254,8 @@ Scope {
                         }
 
                         RoundCorner {
-                            visible: dockRoot.hug && Config.options.dock.showBackground
+                            glass: true
+                            visible: dockRoot.hug && Config.options.dock.showBackground && !dockRoot.glassHug
                             anchors.left: dockRoot.vertical ? (dockRoot.position === "left" ? dockVisualBackground.left : undefined) : dockVisualBackground.right
                             anchors.bottom: dockRoot.vertical ? undefined : dockVisualBackground.bottom
                             anchors.top: dockRoot.vertical ? dockVisualBackground.bottom : undefined
@@ -194,6 +265,11 @@ Scope {
                             corner: dockRoot.position === "left" ? RoundCorner.CornerEnum.TopLeft
                                 : dockRoot.position === "right" ? RoundCorner.CornerEnum.TopRight
                                 : RoundCorner.CornerEnum.BottomLeft
+                        }
+
+                        DockContextMenu {
+                            id: dockContextMenu
+                            screen: dockRoot.screen
                         }
 
                         GridLayout {
@@ -225,6 +301,7 @@ Scope {
                                 visible: dockRow.hasPinnedApps
                                 Layout.topMargin: DockStyle.mTop(DockStyle.pinnedInnerMargin, 0)
                                 Layout.leftMargin: DockStyle.mLeft(DockStyle.pinnedInnerMargin, 0)
+                                contextMenu: dockContextMenu
                                 pinnedApps: Config.options?.dock.pinnedApps ?? []
                             }
 
@@ -236,6 +313,8 @@ Scope {
 
                             DockActiveApps {
                                 id: activeApps
+                                contextMenu: dockContextMenu
+                                appListRoot: dragSlots
                             }
 
                             DockSeparator {

@@ -22,7 +22,7 @@ Item {
         (colorQuantizer?.colors[0] ?? Appearance.colors.colPrimary),
         Appearance.colors.colPrimaryContainer,
         0.8) || Appearance.m3colors.m3secondaryContainer
-    property bool downloaded: false
+    property bool downloaded: Boolean(root.artUrl && (root.artUrl.startsWith("data:") || root.artUrl.startsWith("file:/") || root.artUrl.startsWith("/")))
     property list<real> visualizerPoints: []
     property real maxVisualizerValue: 1000
     property int visualizerSmoothing: 2
@@ -72,8 +72,11 @@ Item {
     }
 
     property string displayedArtFilePath: {
+        if (!root.artUrl || root.artUrl.length === 0) return ""
+        if (root.artUrl.startsWith("data:")) return root.artUrl
+        if (root.artUrl.startsWith("file:/")) return root.artUrl
+        if (root.artUrl.startsWith("/")) return "file://" + root.artUrl
         if (!root.downloaded) return ""
-        if (root.artUrl.startsWith("file://")) return root.artUrl
         return Qt.resolvedUrl(artFilePath)
     }
 
@@ -95,15 +98,19 @@ Item {
             return
         }
 
-        if (root.artUrl.startsWith("file://")) {
+        if (root.artUrl.startsWith("data:") || root.artUrl.startsWith("file:/") || root.artUrl.startsWith("/")) {
             root.downloaded = true
             return
         }
 
-        coverArtDownloader.targetFile = root.artUrl
-        coverArtDownloader.artFilePath = root.artFilePath
-        root.downloaded = false
-        coverArtDownloader.running = true
+        if (root.artUrl.startsWith("http://") || root.artUrl.startsWith("https://")) {
+            coverArtDownloader.targetFile = root.artUrl
+            coverArtDownloader.artFilePath = root.artFilePath
+            root.downloaded = false
+            coverArtDownloader.running = true
+        } else {
+            root.downloaded = true
+        }
     }
 
     Process {
