@@ -4,7 +4,7 @@ import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.waffle.looks
 import qs.modules.waffle.bar.tasks
-import qs.modules.waffle.bar.tray
+import qs.modules.waffle.bar.KeyboardLayoutButton
 
 Rectangle {
     id: root
@@ -70,7 +70,7 @@ Rectangle {
             sourceComponent: WidgetsButton {}
         }
         Tray {}
-        UpdatesButton {}
+KeyboardLayoutButton {}
         SystemButton {}
         TimeButton {}
     }
