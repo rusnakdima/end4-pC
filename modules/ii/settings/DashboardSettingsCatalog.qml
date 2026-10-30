@@ -82,6 +82,8 @@ QtObject {
     })
 
     readonly property var custom: ({
+        "bar:Claude Code": { type: "switch", get: () => Config.options.bar.aiUsage.claudeEnabled, set: v => { Config.options.bar.aiUsage.claudeEnabled = v; } },
+        "bar:Codex": { type: "switch", get: () => Config.options.bar.aiUsage.codexEnabled, set: v => { Config.options.bar.aiUsage.codexEnabled = v; } },
         "bar:Bar style": { type: "select", get: () => Config.options.bar.cornerStyle, set: v => { Config.options.bar.cornerStyle = v; }, options: [{ displayName: Translation.tr("Hug"), icon: "line_curve", value: 0 }, { displayName: Translation.tr("Split Hug"), icon: "splitscreen", value: 6 }, { displayName: Translation.tr("Float"), icon: "view_day", value: 1 }, { displayName: Translation.tr("Islands"), icon: "crop_3_2", value: 2 }, { displayName: Translation.tr("M3"), icon: "interests", value: 3 }, { displayName: Translation.tr("M3 Hug"), icon: "category", value: 4 }, { displayName: Translation.tr("Panel"), icon: "toolbar", value: 5 }] },
         "bar:Group color": { type: "select", get: () => Config.options.bar.groupColor, set: v => { Config.options.bar.groupColor = v; }, get options() { return ["primaryContainer", "secondaryContainer", "tertiaryContainer", "layer1", "layer0"].map(name => ({ value: name, color: roleColor(name) })); } },
         "interface:Football/Goal file": { type: "text", get: () => Config.options.sidebar.football.goalSoundPath, set: v => { Config.options.sidebar.football.goalSoundPath = v; } },
@@ -185,6 +187,12 @@ QtObject {
     })
 
     readonly property var sections: [
+        {
+            page: Translation.tr("Bar"), title: Translation.tr("AI Usage"), icon: "neurology", cards: [
+                { type: "toggle", key: "bar:Claude Code", title: Translation.tr("Claude Code"), icon: "terminal", kw: "ai usage provider anthropic enable disable" },
+                { type: "toggle", key: "bar:Codex", title: Translation.tr("Codex"), icon: "code", kw: "ai usage provider openai enable disable" }
+            ]
+        },
         {
             page: Translation.tr("Bar"), title: Translation.tr("Bar layout"), icon: "view_week", cards: [
                 { type: "barlayout", key: "bar:Layout editor", title: Translation.tr("Bar layout"), icon: "view_week" }
