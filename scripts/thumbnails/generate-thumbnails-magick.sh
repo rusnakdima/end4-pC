@@ -136,11 +136,33 @@ case "$MODE" in
             echo "Directory not found: $TARGET"
             exit 2
         fi
+        # Only files that can actually be rendered are processed, so the
+        # progress count matches the number of real thumbnails.
+        files=()
         for f in "$TARGET"/*; do
             [ -f "$f" ] || continue
-            generate_thumbnail "$f" &
+            case "${f,,}" in
+                *.png|*.jpg|*.jpeg|*.webp|*.bmp|*.gif|*.tif|*.tiff|*.avif|*.jxl|*.heic|*.heif) ;;
+                *.mp4|*.webm|*.mkv|*.avi|*.mov|*.m4v|*.wmv|*.flv|*.ogv|*.3gp|*.qt) ;;
+                *) continue ;;
+            esac
+            files+=("$f")
+        done
+        total=${#files[@]}
+        [ "$total" -eq 0 ] && exit 0
+        counter_file="$(mktemp)"
+        echo "0" > "$counter_file"
+        for f in "${files[@]}"; do
+            (
+                generate_thumbnail "$f"
+                # The progress protocol the picker listens for, so a cell
+                # reloads its thumbnail as soon as it exists.
+                completed=$(flock "$counter_file" sh -c 'read c < "$1"; echo $((c + 1)) > "$1"; echo $((c + 1))' _ "$counter_file")
+                echo "PROGRESS $completed/$total FILE $(realpath "$f")"
+            ) &
         done
         wait
+        rm -f "$counter_file"
         ;;
     *)
         usage

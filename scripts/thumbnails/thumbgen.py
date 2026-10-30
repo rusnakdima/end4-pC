@@ -225,6 +225,12 @@ def main(img_dirs: str, size: str, workers: str, only_images: bool,
     directories = [Path(directory) for directory in img_dirs.split()]
     for directory in directories:
         files = collect_files(directory, recursive)
+        # Only files that can be rendered are counted, so the progress total
+        # matches the number of real thumbnails. Hidden files like .directory
+        # are never thumbnails.
+        files = [f for f in files
+                 if f.suffix.lower() in IMAGE_SUFFIXES
+                 or f.suffix.lower() in VIDEO_SUFFIXES]
         if only_images:
             files = [f for f in files if f.suffix.lower() in IMAGE_SUFFIXES]
         files = [str(file) for file in files]
