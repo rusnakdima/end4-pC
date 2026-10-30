@@ -123,10 +123,6 @@ Item {
         }
         Loader {
             id: xkbLoader
-            width: item?.implicitWidth ?? 0
-            height: item?.implicitHeight ?? 0
-            implicitWidth: item?.implicitWidth ?? 0
-            implicitHeight: item?.implicitHeight ?? 0
             source: "HyprlandXkbIndicator.qml"
             Binding {
                 target: xkbLoader.item
