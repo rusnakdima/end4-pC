@@ -14,7 +14,7 @@ StyledText {
 
     font {
         hintingPreference: Font.PreferNoHinting
-        family: Fonts?.iconMaterialFamily ?? "Material Symbols Lite"
+        family: Fonts?.iconMaterialFamily ?? "Material Symbols Rounded"
         pixelSize: iconSize
         weight: resolvedFill > 0.5 ? Font.DemiBold : Font.Normal
         variableAxes: {
