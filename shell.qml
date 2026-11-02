@@ -102,13 +102,25 @@ ShellRoot {
         name: "sttToggle"
         description: "Toggles speech to text"
 
-        onPressed: {
-            if (!SpeechToText.enabled) {
-                Quickshell.execDetached(["notify-send", "Speech to text",
-                    "Enable speech to text in the settings", "-a", "Hyprland"]);
-                return;
-            }
-            SpeechToText.toggleRecording();
+        // One gesture enables the feature when it is off and starts recording.
+        onPressed: SpeechToText.toggleDictation()
+    }
+
+    // Same entry point for scripts and compositors without Hyprland global
+    // shortcuts: qs ipc call stt toggle
+    IpcHandler {
+        target: "stt"
+
+        function toggle(): void {
+            SpeechToText.toggleDictation();
+        }
+
+        function start(): void {
+            if (!SpeechToText.recording) SpeechToText.toggleDictation();
+        }
+
+        function stop(): void {
+            if (SpeechToText.recording) SpeechToText.stopRecording();
         }
     }
 }

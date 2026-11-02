@@ -120,8 +120,12 @@ Singleton {
                 property bool enabled: false
                 property string model: "base" // tiny, base, small, medium, large-v3
                 property string language: "auto" // auto or an ISO 639-1 code
-                property string device: "cpu" // cpu, cuda
+                property string device: "cpu" // inference device: cpu, cuda
                 property string computeType: "int8" // int8, float16
+                property string source: "" // Pipewire node name; empty uses the default source
+                property int maxSeconds: 120 // auto-stop safety net
+                property string output: "both" // type, clipboard, both or chat
+                property bool streaming: true // type each phrase while speaking
             }
 
             property JsonObject appearance: JsonObject {

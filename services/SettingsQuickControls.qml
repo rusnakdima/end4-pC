@@ -121,6 +121,13 @@ Singleton {
         { displayName: "float32", icon: "speed", value: "float32" }
     ]
 
+    readonly property var sttOutputModes: [
+        { displayName: Translation.tr("Type into focused app"), icon: "keyboard", value: "type" },
+        { displayName: Translation.tr("Copy to clipboard"), icon: "content_copy", value: "clipboard" },
+        { displayName: Translation.tr("Type and copy"), icon: "content_paste_go", value: "both" },
+        { displayName: Translation.tr("AI chat input"), icon: "chat", value: "chat" }
+    ]
+
     readonly property var controls: ({
         "desktop:Preview wallpaper": root.optionSwitch("background.enableWallpaperPreview"),
         "desktop:Blur wall": root.optionSwitch("background.showBlur"),
@@ -473,8 +480,11 @@ Singleton {
         "services:Speech to Text/Enable speech to text": root.optionSwitch("stt.enabled"),
         "services:Speech to Text/Model": root.optionSelect("stt.model", root.sttModels),
         "services:Speech to Text/Language": root.optionSelect("stt.language", root.sttLanguages),
-        "services:Speech to Text/Device": root.optionSelect("stt.device", root.sttDevices),
+        "services:Speech to Text/Inference device": root.optionSelect("stt.device", root.sttDevices),
         "services:Speech to Text/Compute type": root.optionSelect("stt.computeType", root.sttComputeTypes),
+        "services:Speech to Text/Output": root.optionSelect("stt.output", root.sttOutputModes),
+        "services:Speech to Text/Max recording time": root.optionSpin("stt.maxSeconds", 10, 600, 10),
+        "services:Speech to Text/Live dictation": root.optionSwitch("stt.streaming"),
 
         "services:Total duration timeout (s)": root.spin(() => Config.options.musicRecognition.timeout, v => Config.options.musicRecognition.timeout = v, 10, 100, 2),
         "services:Polling interval (s)": root.spin(() => Config.options.musicRecognition.interval, v => Config.options.musicRecognition.interval = v, 2, 10, 1),

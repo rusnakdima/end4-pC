@@ -249,7 +249,7 @@ QtObject {
                 { type: "toggle", key: "bar:Dark/Light toggle", title: Translation.tr("Dark/Light toggle"), icon: "dark_mode" },
                 { type: "toggle", key: "bar:Performance Profile", title: Translation.tr("Performance profile"), icon: "speed" },
                 { type: "toggle", key: "bar:Record Screen", title: Translation.tr("Record screen"), icon: "screen_record" },
-                { type: "toggle", key: "bar:Speech to Text", title: Translation.tr("Speech to text"), icon: "mic" },
+                { type: "toggle", key: "bar:Speech to Text", title: Translation.tr("Speech to text"), icon: "speech_to_text" },
                 { type: "toggle", key: "bar:Wallpapers Toggle", title: Translation.tr("Wallpapers toggle"), icon: "wallpaper" }
             ]
         },
@@ -743,12 +743,15 @@ QtObject {
             ]
         },
         {
-            page: Translation.tr("Services"), title: Translation.tr("Speech to Text"), icon: "record_voice_over", cards: [
-                { type: "toggle", key: "services:Speech to Text/Enable speech to text", title: Translation.tr("Enable speech to text"), icon: "record_voice_over" },
+            page: Translation.tr("Services"), title: Translation.tr("Speech to Text"), icon: "speech_to_text", cards: [
+                { type: "toggle", key: "services:Speech to Text/Enable speech to text", title: Translation.tr("Enable speech to text"), icon: "speech_to_text" },
                 { type: "combo", key: "services:Speech to Text/Model", title: Translation.tr("Model"), icon: "model_training" },
                 { type: "combo", key: "services:Speech to Text/Language", title: Translation.tr("Language"), icon: "language" },
-                { type: "combo", key: "services:Speech to Text/Device", title: Translation.tr("Device"), icon: "memory" },
-                { type: "combo", key: "services:Speech to Text/Compute type", title: Translation.tr("Compute type"), icon: "speed" }
+                { type: "combo", key: "services:Speech to Text/Inference device", title: Translation.tr("Inference device"), icon: "memory" },
+                { type: "combo", key: "services:Speech to Text/Compute type", title: Translation.tr("Compute type"), icon: "speed" },
+                { type: "combo", w: 2, key: "services:Speech to Text/Output", title: Translation.tr("Output"), icon: "send" },
+                { type: "spin", w: 2, key: "services:Speech to Text/Max recording time", title: Translation.tr("Max recording time (s)"), icon: "timer" },
+                { type: "toggle", w: 4, key: "services:Speech to Text/Live dictation", title: Translation.tr("Live dictation (type while speaking)"), icon: "graphic_eq" }
             ]
         },
         {

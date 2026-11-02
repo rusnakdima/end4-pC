@@ -53,6 +53,15 @@ Item {
     Connections {
         target: SpeechToText
         function onTranscriptReady(text) {
+            // Only the chat-targeted recordings belong in the input field;
+            // dictation from the bar goes to the focused app instead.
+            if (SpeechToText.deliveryMode !== "chat") return;
+            // Live dictation already appended every phrase as it arrived.
+            if (SpeechToText.streamedSegments > 0) return;
+            root.insertTranscript(text);
+        }
+        function onTranscriptSegment(text) {
+            if (SpeechToText.deliveryMode !== "chat") return;
             root.insertTranscript(text);
         }
     }
@@ -754,7 +763,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     onClicked: {
                         if (!SpeechToText.recording)
                             root.lastInsertedTranscript = "";
-                        SpeechToText.toggleRecording();
+                        SpeechToText.toggleDictation("chat");
                     }
 
                     contentItem: Item {

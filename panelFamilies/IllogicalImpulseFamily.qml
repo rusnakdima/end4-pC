@@ -24,6 +24,7 @@ import qs.modules.ii.sidebarLeft
 import qs.modules.ii.sidebarRight
 import qs.modules.ii.overlay
 import qs.modules.ii.verticalBar
+import qs.modules.ii.voiceInput
 import qs.modules.ii.wallpaperSelector
 import qs.modules.ii.desktopMenu
 import qs.modules.ii.dropover
@@ -50,6 +51,7 @@ Scope {
     PanelLoader { component: SidebarLeft {} }
     PanelLoader { component: SidebarRight {} }
     PanelLoader { extraCondition: Config.options.bar.vertical; component: VerticalBar {} }
+    PanelLoader { component: VoiceInputOverlay {} }
     PanelLoader { component: WallpaperSelector {} }
     PanelLoader { component: Settings {} }
     PanelLoader { component: DesktopMenu {} }

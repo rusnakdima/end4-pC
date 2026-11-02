@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 
 import qs.modules.common
 import qs.modules.common.functions
+import qs.services
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -37,6 +38,27 @@ Singleton {
     readonly property string sttLanguage: Config.options.stt.language
     readonly property string sttDevice: Config.options.stt.device
     readonly property string sttComputeType: Config.options.stt.computeType
+    readonly property string sttSource: Config.options.stt.source
+    readonly property int sttMaxSeconds: Config.options.stt.maxSeconds
+    readonly property string sttOutput: Config.options.stt.output
+    readonly property bool sttStreaming: Config.options.stt.streaming
+
+    // "0:07" — shared by the bar button and the listening pill.
+    readonly property string elapsedLabel: {
+        const minutes = Math.floor(root.elapsed / 60);
+        const seconds = root.elapsed % 60;
+        return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
+    }
+
+    // Delivery target for the current recording. Empty means "use the
+    // configured output"; the AI chat mic sets "chat" for its own recordings.
+    property string sessionTarget: ""
+    readonly property string deliveryMode: root.sessionTarget !== "" ? root.sessionTarget : root.sttOutput
+
+    // Live dictation only makes sense when the transcript is typed or sent to
+    // the chat while speaking; clipboard-only mode stays one-shot.
+    readonly property bool liveTyping: root.sttStreaming
+        && (root.deliveryMode === "type" || root.deliveryMode === "both" || root.deliveryMode === "chat")
 
     // Internals
     property string currentState: "idle"
@@ -56,6 +78,14 @@ Singleton {
     property string pendingError: ""
     property string stderrText: ""
 
+    // Streaming session state
+    property int streamedSegments: 0
+    property string segmentBuffer: ""
+    property string detectedLanguage: ""
+    property var insertQueue: []
+    property bool insertBusy: false
+    property bool insertErrorNotified: false
+
     // The backend transcribes after the capture ends, so the process stays alive
     // for as long as the inference takes (up to 5 minutes of audio, which on a
     // CPU with the large model can take several minutes). Only kill it when it
@@ -63,6 +93,7 @@ Singleton {
     property int stopTimeoutMs: 600000
 
     signal transcriptReady(string text)
+    signal transcriptSegment(string text)
 
     onEnabledChanged: {
         // Leaving the "disabled" state must not keep a stale error message around.
@@ -81,15 +112,26 @@ Singleton {
     }
 
 
-    function startRecording() {
+    function startRecording(target = "") {
         if (!root.enabled) {
             // Not a failure: the feature is switched off. Report it as its own
             // state so consumers do not render it as a broken recording.
             root.errorValue = Translation.tr("Speech to text is disabled");
             root.currentState = "disabled";
+            root.sessionTarget = "";
             return;
         }
         if (root.busy) return;
+
+        // A muted microphone only records silence, so report it instead of
+        // finishing with an empty transcript.
+        const sourceNode = root.configuredSourceNode();
+        if (sourceNode?.audio?.muted) {
+            root.notify(Translation.tr("Speech to text"), Translation.tr("The microphone is muted"));
+            return;
+        }
+
+        root.sessionTarget = target;
 
         const stamp = Date.now();
         root.wavPath = `${root.captureDir}/capture-${stamp}.wav`;
@@ -101,6 +143,10 @@ Singleton {
         root.pendingText = "";
         root.pendingError = "";
         root.stderrText = "";
+        root.streamedSegments = 0;
+        root.segmentBuffer = "";
+        root.detectedLanguage = "";
+        root.insertErrorNotified = false;
 
         // Track this recording in history.
         const entry = {
@@ -125,17 +171,34 @@ Singleton {
             sttProcess.running = false;
         }
 
-        sttProcess.command = [
-            "bash",
-            `${FileUtils.trimFileProtocol(Directories.scriptPath)}/ai/stt/stt-venv.sh`,
-            "record",
-            "--out", root.wavPath,
-            "--stop-file", root.stopPath,
-            "--model", root.sttModel,
-            "--language", root.sttLanguage,
-            "--device", root.sttDevice,
-            "--compute-type", root.sttComputeType
-        ];
+        const script = `${FileUtils.trimFileProtocol(Directories.scriptPath)}/ai/stt/stt-venv.sh`;
+        if (root.liveTyping) {
+            // Phrase-by-phrase dictation: no WAV, one JSON line per phrase and
+            // a final aggregate line.
+            sttProcess.command = [
+                "bash", script, "stream",
+                "--stop-file", root.stopPath,
+                "--model", root.sttModel,
+                "--language", root.sttLanguage,
+                "--device", root.sttDevice,
+                "--compute-type", root.sttComputeType,
+                "--max-seconds", String(root.sttMaxSeconds)
+            ];
+        } else {
+            sttProcess.command = [
+                "bash", script, "record",
+                "--out", root.wavPath,
+                "--stop-file", root.stopPath,
+                "--model", root.sttModel,
+                "--language", root.sttLanguage,
+                "--device", root.sttDevice,
+                "--compute-type", root.sttComputeType,
+                "--max-seconds", String(root.sttMaxSeconds)
+            ];
+        }
+        if (root.sttSource.length > 0) {
+            sttProcess.command.push("--source-target", root.sttSource);
+        }
         sttProcess.running = true;
         startWatchdog.restart();
     }
@@ -158,8 +221,74 @@ Singleton {
         }
     }
 
+    // One gesture from the bar button or the global shortcut: enabling the
+    // feature and starting the recording used to need two clicks.
+    function toggleDictation(target = "") {
+        if (root.recording) {
+            root.stopRecording();
+            return;
+        }
+        if (root.busy) return;
+        if (!root.enabled) {
+            Config.options.stt.enabled = true;
+        }
+        root.startRecording(target);
+    }
+
+    function configuredSourceNode() {
+        const name = root.sttSource;
+        if (name.length === 0) return Audio.source ?? null;
+        const devices = Audio.inputDevices;
+        for (let i = 0; i < devices.length; i++) {
+            if (devices[i].name === name) return devices[i];
+        }
+        return null;
+    }
+
     function clearTranscript() {
         root.transcriptValue = "";
+    }
+
+    // Hands the finished text to wherever the user configured it to go.
+    function deliverTranscript(text) {
+        const trimmed = (text ?? "").trim();
+        if (trimmed.length === 0) {
+            root.notify(Translation.tr("Speech to text"), Translation.tr("No speech was detected"));
+            return;
+        }
+
+        const mode = root.deliveryMode;
+        if (mode === "chat") return; // AiChat consumes transcriptReady itself.
+
+        if (mode === "clipboard" || mode === "both") {
+            Quickshell.clipboardText = trimmed;
+        }
+        if (mode === "type" || mode === "both") {
+            root.insertText(trimmed);
+        }
+    }
+
+    function insertText(text) {
+        if (!text || text.length === 0) return;
+        // Queue instead of cancelling: a phrase every few seconds must not
+        // truncate the phrase that is still being typed.
+        root.insertQueue.push(text);
+        root.pumpInsertQueue();
+    }
+
+    function pumpInsertQueue() {
+        if (root.insertBusy || root.insertQueue.length === 0) return;
+        root.insertBusy = true;
+        insertProcess.command = [
+            "bash",
+            `${FileUtils.trimFileProtocol(Directories.scriptPath)}/ai/stt/insert-text.sh`,
+            root.insertQueue[0]
+        ];
+        insertProcess.running = true;
+    }
+
+    function notify(summary, body) {
+        Quickshell.execDetached(["notify-send", summary, body, "-a", "Quickshell"]);
     }
 
     function handleStdout(line) {
@@ -177,6 +306,30 @@ Singleton {
 
         if (payload.error !== undefined && payload.error !== null) {
             root.pendingError = String(payload.error);
+            return;
+        }
+
+        if (payload.type === "segment") {
+            const text = String(payload.text ?? "").trim();
+            if (text.length === 0) return;
+            if (payload.language) root.detectedLanguage = String(payload.language);
+            root.segmentBuffer = root.segmentBuffer.length > 0
+                ? `${root.segmentBuffer} ${text}`
+                : text;
+            root.streamedSegments += 1;
+            root.transcriptSegment(text);
+            if (root.deliveryMode === "type" || root.deliveryMode === "both") {
+                root.insertText(`${text} `);
+            }
+            return;
+        }
+
+        if (payload.type === "result") {
+            // The aggregate line after the last phrase. The phrases were
+            // already delivered, so this only feeds history and the clipboard.
+            root.pendingText = String(payload.text ?? root.segmentBuffer).trim();
+            root.pendingHasText = root.pendingText.length > 0;
+            if (payload.language) root.detectedLanguage = String(payload.language);
             return;
         }
 
@@ -216,10 +369,26 @@ Singleton {
             root.transcriptValue = root.pendingText;
             root.errorValue = "";
             root.currentState = "idle";
-            root.transcriptReady(root.transcriptValue);
+            if (root.streamedSegments > 0) {
+                // The phrases were typed/delivered as they were committed.
+                // Only the clipboard needs the complete text.
+                if (root.deliveryMode === "clipboard" || root.deliveryMode === "both") {
+                    Quickshell.clipboardText = root.transcriptValue;
+                }
+            } else {
+                // AiChat reads deliveryMode synchronously in this signal, so
+                // the per-recording target is cleared only after delivery.
+                root.transcriptReady(root.transcriptValue);
+                root.deliverTranscript(root.transcriptValue);
+            }
         } else if (root.pendingError.length > 0) {
             root.errorValue = root.pendingError;
             root.currentState = "error";
+        } else if (exitCode === 0 && root.liveTyping) {
+            // Live dictation that heard nothing is not a failure.
+            root.errorValue = Translation.tr("No speech was detected");
+            root.currentState = "idle";
+            root.notify(Translation.tr("Speech to text"), Translation.tr("No speech was detected"));
         } else if (exitCode !== 0) {
             const details = root.stderrText.length > 0 ? `: ${root.stderrText}` : "";
             root.errorValue = `Speech to text failed (exit code ${exitCode})${details}`;
@@ -229,6 +398,7 @@ Singleton {
             root.currentState = "error";
         }
 
+        root.sessionTarget = "";
         root.cleanupFiles();
     }
 
@@ -259,6 +429,28 @@ Singleton {
             sttProcess.running = false;
             root.handleExit(exitCode);
         }
+    }
+
+    Process {
+        id: insertProcess
+        onExited: (exitCode, exitStatus) => {
+            root.insertBusy = false;
+            if (root.insertQueue.length > 0) root.insertQueue.shift();
+            if (exitCode !== 0 && !root.insertErrorNotified) {
+                root.insertErrorNotified = true;
+                root.notify(Translation.tr("Speech to text"), Translation.tr("Could not type the transcript"));
+            }
+            root.pumpInsertQueue();
+        }
+    }
+
+    Timer {
+        // Same limit that is passed to the backend as --max-seconds. Stopping
+        // from here also flips the UI to "transcribing" at the right moment.
+        id: maxDurationTimer
+        interval: Math.max(10, root.sttMaxSeconds) * 1000
+        running: root.recording
+        onTriggered: root.stopRecording()
     }
 
     Timer {

@@ -81,17 +81,40 @@ ContentPage {
         }
 
         ContentSection {
-            icon: "record_voice_over"
+            icon: "speech_to_text"
             shape: MaterialShape.Shape.Oval
             title: Translation.tr("Speech to Text")
 
             GroupedList {
                 ConfigSwitch {
-                    buttonIcon: "record_voice_over"
+                    buttonIcon: "speech_to_text"
                     text: Translation.tr("Enable speech to text")
                     checked: Config.options.stt.enabled
                     onCheckedChanged: {
                         Config.options.stt.enabled = checked;
+                    }
+                }
+                ConfigComboBox {
+                    Layout.fillWidth: true
+                    buttonIcon: "mic"
+                    text: Translation.tr("Microphone")
+                    fieldWidth: 200
+                    fixedWidth: true
+                    model: {
+                        const list = [{ displayName: Translation.tr("System default"), icon: "mic", value: "" }];
+                        const devices = Audio.inputDevices;
+                        for (let i = 0; i < devices.length; i++) {
+                            list.push({
+                                displayName: Audio.friendlyDeviceName(devices[i]),
+                                icon: "mic",
+                                value: devices[i].name
+                            });
+                        }
+                        return list;
+                    }
+                    currentValue: Config.options.stt.source
+                    onSelected: newValue => {
+                        Config.options.stt.source = newValue;
                     }
                 }
                 ConfigComboBox {
@@ -122,7 +145,7 @@ ContentPage {
                 ConfigComboBox {
                     Layout.fillWidth: true
                     buttonIcon: "memory"
-                    text: Translation.tr("Device")
+                    text: Translation.tr("Inference device")
                     fieldWidth: 200
                     fixedWidth: true
                     model: SettingsQuickControls.sttDevices
@@ -141,6 +164,37 @@ ContentPage {
                     currentValue: Config.options.stt.computeType
                     onSelected: newValue => {
                         Config.options.stt.computeType = newValue;
+                    }
+                }
+                ConfigComboBox {
+                    Layout.fillWidth: true
+                    buttonIcon: "send"
+                    text: Translation.tr("Output")
+                    fieldWidth: 200
+                    fixedWidth: true
+                    model: SettingsQuickControls.sttOutputModes
+                    currentValue: Config.options.stt.output
+                    onSelected: newValue => {
+                        Config.options.stt.output = newValue;
+                    }
+                }
+                ConfigSpinBox {
+                    icon: "timer"
+                    text: Translation.tr("Max recording time (s)")
+                    value: Config.options.stt.maxSeconds
+                    from: 10
+                    to: 600
+                    stepSize: 10
+                    onValueChanged: {
+                        Config.options.stt.maxSeconds = value;
+                    }
+                }
+                ConfigSwitch {
+                    buttonIcon: "graphic_eq"
+                    text: Translation.tr("Live dictation (type while speaking)")
+                    checked: Config.options.stt.streaming
+                    onCheckedChanged: {
+                        Config.options.stt.streaming = checked;
                     }
                 }
             }

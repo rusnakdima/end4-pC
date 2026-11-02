@@ -10,8 +10,10 @@ import qs.modules.common
  *
  * The service is switched on and off with the "stt.enabled" config option.
  * When it is disabled it must refuse to start a recording and it must say
- * why, and the model, the language, the device and the compute type of the
- * config must reach the request the backend receives.
+ * why, and the model, the language, the device, the compute type, the
+ * microphone and the time limit of the config must reach the request the
+ * backend receives. The transcript delivery mode follows "stt.output", and
+ * live dictation uses the streaming backend that emits one line per phrase.
  */
 TestCase {
     id: testCase
@@ -63,6 +65,61 @@ TestCase {
         verify(source.includes('"--language"'));
         verify(source.includes('"--device"'));
         verify(source.includes('"--compute-type"'));
+    }
+
+    function test_the_microphone_and_the_time_limit_reach_the_request() {
+        compare(SpeechToText.sttSource, Config.options.stt.source);
+        compare(SpeechToText.sttMaxSeconds, Config.options.stt.maxSeconds);
+        compare(SpeechToText.sttOutput, Config.options.stt.output);
+
+        wait(500);
+        verify(serviceView.loaded);
+        const source = serviceView.text();
+        verify(source.includes('"--source-target"'));
+        verify(source.includes('"--max-seconds"'));
+    }
+
+    function test_the_backend_accepts_the_microphone_and_the_time_limit() {
+        wait(500);
+        verify(backendView.loaded);
+        const source = backendView.text();
+        verify(source.includes('"--source-target"'));
+        verify(source.includes('"--max-seconds"'));
+    }
+
+    function test_the_delivery_mode_defaults_to_the_config() {
+        compare(SpeechToText.sessionTarget, "");
+        compare(SpeechToText.deliveryMode, Config.options.stt.output);
+        compare(SpeechToText.elapsedLabel, "0:00");
+    }
+
+    function test_live_dictation_follows_the_config_and_the_delivery_mode() {
+        compare(SpeechToText.sttStreaming, Config.options.stt.streaming);
+        const expected = Config.options.stt.streaming
+            && (SpeechToText.deliveryMode === "type"
+                || SpeechToText.deliveryMode === "both"
+                || SpeechToText.deliveryMode === "chat");
+        compare(SpeechToText.liveTyping, expected);
+    }
+
+    function test_the_service_uses_the_stream_subcommand_and_parses_segments() {
+        wait(500);
+        verify(serviceView.loaded);
+        const source = serviceView.text();
+        verify(source.includes('"stream"'));
+        verify(source.includes('payload.type === "segment"'));
+        verify(source.includes('payload.type === "result"'));
+        verify(source.includes('signal transcriptSegment'));
+        verify(source.includes('insertQueue'));
+    }
+
+    function test_the_backend_emits_a_line_per_phrase() {
+        wait(500);
+        verify(backendView.loaded);
+        const source = backendView.text();
+        verify(source.includes('"type": "segment"'));
+        verify(source.includes('"type": "result"'));
+        verify(source.includes('"stream"'));
     }
 
     function test_a_disabled_service_refuses_to_start_a_recording() {

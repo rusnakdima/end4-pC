@@ -167,34 +167,93 @@ Item {
         }
         Component {
             id: sttM3
-            UtilButton {
-                iconText: SpeechToText.enabled ? (SpeechToText.recording ? "stop_circle" : "mic") : "mic_off"
-                forceHovered: SpeechToText.recording
-                onClicked: {
-                    if (!SpeechToText.enabled) {
-                        Config.options.stt.enabled = true;
-                    } else {
-                        SpeechToText.toggleRecording();
+            Item {
+                implicitWidth: sttButton.implicitWidth + sttTimerRevealer.implicitWidth
+                implicitHeight: sttButton.implicitHeight
+
+                UtilButton {
+                    id: sttButton
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    iconText: {
+                        if (!SpeechToText.enabled) return "voice_over_off";
+                        if (SpeechToText.recording) return "stop_circle";
+                        if (SpeechToText.transcribing) return "graphic_eq";
+                        return "speech_to_text";
+                    }
+                    forceHovered: SpeechToText.recording || SpeechToText.transcribing
+                    onClicked: SpeechToText.toggleDictation()
+                }
+
+                Revealer {
+                    id: sttTimerRevealer
+                    anchors.left: sttButton.right
+                    anchors.leftMargin: 8
+                    anchors.verticalCenter: sttButton.verticalCenter
+                    reveal: SpeechToText.recording && !root.vertical
+
+                    StyledText {
+                        width: implicitWidth
+                        text: SpeechToText.elapsedLabel
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        font.features: { "tnum": 1 }
+                        font.letterSpacing: -0.3
+                        color: root.contentColor
+                        rightPadding: 8
+                        Component.onCompleted: width = implicitWidth
                     }
                 }
             }
         }
         Component {
             id: legacyStt
-            CircleUtilButton {
-                onClicked: {
-                    if (!SpeechToText.enabled) {
-                        Config.options.stt.enabled = true;
-                    } else {
-                        SpeechToText.toggleRecording();
+            Item {
+                implicitWidth: legacySttButton.implicitWidth + legacySttTimerRevealer.implicitWidth
+                implicitHeight: legacySttButton.implicitHeight
+
+                CircleUtilButton {
+                    id: legacySttButton
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    colBackground: SpeechToText.recording ? Appearance.colors.colPrimaryContainer : "transparent"
+                    buttonRadius: SpeechToText.recording ? Appearance.rounding.normal : implicitHeight / 2
+                    onClicked: SpeechToText.toggleDictation()
+
+                    Behavior on colBackground { ColorAnimation { duration: 200 } }
+                    Behavior on buttonRadius { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+
+                    MaterialSymbol {
+                        horizontalAlignment: Qt.AlignHCenter
+                        fill: SpeechToText.recording || SpeechToText.transcribing ? 1 : 0
+                        text: {
+                            if (!SpeechToText.enabled) return "voice_over_off";
+                            if (SpeechToText.recording) return "stop_circle";
+                            if (SpeechToText.transcribing) return "graphic_eq";
+                            return "speech_to_text";
+                        }
+                        iconSize: Appearance.font.pixelSize.large
+                        color: SpeechToText.recording || SpeechToText.transcribing ? Appearance.colors.colPrimary : root.contentColor
+                        Behavior on color { ColorAnimation { duration: 200 } }
                     }
                 }
-                MaterialSymbol {
-                    horizontalAlignment: Qt.AlignHCenter
-                    fill: SpeechToText.recording ? 1 : 0
-                    text: SpeechToText.enabled ? (SpeechToText.recording ? "stop_circle" : "mic") : "mic_off"
-                    iconSize: Appearance.font.pixelSize.large
-                    color: SpeechToText.recording ? Appearance.colors.colPrimary : root.contentColor
+
+                Revealer {
+                    id: legacySttTimerRevealer
+                    anchors.left: legacySttButton.right
+                    anchors.leftMargin: 8
+                    anchors.verticalCenter: legacySttButton.verticalCenter
+                    reveal: SpeechToText.recording && !root.vertical
+
+                    StyledText {
+                        width: implicitWidth
+                        text: SpeechToText.elapsedLabel
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        font.features: { "tnum": 1 }
+                        font.letterSpacing: -0.3
+                        color: root.contentColor
+                        rightPadding: 8
+                        Component.onCompleted: width = implicitWidth
+                    }
                 }
             }
         }

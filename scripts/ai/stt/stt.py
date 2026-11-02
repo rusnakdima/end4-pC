@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """Whisper speech-to-text backend for the end4-pC shell.
 
-Two subcommands:
+Three subcommands:
 
   record      capture the microphone through pw-record into a 16 kHz mono WAV
               file and transcribe it.
+  stream      dictate live: commit each phrase when a pause ends it and print
+              one JSON line per phrase, then one aggregate result line.
   transcribe  transcribe an existing audio file.
 
-Exactly one line of JSON is written to stdout in every case. Diagnostics go to
-stderr. On failure ``{"error": "..."}`` is printed and the exit code is
+`record` and `transcribe` write exactly one line of JSON to stdout. `stream`
+writes one line per committed phrase plus a final result line. Diagnostics go
+to stderr. On failure ``{"error": "..."}`` is printed and the exit code is
 non-zero.
 """
 
@@ -325,8 +328,8 @@ def stop_requested(stop_file):
     return bool(stop_file) and os.path.exists(stop_file)
 
 
-def capture_audio(out_path, stop_file, max_seconds, source_target):
-    """Record the microphone into out_path as a 16 kHz mono s16 WAV."""
+def pw_record_command(source_target):
+    """The pw-record invocation that streams raw s16 frames to stdout."""
     command = [
         "pw-record",
         "--rate",
@@ -338,9 +341,14 @@ def capture_audio(out_path, stop_file, max_seconds, source_target):
     ]
     if source_target:
         command += ["--target", source_target]
-    # "-" makes pw-record stream the raw frames to stdout, they are written
-    # into the WAV file by this script.
+    # "-" makes pw-record stream the raw frames to stdout.
     command += ["-"]
+    return command
+
+
+def capture_audio(out_path, stop_file, max_seconds, source_target):
+    """Record the microphone into out_path as a 16 kHz mono s16 WAV."""
+    command = pw_record_command(source_target)
 
     # pw-record's stderr goes to a temp file so it can never fill a pipe
     # buffer and block the recorder.
@@ -458,6 +466,328 @@ def capture_audio(out_path, stop_file, max_seconds, source_target):
     return reason, recorder_stderr
 
 
+# --- Live dictation -------------------------------------------------------
+
+FRAME_MS = 20
+FRAME_SAMPLES = SAMPLE_RATE * FRAME_MS // 1000
+FRAME_BYTES = FRAME_SAMPLES * SAMPLE_WIDTH
+
+
+class AudioBuffer:
+    """Thread-safe hand-off of raw s16 bytes from the pw-record reader."""
+
+    def __init__(self):
+        self._data = bytearray()
+        self._lock = threading.Lock()
+        self._eof = False
+        self._error = None
+
+    def append(self, chunk):
+        with self._lock:
+            self._data.extend(chunk)
+
+    def finish(self, error=None):
+        with self._lock:
+            self._eof = True
+            self._error = error
+
+    def take(self):
+        with self._lock:
+            data = bytes(self._data)
+            self._data.clear()
+            return data
+
+    def finished(self):
+        with self._lock:
+            return self._eof
+
+    def error(self):
+        with self._lock:
+            return self._error
+
+
+def pump_recorder(proc, buffer):
+    """Move everything pw-record writes into the buffer until EOF."""
+    try:
+        while True:
+            chunk = proc.stdout.read(FRAME_BYTES)
+            if not chunk:
+                break
+            buffer.append(chunk)
+    except Exception as exc:  # broken pipe, closed stream, ...
+        buffer.finish(exc)
+    else:
+        buffer.finish()
+
+
+def stop_recorder(proc):
+    """SIGINT then SIGKILL the recorder, as capture_audio does."""
+    if proc.poll() is None:
+        try:
+            proc.send_signal(signal.SIGINT)
+        except OSError:
+            pass
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                pass
+
+
+def start_recorder(source_target):
+    """Start pw-record, returning (process, stderr file)."""
+    stderr_file = tempfile.TemporaryFile()
+    try:
+        proc = subprocess.Popen(
+            pw_record_command(source_target),
+            stdout=subprocess.PIPE,
+            stderr=stderr_file,
+            bufsize=0,
+        )
+    except FileNotFoundError:
+        stderr_file.close()
+        emit_error("pw-record was not found - install pipewire-audio")
+    except OSError as exc:
+        stderr_file.close()
+        emit_error("could not start pw-record: %s" % exc)
+    return proc, stderr_file
+
+
+def stream_audio(args):
+    """Dictate live: commit each phrase when a pause ends it.
+
+    Every committed phrase is written as one JSON line as soon as it is
+    transcribed:
+
+        {"type": "segment", "text": "...", "language": "en"}
+
+    The aggregate payload, printed by main() at the end, is:
+
+        {"type": "result", "text": "...", "language": ..., "duration": ...}
+
+    The recorder starts before the model is loaded: the reader thread buffers
+    the first words during the (few seconds long) model load, so they are not
+    lost.
+    """
+    import numpy as np
+
+    WhisperModel = import_faster_whisper()
+    device = resolve_device(args.device)
+
+    started = time.monotonic()
+    deadline = started + args.max_seconds if args.max_seconds and args.max_seconds > 0 else None
+
+    whisper_language = None if (args.language is None or args.language == "auto") else args.language
+    detected_language = whisper_language or ""
+
+    recorder = None
+    recorder_stderr = None
+    buffer = None
+    reader = None
+
+    if args.audio:
+        samples = load_audio(args.audio)
+        if samples is None:
+            emit_error("could not decode audio file '%s'" % args.audio)
+        audio_duration = float(samples.size) / SAMPLE_RATE
+    else:
+        audio_duration = 0.0
+        recorder, recorder_stderr = start_recorder(args.source_target)
+        buffer = AudioBuffer()
+        reader = threading.Thread(target=pump_recorder, args=(recorder, buffer), daemon=True)
+        reader.start()
+
+    # Loading takes a few seconds; the recorder buffers meanwhile.
+    model, device, compute_type = load_model(
+        WhisperModel, args.model, device, args.compute_type
+    )
+
+    silence_frames_needed = max(1, int(round(args.silence_ms / FRAME_MS)))
+    min_speech_frames = max(1, int(round(args.min_speech_ms / FRAME_MS)))
+    pad_samples = max(0, int(round(args.pad_ms * SAMPLE_RATE / 1000)))
+    max_window_samples = max(SAMPLE_RATE, int(round(args.window_max_seconds * SAMPLE_RATE)))
+
+    frames = []
+    pending_len = 0
+    byte_carry = b""
+    noise_floor = 0.003
+    speech_seen = False
+    silence_run = 0
+    speech_frames = 0
+    last_voice_sample = 0
+    full_text = []
+    segment_count = 0
+
+    def pending_array():
+        if not frames:
+            return np.zeros(0, dtype=np.float32)
+        if len(frames) == 1:
+            return frames[0]
+        return np.concatenate(frames)
+
+    def transcribe_slice(chunk):
+        nonlocal detected_language
+        if chunk.size == 0:
+            return ""
+        # Detect the language on the first phrase, then keep it: re-detecting
+        # on every short phrase is slow and unstable.
+        language = whisper_language or (detected_language or None)
+        try:
+            segments, info = model.transcribe(
+                chunk,
+                language=language,
+                beam_size=1,
+                vad_filter=False,
+                without_timestamps=True,
+                condition_on_previous_text=False,
+            )
+            texts = []
+            for segment in segments:
+                text = getattr(segment, "text", "")
+                if text:
+                    texts.append(text.strip())
+            info_language = getattr(info, "language", None)
+            if info_language:
+                detected_language = info_language
+            return " ".join(part for part in texts if part).strip()
+        except Exception as exc:
+            log("stt: could not transcribe a phrase: %s" % exc)
+            return ""
+
+    def emit_segment(text):
+        nonlocal segment_count
+        text = (text or "").strip()
+        if not text:
+            return
+        segment_count += 1
+        full_text.append(text)
+        sys.stdout.write(
+            json.dumps(
+                {
+                    "type": "segment",
+                    "text": text,
+                    "language": detected_language or "",
+                }
+            )
+            + "\n"
+        )
+        sys.stdout.flush()
+
+    def commit(upto):
+        nonlocal frames, pending_len, speech_seen, silence_run, speech_frames
+        nonlocal last_voice_sample
+        cut = max(0, min(int(upto), pending_len))
+        if cut == 0:
+            return
+        audio = pending_array()
+        emit_segment(transcribe_slice(audio[:cut]))
+        remainder = audio[cut:]
+        frames = [remainder] if remainder.size else []
+        pending_len = int(remainder.size)
+        last_voice_sample = max(0, last_voice_sample - cut)
+        speech_seen = False
+        silence_run = 0
+        speech_frames = 0
+
+    def handle_frame(frame):
+        nonlocal pending_len, noise_floor, speech_seen, silence_run
+        nonlocal speech_frames, last_voice_sample
+        if frame.size == 0:
+            return
+        frames.append(frame)
+        pending_len += int(frame.size)
+
+        energy = float(np.sqrt(np.mean(frame * frame)))
+        is_voice = energy > max(0.004, noise_floor * 2.5)
+        if not is_voice:
+            noise_floor = min(0.02, noise_floor * 0.995 + energy * 0.005)
+
+        if is_voice:
+            speech_seen = True
+            speech_frames += 1
+            silence_run = 0
+            last_voice_sample = pending_len
+        elif speech_seen:
+            silence_run += 1
+            if silence_run >= silence_frames_needed and speech_frames >= min_speech_frames:
+                commit(min(last_voice_sample + pad_samples, pending_len))
+                return
+
+        if speech_seen and pending_len >= max_window_samples:
+            commit(min(last_voice_sample + pad_samples, pending_len))
+            return
+
+        # Drop leading silence so waiting before a phrase cannot grow the
+        # buffer. Keep one second of pre-roll for the first phoneme.
+        if not speech_seen and pending_len > 3 * SAMPLE_RATE:
+            audio = pending_array()[-SAMPLE_RATE:]
+            frames.clear()
+            frames.append(audio)
+            pending_len = int(audio.size)
+            last_voice_sample = 0
+
+    def feed_bytes(data):
+        nonlocal byte_carry
+        data = byte_carry + data
+        usable = len(data) - (len(data) % FRAME_BYTES)
+        byte_carry = data[usable:]
+        if usable <= 0:
+            return
+        samples = np.frombuffer(data[:usable], dtype="<i2").astype(np.float32) / 32768.0
+        for start in range(0, samples.size, FRAME_SAMPLES):
+            handle_frame(samples[start:start + FRAME_SAMPLES])
+
+    reason = "finished"
+    if args.audio:
+        for start in range(0, samples.size, FRAME_SAMPLES):
+            handle_frame(samples[start:start + FRAME_SAMPLES])
+    else:
+        while True:
+            feed_bytes(buffer.take())
+            if buffer.finished():
+                reason = "recorder-exited"
+                break
+            if stop_requested(args.stop_file):
+                reason = "stop-file"
+                break
+            if deadline is not None and time.monotonic() >= deadline:
+                reason = "max-seconds"
+                break
+            time.sleep(0.05)
+        stop_recorder(recorder)
+        reader.join(timeout=2)
+        feed_bytes(buffer.take())
+        if buffer.error() is not None:
+            log("stt: recorder read failed: %s" % buffer.error())
+        try:
+            if recorder_stderr is not None:
+                recorder_stderr.close()
+        except OSError:
+            pass
+        audio_duration = time.monotonic() - started
+
+    # Flush the phrase that was still being spoken when the capture ended.
+    if speech_seen and pending_len > 0:
+        commit(min(last_voice_sample + pad_samples, pending_len))
+
+    log("stt: live dictation stopped (%s)" % reason)
+    text = " ".join(part for part in full_text if part).strip()
+    return {
+        "type": "result",
+        "text": text,
+        "language": detected_language or "",
+        "duration": round(float(audio_duration), 3),
+        "device": device,
+        "segments": segment_count,
+    }
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="stt.py",
@@ -515,6 +845,84 @@ def build_parser():
         help="write the resulting JSON to this file as well",
     )
 
+    stream = subparsers.add_parser(
+        "stream",
+        help="dictate live: transcribe and emit each phrase as it ends",
+    )
+    stream.add_argument(
+        "--stop-file",
+        default="",
+        help="path whose appearance stops the capture (polled every 50 ms)",
+    )
+    stream.add_argument(
+        "--max-seconds",
+        type=float,
+        default=300.0,
+        help="maximum capture duration in seconds (default: 300)",
+    )
+    stream.add_argument(
+        "--source-target",
+        default="auto",
+        help="pw-record source target name (default: auto)",
+    )
+    stream.add_argument(
+        "--model",
+        default="base",
+        choices=list(MODEL_IDS),
+        help="whisper model id (default: base)",
+    )
+    stream.add_argument(
+        "--language",
+        default="auto",
+        help="spoken language code, or 'auto' to detect it on the first phrase",
+    )
+    stream.add_argument(
+        "--device",
+        default="cpu",
+        choices=list(DEVICE_IDS),
+        help="inference device: cpu, cuda or auto (default: cpu)",
+    )
+    stream.add_argument(
+        "--compute-type",
+        default="int8",
+        choices=list(COMPUTE_TYPES),
+        help="quantization/compute type (default: int8)",
+    )
+    stream.add_argument(
+        "--silence-ms",
+        type=float,
+        default=450.0,
+        help="pause length that ends a phrase (default: 450)",
+    )
+    stream.add_argument(
+        "--min-speech-ms",
+        type=float,
+        default=250.0,
+        help="shortest speech that is transcribed as a phrase (default: 250)",
+    )
+    stream.add_argument(
+        "--pad-ms",
+        type=float,
+        default=200.0,
+        help="audio kept after the last voice frame (default: 200)",
+    )
+    stream.add_argument(
+        "--window-max-seconds",
+        type=float,
+        default=15.0,
+        help="force a commit for phrases longer than this (default: 15)",
+    )
+    stream.add_argument(
+        "--audio",
+        default="",
+        help="debug: read this audio file instead of the microphone",
+    )
+    stream.add_argument(
+        "--result-file",
+        default="",
+        help="write the aggregate result to this file as well",
+    )
+
     transcribe = subparsers.add_parser(
         "transcribe",
         help="transcribe an existing audio file",
@@ -560,7 +968,9 @@ def main(argv=None):
         parser.print_help(file=sys.stderr)
         emit_error("no command given (expected 'record' or 'transcribe')", 2)
 
-    if args.command == "record":
+    if args.command == "stream":
+        payload = stream_audio(args)
+    elif args.command == "record":
         out_path = os.path.abspath(os.path.expanduser(args.out))
         out_dir = os.path.dirname(out_path)
         if out_dir:
