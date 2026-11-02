@@ -450,27 +450,30 @@ ContentPage {
                         }
                     }
 
-                    ConfigSpinBox {
-                        icon: "keyboard_return"
-                        text: Translation.tr("Repeat delay (ms)")
-                        value: Config.options.hyprland.input.repeatDelay
-                        from: 100; to: 1000; stepSize: 10
-                        onValueChanged: {
-                            if (value === Config.options.hyprland.input.repeatDelay) return
-                            Config.options.hyprland.input.repeatDelay = value
-                            HyprlandConfig.set("input:repeat_delay", value)
+                    ConfigRow {
+                        uniform: true
+                        ConfigSpinBox {
+                            icon: "keyboard_return"
+                            text: Translation.tr("Repeat delay (ms)")
+                            value: Config.options.hyprland.input.repeatDelay
+                            from: 100; to: 1000; stepSize: 10
+                            onValueChanged: {
+                                if (value === Config.options.hyprland.input.repeatDelay) return
+                                Config.options.hyprland.input.repeatDelay = value
+                                HyprlandConfig.set("input:repeat_delay", value)
+                            }
                         }
-                    }
 
-                    ConfigSpinBox {
-                        icon: "speed"
-                        text: Translation.tr("Repeat rate")
-                        value: Config.options.hyprland.input.repeatRate
-                        from: 10; to: 100; stepSize: 1
-                        onValueChanged: {
-                            if (value === Config.options.hyprland.input.repeatRate) return
-                            Config.options.hyprland.input.repeatRate = value
-                            HyprlandConfig.set("input:repeat_rate", value)
+                        ConfigSpinBox {
+                            icon: "speed"
+                            text: Translation.tr("Repeat rate")
+                            value: Config.options.hyprland.input.repeatRate
+                            from: 10; to: 100; stepSize: 1
+                            onValueChanged: {
+                                if (value === Config.options.hyprland.input.repeatRate) return
+                                Config.options.hyprland.input.repeatRate = value
+                                HyprlandConfig.set("input:repeat_rate", value)
+                            }
                         }
                     }
                     HyprOptionText {
@@ -766,77 +769,86 @@ ContentPage {
                     }
                 }
 
-                ConfigSpinBox {
-                    icon: "blur_circular"
-                    text: Translation.tr("Blur Size")
-                    value: Config.options.hyprland.decoration.blur.size
-                    from: 1; to: 20; stepSize: 1
-                    onValueChanged: {
-                        if (value === Config.options.hyprland.decoration.blur.size) return
-                        Config.options.hyprland.decoration.blur.size = value
-                        HyprlandConfig.set("decoration:blur:size", value)
+                ConfigRow {
+                    uniform: true
+                    ConfigSpinBox {
+                        icon: "blur_circular"
+                        text: Translation.tr("Blur Size")
+                        value: Config.options.hyprland.decoration.blur.size
+                        from: 1; to: 20; stepSize: 1
+                        onValueChanged: {
+                            if (value === Config.options.hyprland.decoration.blur.size) return
+                            Config.options.hyprland.decoration.blur.size = value
+                            HyprlandConfig.set("decoration:blur:size", value)
+                        }
+                    }
+
+                    ConfigSpinBox {
+                        icon: "layers"
+                        text: Translation.tr("Blur Passes")
+                        value: Config.options.hyprland.decoration.blur.passes
+                        from: 1; to: 6; stepSize: 1
+                        onValueChanged: {
+                            if (value === Config.options.hyprland.decoration.blur.passes) return
+                            Config.options.hyprland.decoration.blur.passes = value
+                            HyprlandConfig.set("decoration:blur:passes", value)
+                        }
                     }
                 }
 
-                ConfigSpinBox {
-                    icon: "layers"
-                    text: Translation.tr("Blur Passes")
-                    value: Config.options.hyprland.decoration.blur.passes
-                    from: 1; to: 6; stepSize: 1
-                    onValueChanged: {
-                        if (value === Config.options.hyprland.decoration.blur.passes) return
-                        Config.options.hyprland.decoration.blur.passes = value
-                        HyprlandConfig.set("decoration:blur:passes", value)
+                ConfigRow {
+                    uniform: true
+                    ConfigSpinBox {
+                        icon: "margin"
+                        text: Translation.tr("Gaps In")
+                        value: Config.options.hyprland.general.gapsIn
+                        from: 0; to: 40; stepSize: 1
+                        onValueChanged: {
+                            if (value === Config.options.hyprland.general.gapsIn) return
+                            Config.options.hyprland.general.gapsIn = value
+                            HyprlandConfig.set("general:gaps_in", value)
+                        }
+                    }
+
+                    ConfigSpinBox {
+                        icon: "open_in_full"
+                        text: Translation.tr("Gaps Out")
+                        value: Config.options.hyprland.general.gapsOut
+                        from: 0; to: 60; stepSize: 1
+                        onValueChanged: {
+                            if (value === Config.options.hyprland.general.gapsOut) return
+                            Config.options.hyprland.general.gapsOut = value
+                            HyprlandConfig.set("general:gaps_out", value)
+                        }
                     }
                 }
 
-                ConfigSpinBox {
-                    icon: "margin"
-                    text: Translation.tr("Gaps In")
-                    value: Config.options.hyprland.general.gapsIn
-                    from: 0; to: 40; stepSize: 1
-                    onValueChanged: {
-                        if (value === Config.options.hyprland.general.gapsIn) return
-                        Config.options.hyprland.general.gapsIn = value
-                        HyprlandConfig.set("general:gaps_in", value)
+                ConfigRow {
+                    uniform: true
+                    ConfigSpinBox {
+                        icon: "opacity"
+                        text: Translation.tr("Active Opacity")
+                        value: Math.round(Config.options.hyprland.decoration.activeOpacity * 100)
+                        from: 10; to: 100; stepSize: 5
+                        onValueChanged: {
+                            const newVal = value / 100.0
+                            if (newVal === Config.options.hyprland.decoration.activeOpacity) return
+                            Config.options.hyprland.decoration.activeOpacity = newVal
+                            HyprlandConfig.set("decoration:active_opacity", newVal)
+                        }
                     }
-                }
 
-                ConfigSpinBox {
-                    icon: "open_in_full"
-                    text: Translation.tr("Gaps Out")
-                    value: Config.options.hyprland.general.gapsOut
-                    from: 0; to: 60; stepSize: 1
-                    onValueChanged: {
-                        if (value === Config.options.hyprland.general.gapsOut) return
-                        Config.options.hyprland.general.gapsOut = value
-                        HyprlandConfig.set("general:gaps_out", value)
-                    }
-                }
-
-                ConfigSpinBox {
-                    icon: "opacity"
-                    text: Translation.tr("Active Opacity")
-                    value: Math.round(Config.options.hyprland.decoration.activeOpacity * 100)
-                    from: 10; to: 100; stepSize: 5
-                    onValueChanged: {
-                        const newVal = value / 100.0
-                        if (newVal === Config.options.hyprland.decoration.activeOpacity) return
-                        Config.options.hyprland.decoration.activeOpacity = newVal
-                        HyprlandConfig.set("decoration:active_opacity", newVal)
-                    }
-                }
-
-                ConfigSpinBox {
-                    icon: "opacity"
-                    text: Translation.tr("Inactive Opacity")
-                    value: Math.round(Config.options.hyprland.decoration.inactiveOpacity * 100)
-                    from: 10; to: 100; stepSize: 5
-                    onValueChanged: {
-                        const newVal = value / 100.0
-                        if (newVal === Config.options.hyprland.decoration.inactiveOpacity) return
-                        Config.options.hyprland.decoration.inactiveOpacity = newVal
-                        HyprlandConfig.set("decoration:inactive_opacity", newVal)
+                    ConfigSpinBox {
+                        icon: "opacity"
+                        text: Translation.tr("Inactive Opacity")
+                        value: Math.round(Config.options.hyprland.decoration.inactiveOpacity * 100)
+                        from: 10; to: 100; stepSize: 5
+                        onValueChanged: {
+                            const newVal = value / 100.0
+                            if (newVal === Config.options.hyprland.decoration.inactiveOpacity) return
+                            Config.options.hyprland.decoration.inactiveOpacity = newVal
+                            HyprlandConfig.set("decoration:inactive_opacity", newVal)
+                        }
                     }
                 }
                 ConfigSpinBox {

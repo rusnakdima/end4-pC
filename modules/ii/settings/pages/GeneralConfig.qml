@@ -402,18 +402,15 @@ ContentPage {
                         }
                     }
                 }
-                ConfigRow {
-                    uniform: true
-                    ConfigSpinBox {
-                        icon: "charger"
-                        text: Translation.tr("Full warning")
-                        value: Config.options.battery.full
-                        from: 0
-                        to: 101
-                        stepSize: 5
-                        onValueChanged: {
-                            Config.options.battery.full = value;
-                        }
+                ConfigSpinBox {
+                    icon: "charger"
+                    text: Translation.tr("Full warning")
+                    value: Config.options.battery.full
+                    from: 0
+                    to: 101
+                    stepSize: 5
+                    onValueChanged: {
+                        Config.options.battery.full = value;
                     }
                 }
             }
@@ -433,6 +430,7 @@ ContentPage {
                     }
                 }
                 ConfigRow {
+                    uniform: true
                     enabled: Config.options.audio.protection.enable
                     ConfigSpinBox {
                         icon: "arrow_warm_up"

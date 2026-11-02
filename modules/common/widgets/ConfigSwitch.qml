@@ -11,6 +11,8 @@ RippleButton {
     colBackgroundHover: "transparent"
 
     Layout.fillWidth: true
+    Layout.leftMargin: 8
+    Layout.rightMargin: 8
     Layout.bottomMargin: 6 //Visually it works and I don't know why this should be handled by the parent.
     implicitHeight: contentItem.implicitHeight + 8 
     font.pixelSize: Appearance.font.pixelSize.small
@@ -29,6 +31,7 @@ RippleButton {
             id: labelWidget
             Layout.fillWidth: true
             text: root.text
+            elide: Text.ElideRight
             font: root.font
             color: Appearance.colors.colOnSecondaryContainer
             opacity: root.enabled ? 1 : 0.4

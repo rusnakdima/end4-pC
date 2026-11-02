@@ -125,9 +125,11 @@ ContentPage {
         Layout.topMargin: !isMinimal ? 0 : -8
         spacing: 8
 
-        RowLayout { //This is not in the grid because I was planning to do something else.
+        GridLayout {
+            columns: 2
             Layout.fillWidth: true
-            spacing: 8
+            rowSpacing: 8
+            columnSpacing: 8
 
             AboutCard {
                 icon: "planner_review"
@@ -144,13 +146,6 @@ ContentPage {
                 value: SystemInfo.gpu || "N/A"
                 Layout.fillWidth: true
             }
-        }
-
-        GridLayout {
-            columns: 2
-            Layout.fillWidth: true
-            rowSpacing: 8
-            columnSpacing: 8
 
             AboutCard {
                 icon: "memory"

@@ -698,10 +698,7 @@ ContentPage {
                     ConfigRow {
                         uniform: true
                         visible: Config.options.overview.style !== "niri"
-                        Layout.alignment: Qt.AlignHCenter
-                        Layout.leftMargin: 24
                         ConfigSelectionArray {
-                            Layout.alignment: Qt.AlignHCenter
                             currentValue: Config.options.overview.orderRightLeft
                             onSelected: newValue => {
                                 Config.options.overview.orderRightLeft = newValue
@@ -720,7 +717,6 @@ ContentPage {
                             ]
                         }
                         ConfigSelectionArray {
-                            Layout.alignment: Qt.AlignHCenter
                             currentValue: Config.options.overview.orderBottomUp
                             onSelected: newValue => {
                                 Config.options.overview.orderBottomUp = newValue
@@ -1515,16 +1511,13 @@ ContentPage {
                     checked: Config.options.appearance.wallpaperTheming.lockKonsoleColors
                     onCheckedChanged: { Config.options.appearance.wallpaperTheming.lockKonsoleColors = checked }
                 }
-                ConfigRow {
-                    uniform: true
-                    ConfigSwitch {
-                        buttonIcon: "dark_mode"
-                        text: Translation.tr("Force dark mode in terminal")
-                        checked: Config.options.appearance.wallpaperTheming.terminalGenerationProps.forceDarkMode
-                        onCheckedChanged: {
-                            Config.options.appearance.wallpaperTheming.terminalGenerationProps.forceDarkMode = checked
-                            ColorSchemes.regenerateTheme()
-                        }
+                ConfigSwitch {
+                    buttonIcon: "dark_mode"
+                    text: Translation.tr("Force dark mode in terminal")
+                    checked: Config.options.appearance.wallpaperTheming.terminalGenerationProps.forceDarkMode
+                    onCheckedChanged: {
+                        Config.options.appearance.wallpaperTheming.terminalGenerationProps.forceDarkMode = checked
+                        ColorSchemes.regenerateTheme()
                     }
                 }
                 ConfigSpinBox {

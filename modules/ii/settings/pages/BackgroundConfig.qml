@@ -780,6 +780,7 @@ ContentPage {
                     }
 
                     ConfigRow {
+                        uniform: true
 
                         ConfigSwitch {
                             enabled: Config.options.background.widgets.clock.cookie.dialNumberStyle === "dots" || Config.options.background.widgets.clock.cookie.dialNumberStyle === "full"
@@ -1413,6 +1414,7 @@ ContentPage {
                 rowSpacing: 8
                 columnSpacing: 8
                 Repeater {
+                    id: widgetsRepeater
                     model: [
                         {
                             icon: "weather_mix",
@@ -1484,6 +1486,8 @@ ContentPage {
                     ]
                     delegate: Rectangle {
                         Layout.fillWidth: true
+                        // Let the trailing row fill the grid instead of leaving a dead cell.
+                        Layout.columnSpan: index === widgetsRepeater.count - 1 ? 3 - (index % 3) : 1
                         Layout.preferredHeight: 105
                         radius: Appearance.rounding.normal
                         color: Appearance.colors.colLayer1

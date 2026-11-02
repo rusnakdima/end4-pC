@@ -41,6 +41,7 @@ RowLayout {
             id: labelWidget
             Layout.fillWidth: true
             text: root.text
+            elide: Text.ElideRight
             color: Appearance.colors.colOnSecondaryContainer
             opacity: root.enabled ? 1 : 0.4
         }

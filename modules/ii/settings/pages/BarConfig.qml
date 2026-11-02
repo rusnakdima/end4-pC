@@ -280,7 +280,7 @@ ContentPage {
                         Config.options.bar.groupColor = newValue
                     }
                 }
-                ConfigRow{
+                ConfigRow {
                     uniform: true
                     ConfigSwitch {
                         buttonIcon: "variable_insert"
@@ -308,6 +308,7 @@ ContentPage {
                     onCheckedChanged: { Config.options.bar.centerOnlyReserveFrame = checked; }
                 }
                 ConfigRow {
+                    uniform: true
                     ConfigSwitch {
                         buttonIcon: "panorama_wide_angle"
                         text: Translation.tr("Show Frame")
@@ -599,17 +600,21 @@ ContentPage {
                         onCheckedChanged: { Config.options.bar.utilButtons.showScreenRecord = checked }
                     }
                     ConfigSwitch {
-                        buttonIcon: "mic"
+                        buttonIcon: "speech_to_text"
                         text: Translation.tr("Speech to Text")
                         checked: Config.options.bar.utilButtons.showSttToggle
                         onCheckedChanged: { Config.options.bar.utilButtons.showSttToggle = checked }
                     }
+                }
+                ConfigRow {
+                    uniform: true
                     ConfigSwitch {
                         buttonIcon: "imagesmode"
                         text: Translation.tr("Wallpapers Toggle")
                         checked: Config.options.bar.utilButtons.showWallpaperToggle
                         onCheckedChanged: { Config.options.bar.utilButtons.showWallpaperToggle = checked }
                     }
+                    ConfigRowSpacer {}
                 }
             }
         }
@@ -759,14 +764,11 @@ ContentPage {
                         onCheckedChanged: { Config.options.bar.resources.alwaysShowDisk = checked }
                     }
                 }
-                ConfigRow {
-                    uniform: true
-                    ConfigSwitch {
-                        buttonIcon: "swap_horiz"
-                        text: Translation.tr("Swap")
-                        checked: Config.options.bar.resources.alwaysShowSwap
-                        onCheckedChanged: { Config.options.bar.resources.alwaysShowSwap = checked }
-                    }
+                ConfigSwitch {
+                    buttonIcon: "swap_horiz"
+                    text: Translation.tr("Swap")
+                    checked: Config.options.bar.resources.alwaysShowSwap
+                    onCheckedChanged: { Config.options.bar.resources.alwaysShowSwap = checked }
                 }
                 ConfigSelectionArray {
                     text: Translation.tr("Style")
