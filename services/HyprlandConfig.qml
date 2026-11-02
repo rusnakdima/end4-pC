@@ -46,6 +46,35 @@ Singleton {
         Quickshell.execDetached(args)
     }
 
+    // Switch the active XKB layout.
+    //
+    // Hyprland keeps the active layout group by NAME: reordering kb_layout
+    // moves the codes around but never changes which one is active. The old
+    // active name is therefore dropped first - the group falls back to the
+    // only layout left - and the full list is restored right after with the
+    // target in front.
+    function setKeyboardLayout(target: string, codes: list<string>) {
+        const wanted = target.trim();
+        if (wanted.length === 0) return "";
+
+        const others = codes
+            .map(c => c.trim())
+            .filter(c => c.length > 0 && c.toLowerCase() !== wanted.toLowerCase());
+        const applied = [wanted, ...others].join(",");
+
+        // Both steps in one eval so the compositor runs them back to back, in
+        // order: the single layout selects the target, the full list keeps
+        // the other layouts available.
+        Quickshell.execDetached([
+            "hyprctl", "eval",
+            `hl.config({ input = { kb_layout = "${wanted}" } }); hl.config({ input = { kb_layout = "${applied}" } })`
+        ]);
+
+        // Persist the final list; the configurator re-applies it live as well.
+        root.set("input:kb_layout", applied);
+        return applied;
+    }
+
     function reset(key: string) {
         Quickshell.execDetached([
             "python3", root.configuratorScriptPath,

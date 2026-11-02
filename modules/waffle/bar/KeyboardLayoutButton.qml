@@ -20,18 +20,14 @@ BarButton {
         return root.layoutCodes.length > 0 ? root.layoutCodes[0] : "";
     }
 
-    // Hyprland treats the first entry of kb_layout as the active group, so the
-    // chosen layout has to come first.
+    // Switching the layout has to make the chosen code the active group, not
+    // just reorder the list - HyprlandConfig.setKeyboardLayout does that.
     function applyLayout(code) {
         if (WM.compositor !== "hyprland") return;
 
-        const target = code.trim();
-        if (target.length === 0) return;
+        const applied = HyprlandConfig.setKeyboardLayout(code, root.layoutCodes);
+        if (applied.length === 0) return;
 
-        const others = root.layoutCodes.filter(c => c.toLowerCase() !== target.toLowerCase());
-        const applied = [target, ...others].join(",");
-
-        HyprlandConfig.set("input:kb_layout", applied);
         Config.options.hyprland.input.kbLayout = applied;
     }
 

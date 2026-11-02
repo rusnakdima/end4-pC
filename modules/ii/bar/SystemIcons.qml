@@ -121,22 +121,6 @@ Item {
                 color: root.iconColor
             }
         }
-        Loader {
-            id: xkbLoader
-            source: "HyprlandXkbIndicator.qml"
-            Binding {
-                target: xkbLoader.item
-                property: "contentColor"
-                value: root.iconColor
-                when: xkbLoader.item !== null
-            }
-            Binding {
-                target: xkbLoader.item
-                property: "contentColorOverridden"
-                value: true
-                when: xkbLoader.item !== null
-            }
-        }
         MaterialSymbol {
             text: Network.materialSymbol
             iconSize: Appearance.font.pixelSize.larger
