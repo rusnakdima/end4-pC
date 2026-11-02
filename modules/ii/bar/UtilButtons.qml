@@ -115,7 +115,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     colBackground: recordingItem.isRecording ? Appearance.colors.colPrimaryContainer : "transparent"
                     buttonRadius: recordingItem.isRecording ? Appearance.rounding.normal : implicitHeight / 2
-                    onClicked: Quickshell.execDetached([Directories.recordScriptPath])
+                    onClicked: Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "region", "record"])
 
                     Behavior on colBackground { ColorAnimation { duration: 200 } }
                     Behavior on buttonRadius { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
@@ -156,7 +156,7 @@ Item {
             UtilButton {
                 iconText: Persistent.states.record.enable ? "stop_circle" : "screen_record"
                 forceHovered: Persistent.states.record.enable
-                onClicked: Quickshell.execDetached([Directories.recordScriptPath])
+                onClicked: Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "region", "record"])
             }
         }
 
