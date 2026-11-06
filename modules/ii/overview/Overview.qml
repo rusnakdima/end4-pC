@@ -246,10 +246,15 @@ Scope {
         description: "Toggles search on release"
 
         onPressed: {
+            // This chord is the shell's only reliable "Super is physically
+            // held" signal, so the settings card can drag under Super exactly
+            // the way Hyprland drags a normal window.
+            GlobalStates.superDown = true;
             GlobalStates.superReleaseMightTrigger = true;
         }
 
         onReleased: {
+            GlobalStates.superDown = false;
             if (!GlobalStates.superReleaseMightTrigger) {
                 GlobalStates.superReleaseMightTrigger = true;
                 return;
