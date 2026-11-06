@@ -6,13 +6,11 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
-import qs.modules.common.functions as CF
 
 Scope {
     id: root
@@ -26,143 +24,113 @@ Scope {
 
     Dashboard {}
 
-    PanelWindow {
-        id: panelWindow
-        visible: GlobalStates.settingsOpen && Config.options.settings.style !== "dashboard"
+    // Settings is a plain window, not a layer surface. Hyprland floats it by
+    // title (dots/.config/hypr/hyprland/rules.lua matches
+    // "^(illogical-impulse Settings)$") and owns its geometry from then on:
+    // SUPER+left/right drags it, SUPER+middle and the window border resize it.
+    // Nothing in this file moves or sizes the window -- that is the point, and
+    // it is how upstream's settings app works. It also means there is no
+    // fullscreen backdrop: clicking away leaves the window open, like any app.
+    Loader {
+        active: GlobalStates.settingsOpen && Config.options.settings.style !== "dashboard"
 
-        function hide() {
-            GlobalStates.settingsOpen = false;
-        }
+        sourceComponent: FloatingWindow {
+            id: window
+            title: "illogical-impulse Settings"
+            color: Appearance.colors.colUiBackground
 
-        exclusiveZone: 0
-        WlrLayershell.namespace: "quickshell:settings"
-        WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.keyboardFocus: GlobalStates.settingsOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
-        color: "transparent"
-
-        anchors {
-            top: true
-            bottom: true
-            left: true
-            right: true
-        }
-
-        onVisibleChanged: {
-            if (visible) {
-                GlobalFocusGrab.addDismissable(panelWindow);
-                settingsWindow.userMoved = false;
-            } else {
-                GlobalFocusGrab.removeDismissable(panelWindow);
-            }
-        }
-
-        Connections {
-            target: GlobalFocusGrab
-            function onDismissed() {
-                if (panelWindow.visible) panelWindow.hide();
-            }
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            color: "transparent"
-            opacity: GlobalStates.settingsOpen ? 1 : 0
-            z: 0
-            Behavior on opacity {
-                NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
-            }
-            MouseArea {
-                anchors.fill: parent
-                propagateComposedEvents: false
-                onClicked: panelWindow.hide()
-            }
-        }
-
-        Rectangle {
-            id: settingsWindow
             WindowGlass {
                 anchors.fill: parent
-                glassEnabled: (parent?.color.a ?? 0) > 0
-                cardRadius: parent?.radius ?? 0
-                tint: parent?.color ?? 'transparent'
-            }
-            width: Config.options.settings.style === "minimal" ? Math.min(parent.width - 70, 980 * sizeScale) : Math.min(parent.width - 80, 980 * sizeScale)
-            height: Math.min(parent.height - 80, 665 * sizeScale)
-            color: Appearance.colors.colUiBackground
-            border.width: Config.options.settings.borderSize
-            border.color: CF.ColorUtils.transparentize(Appearance.getColorFromName(Config.options.settings.borderColor), 0.8)
-            radius: !isMinimal ? Appearance.rounding.screenRounding - Appearance.sizes.hyprlandGapsOut + 5 : Appearance.rounding.screenRounding + 5
-            z: 1
-
-            property bool userMoved: false
-            anchors.centerIn: userMoved ? undefined : parent
-
-            opacity: GlobalStates.settingsOpen ? 1 : 0
-            scale: GlobalStates.settingsOpen ? 1 : 0.95
-
-            Behavior on opacity {
-                NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
-            }
-            Behavior on scale {
-                NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+                tint: Appearance.colors.colUiBackground
             }
 
-            Keys.onTabPressed: (event) => {
-            const count = settingsContent.pages.length;
-            settingsContent.currentPage = (settingsContent.currentPage + 1) % count;
-            settingsContent.showingProfile = false;
-            event.accepted = true;
-        }
+            implicitWidth: 980 * sizeScale
+            implicitHeight: 665 * sizeScale
+            minimumSize: Qt.size(480, 320)
 
-        Keys.onBacktabPressed: (event) => {
-            const count = settingsContent.pages.length;
-            settingsContent.currentPage = (settingsContent.currentPage - 1 + count) % count;
-            settingsContent.showingProfile = false;
-            event.accepted = true;
-        }
+            property bool settled: false
 
-        Keys.onPressed: (event) => {
-            if (event.key === Qt.Key_Escape) {
-                panelWindow.hide();
-                event.accepted = true;
-                return;
+            visible: true
+            onVisibleChanged: {
+                // Covers the window being closed from outside this file
+                // (killactive, an Alt-Tab dismissal), so the shell's own
+                // state never claims Settings is open when it is not.
+                if (!visible) GlobalStates.settingsOpen = false;
+            }
+            onWidthChanged: settleTimer.restart()
+            onHeightChanged: settleTimer.restart()
+
+            Timer {
+                id: settleTimer
+                interval: 70
+                running: true
+                onTriggered: window.settled = true
             }
 
-            if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
-                const instance = GlobalStates.currentPageInstance;
-                if (instance && instance.contentY !== undefined) {
-                    const step = 60;
-                    const delta = event.key === Qt.Key_Down ? step : -step;
-                    const maxY = Math.max(0, (instance.contentHeight ?? 0) - instance.height);
-                    instance.contentY = Math.max(0, Math.min(maxY, instance.contentY + delta));
-                }
-                event.accepted = true;
-                return;
-            }
-        }
-
-            Rectangle {
-                id: dragHandle
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                height: 32
-                color: "transparent"
-                z: 2
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.SizeAllCursor
-                    drag.target: settingsWindow
-                    drag.axis: Drag.XAndYAxis
-                    onPressed: settingsWindow.userMoved = true
-                    onDoubleClicked: settingsWindow.userMoved = false
-                }
-            }
-
-            SettingsContent {
-                id: settingsContent
+            // The key handlers live on an Item, because a Window is not one,
+            // and on an ancestor of the content so an unaccepted Escape still
+            // bubbles up to them from the search field.
+            Item {
+                id: keyScope
                 anchors.fill: parent
+                focus: true
+
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Escape) {
+                        GlobalStates.settingsOpen = false;
+                        event.accepted = true;
+                        return;
+                    }
+
+                    if (event.key === Qt.Key_Super || event.key === Qt.Key_Meta) {
+                        event.accepted = true;
+                        return;
+                    }
+
+                    if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
+                        const instance = GlobalStates.currentPageInstance;
+                        if (instance && instance.contentY !== undefined) {
+                            const step = 60;
+                            const delta = event.key === Qt.Key_Down ? step : -step;
+                            const maxY = Math.max(0, (instance.contentHeight ?? 0) - instance.height);
+                            instance.contentY = Math.max(0, Math.min(maxY, instance.contentY + delta));
+                        }
+                        event.accepted = true;
+                        return;
+                    }
+                }
+
+                Keys.onTabPressed: (event) => {
+                    const pages = contentLoader.item?.pages ?? [];
+                    if (pages.length > 0) {
+                        const item = contentLoader.item;
+                        item.currentPage = (item.currentPage + 1) % pages.length;
+                        item.showingProfile = false;
+                    }
+                    event.accepted = true;
+                }
+
+                Keys.onBacktabPressed: (event) => {
+                    const pages = contentLoader.item?.pages ?? [];
+                    if (pages.length > 0) {
+                        const item = contentLoader.item;
+                        item.currentPage = (item.currentPage - 1 + pages.length) % pages.length;
+                        item.showingProfile = false;
+                    }
+                    event.accepted = true;
+                }
+
+                // Created once the window has a real size, the same way
+                // Dashboard.qml does it: a QQuickWindow reports 0x0 until its
+                // platform window exists, and laying the pages out against
+                // that wastes a full relayout of every page.
+                Loader {
+                    id: contentLoader
+                    anchors.fill: parent
+                    active: window.settled
+
+                    sourceComponent: SettingsContent {}
+                }
             }
         }
     }
