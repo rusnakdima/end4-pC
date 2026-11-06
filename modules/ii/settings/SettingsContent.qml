@@ -75,6 +75,66 @@ Item {
             margins: contentPadding
         }
 
+        // z keeps the header above the nav/content row, so the results pane
+        // can overhang it instead of shoving the layout apart.
+        Item {
+            id: searchHeader
+            z: 2
+            Layout.fillWidth: true
+            implicitHeight: searchRow.implicitHeight
+
+            RowLayout {
+                id: searchRow
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                spacing: 8
+
+                MaterialSymbol {
+                    text: "search"
+                    iconSize: Appearance.font.pixelSize.large
+                    color: Appearance.colors.colOnSurfaceVariant
+                }
+
+                ToolbarTextField {
+                    id: settingsSearch
+                    Layout.fillWidth: true
+                    placeholderText: Translation.tr("Search settings…")
+
+                    // Enter activates the highlighted row; arrows move the
+                    // highlight; Escape clears the query first and only then
+                    // lets the event reach the window and close it.
+                    onAccepted: searchPane.acceptCurrent()
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Down) {
+                            searchPane.moveSelection(1);
+                            event.accepted = true;
+                            return;
+                        }
+                        if (event.key === Qt.Key_Up) {
+                            searchPane.moveSelection(-1);
+                            event.accepted = true;
+                            return;
+                        }
+                        if (event.key === Qt.Key_Escape && text !== "") {
+                            text = "";
+                            event.accepted = true;
+                        }
+                    }
+                }
+            }
+
+            SettingsSearchPane {
+                id: searchPane
+                anchors.top: searchRow.bottom
+                anchors.topMargin: 6
+                anchors.left: searchRow.left
+                anchors.right: searchRow.right
+                query: settingsSearch.text
+                onDismissed: settingsSearch.text = ""
+            }
+        }
+
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
