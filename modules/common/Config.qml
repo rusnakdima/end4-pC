@@ -761,11 +761,14 @@ Singleton {
                 property JsonObject antiFlashbang: JsonObject {
                     property bool enable: false
                 }
-                // Keyboard backlight colour. Read by the quick controls and by
-                // the Keyboard settings page; nothing applies it yet.
+                // Keyboard backlight colour, stored as hex because kbd-color
+                // takes channels. followWallpaper takes it from
+                // Appearance.colPrimary instead, which matugen already derives
+                // from the wallpaper. Brightness.kbMonitor applies both.
                 property JsonObject keyboardColor: JsonObject {
                     property bool enable: false
-                    property string color: "white"
+                    property bool followWallpaper: false
+                    property string color: "#ffffff"
                 }
             }
 
@@ -960,6 +963,8 @@ Singleton {
 
                 property JsonObject quickToggles: JsonObject {
                     property string style: "android" // Options: classic, android
+                    // The playing wallpaper tile above the toggle panel.
+                    property bool wallpaperTile: true
                     property JsonObject android: JsonObject {
                         property int columns: 5
                         property list<var> toggles: [
@@ -968,7 +973,8 @@ Singleton {
                             { "size": 1, "type": "idleInhibitor" },
                             { "size": 1, "type": "mic" },
                             { "size": 2, "type": "audio" },
-                            { "size": 2, "type": "nightLight" }
+                            { "size": 2, "type": "nightLight" },
+                            { "size": 1, "type": "liveWallpaper" }
                         ]
                     }
                 }

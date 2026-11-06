@@ -256,6 +256,7 @@ Singleton {
             { displayName: Translation.tr("Android"), icon: "action_key", value: "android" }
         ]),
         "interface:Right Sidebar/Columns": root.optionSpin("sidebar.quickToggles.android.columns", 1, 8, 1),
+        "interface:Right Sidebar/Wallpaper tile": root.optionSwitch("sidebar.quickToggles.wallpaperTile"),
         "interface:Right Sidebar/Enable": root.optionSwitch("sidebar.quickSliders.enable"),
         "interface:Brightness": root.optionSwitch("sidebar.quickSliders.showBrightness"),
         "interface:Volume": root.optionSwitch("sidebar.quickSliders.showVolume"),
@@ -271,18 +272,13 @@ Singleton {
             value => { Brightness.kbMonitor.set(Math.round(value)); },
             0, 100, 5
         ),
-        "interface:Keyboard Color/Enable": root.optionSwitch("light.keyboardColor.enable"),
-        "interface:Keyboard Color/Color": root.optionSelect("light.keyboardColor.color", [
-            { displayName: "Red", icon: "palette", value: "red" },
-            { displayName: "Green", icon: "palette", value: "green" },
-            { displayName: "Blue", icon: "palette", value: "blue" },
-            { displayName: "White", icon: "palette", value: "white" },
-            { displayName: "Cyan", icon: "palette", value: "cyan" },
-            { displayName: "Magenta", icon: "palette", value: "magenta" },
-            { displayName: "Yellow", icon: "palette", value: "yellow" },
-            { displayName: "Orange", icon: "palette", value: "orange" },
-            { displayName: "Rainbow", icon: "palette", value: "rainbow" },
-        ]),
+        // Keyed by the Keyboard page's own labels: SettingsQuickControls.find()
+        // resolves a hit as `pageId:section/subsection/label`, so a control can
+        // only be attached to a search result whose label the page really
+        // shows. There is no control for the colour itself -- the page's
+        // swatches are that UI -- so no row is declared for it.
+        "keyboard:Manage keyboard colour": root.optionSwitch("light.keyboardColor.enable"),
+        "keyboard:Match the wallpaper colour": root.optionSwitch("light.keyboardColor.followWallpaper"),
         "interface:Hot Corners/Enable": root.optionSwitch("sidebar.cornerOpen.enable"),
         "interface:Hover to trigger": root.optionSwitch("sidebar.cornerOpen.clickless"),
         "interface:Place at bottom": root.optionSwitch("sidebar.cornerOpen.bottom"),

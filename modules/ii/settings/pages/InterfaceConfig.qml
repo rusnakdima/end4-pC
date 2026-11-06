@@ -461,6 +461,14 @@ ContentPage {
                             Config.options.sidebar.quickToggles.android.columns = value;
                         }
                     }
+                    ConfigSwitch {
+                        buttonIcon: "wallpaper"
+                        text: Translation.tr('Wallpaper tile')
+                        checked: Config.options.sidebar.quickToggles.wallpaperTile
+                        onCheckedChanged: {
+                            Config.options.sidebar.quickToggles.wallpaperTile = checked;
+                        }
+                    }
                 }
             }
 
@@ -503,6 +511,19 @@ ContentPage {
                         checked: Config.options.sidebar.quickSliders.showMic
                         onCheckedChanged: {
                             Config.options.sidebar.quickSliders.showMic = checked;
+                        }
+                    }
+
+                    // Label and control key have to match exactly:
+                    // SettingsQuickControls.find() resolves a search hit as
+                    // `pageId:section/subsection/label`.
+                    ConfigSwitch {
+                        buttonIcon: "keyboard"
+                        text: Translation.tr("Keyboard Brightness")
+                        enabled: Config.options.sidebar.quickSliders.enable
+                        checked: Config.options.sidebar.quickSliders.showKeyboardBrightness
+                        onCheckedChanged: {
+                            Config.options.sidebar.quickSliders.showKeyboardBrightness = checked;
                         }
                     }
                 }

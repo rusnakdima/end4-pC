@@ -42,28 +42,27 @@ Item {
         anchors.fill: parent
         active: root.isVideo && root.onScreen
 
-        sourceComponent: Item {
+        // Qt 6.12's VideoOutput has no `source` property any more (only
+        // fillMode/videoSink), so the MediaPlayer+VideoOutput pair does not
+        // compile. Video is the type Qt ships for exactly this: it owns both
+        // and aliases source, autoPlay, loops, fillMode and muted.
+        sourceComponent: Video {
+            id: video
             anchors.fill: parent
-
-            MediaPlayer {
-                id: player
-                source: root.mediaSource
-                loops: MediaPlayer.Infinite
-                autoPlay: root.shouldPlay
-            }
+            source: root.mediaSource
+            autoPlay: root.shouldPlay
+            loops: MediaPlayer.Infinite
+            fillMode: VideoOutput.PreserveAspectCrop
+            // A wallpaper is silent everywhere else -- mpvpaper itself runs
+            // with no-audio -- so a preview must never start talking.
+            muted: true
 
             Connections {
                 target: root
                 function onShouldPlayChanged() {
-                    if (root.shouldPlay) player.play();
-                    else player.pause();
+                    if (root.shouldPlay) video.play();
+                    else video.pause();
                 }
-            }
-
-            VideoOutput {
-                anchors.fill: parent
-                source: player
-                fillMode: VideoOutput.PreserveAspectCrop
             }
         }
     }

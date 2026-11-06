@@ -426,6 +426,10 @@ Item {
                     introAnim.start();
                 }
                 fileModelData: delegateCell.modelData
+                // The same expression the accent colour uses below: hover and
+                // keyboard selection both funnel into grid.currentIndex, so
+                // exactly one cell ever plays.
+                playSelected: delegateCell.index === grid.currentIndex
                 // The cells are styled like the icon view of a file manager:
                 // a themed surface with a themed label. The hovered and the
                 // selected cells keep their accent color.

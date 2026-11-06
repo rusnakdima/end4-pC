@@ -14,6 +14,9 @@ Item {
     property bool isDirectory: fileModelData ? Boolean(fileModelData.fileIsDir) : false
     readonly property bool isVideoSource: fileModelData ? Images.isVideoPath(fileModelData.fileName) : false
     property bool useThumbnail: fileModelData ? (!root.isDirectory && Images.isValidImageByName(fileModelData.fileName)) : false
+    // Set by the grid: this is the cell the pointer or the keyboard selection
+    // is on, so exactly one cell plays at a time.
+    property bool playSelected: false
     // The colors of the cell. The shell theme provides the defaults, the
     // grid overrides them for the selected and the hovered cells.
     property color colBackground: Appearance.colors.colLayer1
@@ -120,6 +123,20 @@ Item {
                             }
 
                             target: Wallpapers
+                        }
+                    }
+
+                    // Only the selected or hovered cell plays, so browsing the
+                    // grid costs one decode at most and only while the pointer
+                    // or the keyboard selection sits on this cell. The still
+                    // underneath stays as the fallback.
+                    Loader {
+                        anchors.fill: parent
+                        active: root.playSelected && root.isVideoSource
+
+                        sourceComponent: LiveWallpaperPreview {
+                            anchors.fill: parent
+                            path: (fileModelData && fileModelData.filePath) ? fileModelData.filePath : ""
                         }
                     }
                 }
