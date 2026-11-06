@@ -461,14 +461,6 @@ ContentPage {
                             Config.options.sidebar.quickToggles.android.columns = value;
                         }
                     }
-                    ConfigSwitch {
-                        buttonIcon: "wallpaper"
-                        text: Translation.tr('Wallpaper tile')
-                        checked: Config.options.sidebar.quickToggles.wallpaperTile
-                        onCheckedChanged: {
-                            Config.options.sidebar.quickToggles.wallpaperTile = checked;
-                        }
-                    }
                 }
             }
 

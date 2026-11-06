@@ -450,65 +450,10 @@ Item {
         SystemButtonRow {}
     }
 
-    // The quick menu is otherwise pure icon controls; this is its one picture,
-    // and it plays like the banner right above it does: the still supplies the
-    // geometry, LiveWallpaperPreview covers it when the wallpaper is a video.
-    Component {
-        id: wallpaperTileComponent
-
-        Item {
-            id: tile
-
-            readonly property real imageHeight: 96
-            implicitHeight: imageHeight
-
-            Rectangle {
-                id: imageArea
-                anchors.fill: parent
-                radius: Appearance.rounding.normal
-                color: Appearance.colors.colLayer1
-
-                Item {
-                    anchors.fill: parent
-                    layer.enabled: true
-                    layer.effect: OpacityMask {
-                        maskSource: Rectangle {
-                            width: imageArea.width
-                            height: imageArea.height
-                            radius: imageArea.radius
-                        }
-                    }
-
-                    StyledImage {
-                        anchors.fill: parent
-                        fillMode: Image.PreserveAspectCrop
-                        source: Wallpapers.displayPathFor(Config.options.background.wallpaperPath)
-                        cache: false
-                        sourceSize.width: imageArea.width * 2
-                        sourceSize.height: imageArea.height * 2
-                    }
-
-                    LiveWallpaperPreview {
-                        anchors.fill: parent
-                        path: Config.options.background.wallpaperPath
-                    }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: GlobalStates.wallpaperSelectorOpen = true
-                }
-            }
-        }
-    }
-
     Component {
         id: quickTogglesSection
         Item {
-            readonly property bool showTile: Config.options.sidebar.quickToggles.wallpaperTile
-            implicitHeight: (showTile ? wallpaperTileLoader.height + 6 : 0)
-                + (classicLoader.item?.implicitHeight ?? 0)
+            implicitHeight: (classicLoader.item?.implicitHeight ?? 0)
                 + (androidLoader.item?.implicitHeight ?? 0)
 
             Rectangle {
@@ -525,34 +470,17 @@ Item {
             }
 
             Loader {
-                id: wallpaperTileLoader
+                id: classicLoader
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.top: parent.top
-                active: Config.options.sidebar.quickToggles.wallpaperTile
-                sourceComponent: wallpaperTileComponent
-            }
-
-            Loader {
-                id: classicLoader
-                anchors {
-                    left: parent.left
-                    right: parent.right
-                    top: wallpaperTileLoader.bottom
-                    topMargin: wallpaperTileLoader.active ? 6 : 0
-                }
                 active: Config.options.sidebar.quickToggles.style === "classic"
                 sourceComponent: ClassicQuickPanel {}
             }
 
             Loader {
                 id: androidLoader
-                anchors {
-                    left: parent.left
-                    right: parent.right
-                    top: wallpaperTileLoader.bottom
-                    topMargin: wallpaperTileLoader.active ? 6 : 0
-                }
+                anchors.left: parent.left
+                anchors.right: parent.right
                 active: Config.options.sidebar.quickToggles.style === "android"
                 sourceComponent: AndroidQuickPanel {
                     editMode: root.editMode && root.editTab === "toggles"

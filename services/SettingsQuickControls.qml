@@ -256,7 +256,6 @@ Singleton {
             { displayName: Translation.tr("Android"), icon: "action_key", value: "android" }
         ]),
         "interface:Right Sidebar/Columns": root.optionSpin("sidebar.quickToggles.android.columns", 1, 8, 1),
-        "interface:Right Sidebar/Wallpaper tile": root.optionSwitch("sidebar.quickToggles.wallpaperTile"),
         "interface:Right Sidebar/Enable": root.optionSwitch("sidebar.quickSliders.enable"),
         "interface:Brightness": root.optionSwitch("sidebar.quickSliders.showBrightness"),
         "interface:Volume": root.optionSwitch("sidebar.quickSliders.showVolume"),

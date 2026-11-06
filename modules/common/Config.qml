@@ -963,8 +963,6 @@ Singleton {
 
                 property JsonObject quickToggles: JsonObject {
                     property string style: "android" // Options: classic, android
-                    // The playing wallpaper tile above the toggle panel.
-                    property bool wallpaperTile: true
                     property JsonObject android: JsonObject {
                         property int columns: 5
                         property list<var> toggles: [
