@@ -15,10 +15,20 @@ Item {
     readonly property int valueSteps: 30
     readonly property int hueSteps: 360
 
+    // Store and apply together: picking a colour implies you want it kept, so
+    // it also turns colour management on. The swatches, the hex field and the
+    // Apply button all go through here instead of having three paths.
+    function pickColour(hex: string): void {
+        Config.options.light.keyboardColor.color = hex;
+        Config.options.light.keyboardColor.enable = true;
+        Brightness.kbMonitor.setColorHex(hex);
+    }
+
     Component.onCompleted: {
-        if (Brightness.kbMonitor?.color !== null) {
-            currentColor = Brightness.kbMonitor.color;
-        }
+        // Whatever is already on the hardware wins, then the stored choice.
+        const applied = Brightness.kbMonitor?.color;
+        const stored = Config.options.light.keyboardColor.color;
+        currentColor = applied || (stored && stored !== "" ? stored : "#FFFFFF");
     }
 
     property string currentColor: "#FFFFFF"
@@ -116,14 +126,38 @@ Item {
         }
 
         Text {
-            text: Translation.tr("Set the RGB color of your laptop keyboard backlight. Available on supported hardware via asusctl.")
+            text: Translation.tr("Set the keyboard backlight colour and brightness. Colours go through the system's keyboard backlight helper.")
             font.pixelSize: Appearance.font.pixelSize.large
             color: Appearance.colors.colSubtext
             Layout.maximumWidth: 500
             wrapMode: Text.WordWrap
         }
 
+        // Named colours, applied as soon as they are clicked. The same table
+        // backs the quick-control select, so the two cannot drift apart.
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.maximumWidth: 700
+            spacing: 10
+            visible: Brightness.kbMonitor.available
+
+            MaterialSymbol {
+                text: "palette"
+                iconSize: Appearance.font.pixelSize.normal + 5
+                color: Appearance.colors.colOnLayer1
+            }
+
+            CustomColorSelectionArray {
+                spacing: 4
+                swatchSize: 36
+                options: Brightness.keyboardColors
+                currentValue: Config.options.light.keyboardColor.color
+                onSelected: newValue => root.pickColour(newValue)
+            }
+        }
+
         GridLayout {
+            visible: Brightness.kbMonitor.available
             columns: 2
             columnSpacing: 16
             rowSpacing: 16
@@ -192,7 +226,7 @@ Item {
                     const c = Qt.color(text);
                     if (c.isValid) {
                         root.currentColor = c.name();
-                        Brightness.kbMonitor.setColorHex(text);
+                        root.pickColour(c.name());
                     }
                 }
             }
@@ -213,7 +247,7 @@ Item {
                         colBackground: currentColor
                         colBackgroundHover: Qt.darker(currentColor, 1.1)
                         colRipple: Appearance.colors.colPrimaryHover
-                        onClicked: Brightness.kbMonitor.setColorHex(currentColor)
+                        onClicked: root.pickColour(root.currentColor)
                         Layout.fillWidth: true
                     }
 
@@ -227,7 +261,7 @@ Item {
                             root.hue = 0;
                             root.saturation = 0;
                             root.value = 100;
-                            Brightness.kbMonitor.setColorHex("#FFFFFF");
+                            root.pickColour("#FFFFFF");
                         }
                         Layout.fillWidth: true
                     }
@@ -235,13 +269,46 @@ Item {
             }
         }
 
-        Text {
-            text: Translation.tr("If your keyboard does not support color control, this page will appear disabled.")
-            font.pixelSize: Appearance.font.pixelSize.smaller
-            color: Appearance.colors.colOnSurfaceVariant
-            Layout.maximumWidth: 600
-            wrapMode: Text.WordWrap
-            visible: !Brightness.kbMonitor.hasColor
+        // Say exactly what is missing rather than the old vague "may appear
+        // disabled": on this machine the LED comes from the uniwill_wmi
+        // module, which is listed in /etc/modules-load.d/ but is not loaded.
+        NoticeBox {
+            Layout.fillWidth: true
+            visible: !Brightness.kbMonitor.available
+            materialIcon: "memory"
+            text: Translation.tr("No keyboard backlight device was found. It is provided by the uniwill_wmi module, which is listed in /etc/modules-load.d/ but is not loaded. Run: sudo modprobe uniwill_wmi - then reopen this page.")
+        }
+
+        // sudo -n cannot prompt from a background process, so whatever the
+        // helper wrote to stderr is shown verbatim instead of being dropped.
+        NoticeBox {
+            Layout.fillWidth: true
+            visible: !Brightness.kbMonitor.statusOk && Brightness.kbMonitor.statusMessage !== ""
+            materialIcon: "error"
+            text: Brightness.kbMonitor.statusMessage
+        }
+
+        ConfigSwitch {
+            Layout.fillWidth: true
+            buttonIcon: "palette"
+            text: Translation.tr('Manage keyboard colour')
+            checked: Config.options.light.keyboardColor.enable
+            onCheckedChanged: {
+                Config.options.light.keyboardColor.enable = checked;
+                if (checked) Brightness.kbMonitor.applyFromConfig();
+            }
+        }
+
+        ConfigSwitch {
+            Layout.fillWidth: true
+            buttonIcon: "wallpaper"
+            text: Translation.tr('Match the wallpaper colour')
+            enabled: Config.options.light.keyboardColor.enable
+            checked: Config.options.light.keyboardColor.followWallpaper
+            onCheckedChanged: {
+                Config.options.light.keyboardColor.followWallpaper = checked;
+                if (checked) Brightness.kbMonitor.applyFromConfig();
+            }
         }
     }
 }

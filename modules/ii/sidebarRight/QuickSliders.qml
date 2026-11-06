@@ -95,9 +95,27 @@ Rectangle {
                 }
             }
         }
+
+        Loader {
+            anchors {
+                left: parent.left
+                right: parent.right
+            }
+            visible: active
+            // Hidden without the device as well as without the flag: the level
+            // lives in sysfs, and there is nothing to slide when it is absent.
+            active: Config.options.sidebar.quickSliders.showKeyboardBrightness && Brightness.kbMonitor.available
+            sourceComponent: QuickSlider {
+                materialSymbol: "keyboard"
+                // kbMonitor speaks 0..100, the slider speaks 0..1.
+                value: Brightness.kbMonitor.brightnessPercent / 100
+                tooltipContent: `${Brightness.kbMonitor.brightnessPercent}%`
+                onMoved: Brightness.kbMonitor.set(Math.round(value * 100))
+            }
+        }
     }
 
-    component QuickSlider: StyledSlider { 
+    component QuickSlider: StyledSlider {
         id: quickSlider
         required property string materialSymbol
         property string secondaryMaterialSymbol

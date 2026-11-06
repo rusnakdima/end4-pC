@@ -318,7 +318,14 @@ QtObject {
                 { type: "toggle", key: "interface:Right Sidebar/Enable", title: Translation.tr("Quick sliders"), icon: "tune" },
                 { type: "toggle", key: "interface:Brightness", title: Translation.tr("Brightness slider"), icon: "brightness_6" },
                 { type: "toggle", key: "interface:Volume", title: Translation.tr("Volume slider"), icon: "volume_up" },
-                { type: "toggle", key: "interface:Microphone", title: Translation.tr("Mic slider"), icon: "mic" }
+                { type: "toggle", key: "interface:Microphone", title: Translation.tr("Mic slider"), icon: "mic" },
+                { type: "toggle", key: "interface:Keyboard Brightness", title: Translation.tr("Keyboard slider"), icon: "keyboard" }
+            ]
+        },
+        {
+            page: Translation.tr("Keyboard"), title: Translation.tr("Keyboard"), icon: "keyboard", cards: [
+                { type: "toggle", key: "keyboard:Manage keyboard colour", title: Translation.tr("Manage colour"), icon: "palette" },
+                { type: "toggle", key: "keyboard:Match the wallpaper colour", title: Translation.tr("Match wallpaper"), icon: "wallpaper" }
             ]
         },
         {
