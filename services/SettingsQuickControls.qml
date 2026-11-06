@@ -260,6 +260,29 @@ Singleton {
         "interface:Brightness": root.optionSwitch("sidebar.quickSliders.showBrightness"),
         "interface:Volume": root.optionSwitch("sidebar.quickSliders.showVolume"),
         "interface:Microphone": root.optionSwitch("sidebar.quickSliders.showMic"),
+        "interface:Keyboard Brightness": root.optionSwitch("sidebar.quickSliders.showKeyboardBrightness"),
+        "interface:Keyboard Brightness/Up": root.spin(
+            () => Brightness.kbMonitor.brightness,
+            value => { Brightness.kbMonitor.set(Math.round(value)); },
+            0, 100, 5
+        ),
+        "interface:Keyboard Brightness/Down": root.spin(
+            () => Brightness.kbMonitor.brightness,
+            value => { Brightness.kbMonitor.set(Math.round(value)); },
+            0, 100, 5
+        ),
+        "interface:Keyboard Color/Enable": root.optionSwitch("light.keyboardColor.enable"),
+        "interface:Keyboard Color/Color": root.optionSelect("light.keyboardColor.color", [
+            { displayName: "Red", icon: "palette", value: "red" },
+            { displayName: "Green", icon: "palette", value: "green" },
+            { displayName: "Blue", icon: "palette", value: "blue" },
+            { displayName: "White", icon: "palette", value: "white" },
+            { displayName: "Cyan", icon: "palette", value: "cyan" },
+            { displayName: "Magenta", icon: "palette", value: "magenta" },
+            { displayName: "Yellow", icon: "palette", value: "yellow" },
+            { displayName: "Orange", icon: "palette", value: "orange" },
+            { displayName: "Rainbow", icon: "palette", value: "rainbow" },
+        ]),
         "interface:Hot Corners/Enable": root.optionSwitch("sidebar.cornerOpen.enable"),
         "interface:Hover to trigger": root.optionSwitch("sidebar.cornerOpen.clickless"),
         "interface:Place at bottom": root.optionSwitch("sidebar.cornerOpen.bottom"),

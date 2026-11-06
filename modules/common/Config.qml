@@ -761,6 +761,12 @@ Singleton {
                 property JsonObject antiFlashbang: JsonObject {
                     property bool enable: false
                 }
+                // Keyboard backlight colour. Read by the quick controls and by
+                // the Keyboard settings page; nothing applies it yet.
+                property JsonObject keyboardColor: JsonObject {
+                    property bool enable: false
+                    property string color: "white"
+                }
             }
 
             property JsonObject lock: JsonObject {
@@ -972,6 +978,7 @@ Singleton {
                     property bool showMic: false
                     property bool showVolume: true
                     property bool showBrightness: true
+                    property bool showKeyboardBrightness: false
                 }
             }
 

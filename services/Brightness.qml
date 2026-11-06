@@ -51,7 +51,15 @@ Singleton {
         }
     }
 
+    function increaseKeyboardBrightness(): void {
+        Quickshell.execDetached(["brightnessctl", "--class", "kbd_backlight", "+5%", "--quiet"]);
+    }
+
+    function decreaseKeyboardBrightness(): void {
+        Quickshell.execDetached(["brightnessctl", "--class", "kbd_backlight", "5%-", "--quiet"]);
+    }
     reloadableId: "brightness"
+
 
     onMonitorsChanged: {
         ddcMonitors = [];
@@ -176,6 +184,62 @@ Singleton {
             monitor.brightnessMultiplier = value;
         }
     }
+    component KeyboardBrightnessMonitor: QtObject {
+        id: kbMonitor
+
+        property real brightness: 1
+        property string className: "kbd_backlight"
+        // brightness-only (no color control available).
+        property var color: null
+        readonly property bool hasColor: Config.options.keyboard?.hasColor ?? false
+
+        function increase(): void {
+            Quickshell.execDetached(["brightnessctl", "--class", "kbd_backlight", "+5%", "--quiet"]);
+        }
+
+        function decrease(): void {
+            Quickshell.execDetached(["brightnessctl", "--class", "kbd_backlight", "5%-", "--quiet"]);
+        }
+
+        function set(percent: int): void {
+            Quickshell.execDetached(["brightnessctl", "--class", "kbd_backlight", percent + "%", "--quiet"]);
+        }
+
+        function setColor(r: int, g: int, b: int): void {
+            const hex = "#" + [r, g, b].map(v => Math.max(0, Math.min(255, v)).toString(16).padStart(2, "0")).join("");
+            kbMonitor.color = hex;
+            Quickshell.execDetached(["asusctl", "aura", "effect", "--color", hex, "--kb", "1", "--quiet"]);
+        }
+
+        function setColorHex(hex: string): void {
+            kbMonitor.color = hex;
+            Quickshell.execDetached(["asusctl", "aura", "effect", "--color", hex, "--kb", "1", "--quiet"]);
+        }
+        // QtObject has no default property, so the process has to be declared
+        // as a property (the same way BrightnessMonitor declares initProc).
+        // brightnessctl reports the raw level and the raw maximum, and the
+        // maximum is not 100 for keyboard backlights.
+        readonly property Process kbGetProc: Process {
+            command: ["sh", "-c", `echo "$(brightnessctl --class kbd_backlight g 2>/dev/null) $(brightnessctl --class kbd_backlight m 2>/dev/null)"`]
+            stdout: SplitParser {
+                onRead: data => {
+                    const parts = data.trim().split(/\s+/);
+                    const current = parseInt(parts[0]);
+                    const max = parseInt(parts[1]);
+                    if (!isNaN(current) && max > 0)
+                        kbMonitor.brightness = current / max;
+                }
+            }
+        }
+
+        Component.onCompleted: {
+            kbGetProc.running = true;
+        }
+    }
+
+    // Exposed so the settings pages and the quick controls can read the level
+    // and apply a colour. Nothing else in the shell owns this object.
+    readonly property KeyboardBrightnessMonitor kbMonitor: KeyboardBrightnessMonitor {}
 
     Component {
         id: monitorComp
@@ -267,5 +331,16 @@ Singleton {
         name: "brightnessDecrease"
         description: "Decrease brightness"
         onPressed: root.decreaseBrightness()
+    }
+    CompositorGlobalShortcut {
+        name: "keyboardBrightnessIncrease"
+        description: "Increase keyboard brightness"
+        onPressed: root.increaseKeyboardBrightness()
+    }
+
+    CompositorGlobalShortcut {
+        name: "keyboardBrightnessDecrease"
+        description: "Decrease keyboard brightness"
+        onPressed: root.decreaseKeyboardBrightness()
     }
 }
