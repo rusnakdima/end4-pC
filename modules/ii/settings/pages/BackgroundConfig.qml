@@ -18,6 +18,37 @@ ContentPage {
             : path
     }
 
+    // Carousel's default delegate only ever shows a thumbnail, so a video
+    // wallpaper sat frozen here. Keep the thumbnail -- it is still the still,
+    // and it is what sizes the card -- and lay the player over it.
+    Component {
+        id: wallpaperDelegate
+
+        Item {
+            id: card
+            anchors.fill: parent
+            // The Carousel Loader instantiates this, so it is the parent: it
+            // hands down the raw model entry plus the card's fixed size.
+            readonly property var rawPath: parent?.modelData ?? ""
+            readonly property real fixedWidth: parent?.fixedWidth ?? width
+            readonly property real fixedHeight: parent?.fixedHeight ?? height
+
+            ThumbnailImage {
+                anchors.fill: parent
+                sourcePath: FileUtils.trimFileProtocol(page.displayPathFor(card.rawPath))
+                thumbnailSizeName: (sourceSize.width > 512 || sourceSize.height > 512) ? "xx-large" : "x-large"
+                fillMode: Image.PreserveAspectCrop
+                sourceSize.width: card.fixedWidth * 1.5
+                sourceSize.height: card.fixedHeight * 1.5
+            }
+
+            LiveWallpaperPreview {
+                anchors.fill: parent
+                path: FileUtils.trimFileProtocol(card.rawPath)
+            }
+        }
+    }
+
     ColumnLayout {
         id: mainLayout 
         Layout.fillWidth: true   
@@ -51,14 +82,16 @@ ContentPage {
                         largeItemWidthRatio: 0.5
                         mediumItemWidthRatio: 0.485
                         itemSpacing: 8
+                        // Raw paths, not displayPathFor: the delegate needs the
+                        // clip itself to play it, and resolves the thumbnail
+                        // for the still the same way displayPathFor did.
                         model: [
-                            page.displayPathFor(Config.options.background.wallpaperPath),
-                            page.displayPathFor(
-                                Config.options.background.lockWall !== ""
-                                    ? Config.options.background.lockWall
-                                    : Config.options.background.wallpaperPath
-                            )
+                            Config.options.background.wallpaperPath,
+                            Config.options.background.lockWall !== ""
+                                ? Config.options.background.lockWall
+                                : Config.options.background.wallpaperPath
                         ]
+                        delegate: wallpaperDelegate
                         wheelEnabled: false
                         dragEnabled: false
                         clickAction: (index, modelData) => {
@@ -142,7 +175,8 @@ ContentPage {
                         largeItemWidthRatio: 1
                         mediumItemWidthRatio: 0
                         itemSpacing: 8
-                        model: [page.displayPathFor(Config.options.background.wallpaperPath)]
+                        model: [Config.options.background.wallpaperPath]
+                        delegate: wallpaperDelegate
                         wheelEnabled: false
                         dragEnabled: false
                         clickAction: (index, modelData) => {

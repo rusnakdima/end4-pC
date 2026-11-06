@@ -46,12 +46,19 @@ DashboardCard {
 
         Image {
             anchors.fill: parent
-            source: tile.path !== "" ? "file://" + tile.path : ""
+            // displayPathFor, not the raw path: an Image cannot decode a clip,
+            // so a video wallpaper used to leave this tile blank.
+            source: tile.path !== "" ? Wallpapers.displayPathFor(tile.path) : ""
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             cache: false
             sourceSize.width: 720
             sourceSize.height: 405
+        }
+
+        LiveWallpaperPreview {
+            anchors.fill: parent
+            path: tile.path
         }
 
         MouseArea {

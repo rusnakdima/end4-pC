@@ -276,6 +276,17 @@ Item {
                                 sourceSize.width: wallpaperRect.width * 2
                                 sourceSize.height: wallpaperRect.height * 2
                             }
+
+                            // Anchored to the image rather than to the rect, so
+                            // it inherits the cover geometry (x/y/width/height)
+                            // and the press-and-hold panning, and the mask above
+                            // rounds it along with them.
+                            LiveWallpaperPreview {
+                                anchors.fill: bannerImage
+                                path: Config.options.sidebar.bannerImage !== ""
+                                    ? Config.options.sidebar.bannerImage
+                                    : Config.options.background.wallpaperPath
+                            }
                         }
 
                         Rectangle {
