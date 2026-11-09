@@ -48,6 +48,7 @@ install_packages() {
         fish
         oh-my-posh
         neovim
+        libqalculate
     )
 
     # AUR packages. makepkg refuses to run as root, so they are only installed

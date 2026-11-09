@@ -21,6 +21,12 @@ gsettings set org.gnome.desktop.interface gtk-theme "$theme" 2>/dev/null
 set_ini_key "$HOME/.config/gtk-3.0/settings.ini" gtk-theme-name "$theme"
 set_ini_key "$HOME/.config/gtk-4.0/settings.ini" gtk-theme-name "$theme"
 
+# GTK font settings
+set_ini_key "$HOME/.config/gtk-3.0/settings.ini" gtk-font-name "Noto Sans 11"
+set_ini_key "$HOME/.config/gtk-4.0/settings.ini" gtk-font-name "Noto Sans 11"
+set_ini_key "$HOME/.config/gtk-3.0/settings.ini" gtk-xft-rgba "rgb"
+set_ini_key "$HOME/.config/gtk-4.0/settings.ini" gtk-xft-rgba "rgb"
+
 # GTK 2
 GTK2_CONFIG="$HOME/.gtkrc-2.0"
 if grep -q "^gtk-theme-name=" "$GTK2_CONFIG" 2>/dev/null; then

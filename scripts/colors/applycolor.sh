@@ -100,4 +100,4 @@ else
   apply_term &
 fi
 
-# apply_qt & # Qt theming is already handled by kde-material-colors
+apply_qt &

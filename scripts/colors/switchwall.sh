@@ -79,9 +79,25 @@ pre_process() {
     if [[ "$mode_flag" == "dark" ]]; then
         gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
         gsettings set org.gnome.desktop.interface gtk-theme 'adw-gtk3-dark'
+        for ini in "$HOME/.config/gtk-3.0/settings.ini" "$HOME/.config/gtk-4.0/settings.ini"; do
+            [[ -f "$ini" ]] || continue
+            sed -i 's/^gtk-theme-name=.*/gtk-theme-name=adw-gtk3-dark/' "$ini"
+            sed -i 's/^gtk-application-prefer-dark-theme=.*/gtk-application-prefer-dark-theme=true/' "$ini"
+        done
+        if [[ -f "$HOME/.config/kdeglobals" ]]; then
+            sed -i 's/^ColorScheme=.*/ColorScheme=MaterialYouDark/' "$HOME/.config/kdeglobals"
+        fi
     elif [[ "$mode_flag" == "light" ]]; then
         gsettings set org.gnome.desktop.interface color-scheme 'prefer-light'
         gsettings set org.gnome.desktop.interface gtk-theme 'adw-gtk3'
+        for ini in "$HOME/.config/gtk-3.0/settings.ini" "$HOME/.config/gtk-4.0/settings.ini"; do
+            [[ -f "$ini" ]] || continue
+            sed -i 's/^gtk-theme-name=.*/gtk-theme-name=adw-gtk3/' "$ini"
+            sed -i 's/^gtk-application-prefer-dark-theme=.*/gtk-application-prefer-dark-theme=false/' "$ini"
+        done
+        if [[ -f "$HOME/.config/kdeglobals" ]]; then
+            sed -i 's/^ColorScheme=.*/ColorScheme=MaterialYouLight/' "$HOME/.config/kdeglobals"
+        fi
     fi
 
     if [ ! -d "$CACHE_DIR"/user/generated ]; then

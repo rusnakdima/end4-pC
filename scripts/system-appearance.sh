@@ -48,6 +48,77 @@ set_qt_font() {
     kwriteconfig6 --notify --file kdeglobals --group General --key "$key" "$(echo "$current" | replace_font_field "$family" "$size")"
 }
 
+# Qt5 font settings
+set_qt5_font() {
+    local key="$1" family="$2" size="$3"
+    local conf="$HOME/.config/qt5ct/qt5ct.conf"
+    mkdir -p "$(dirname "$conf")"
+    if grep -q "^${key}=" "$conf" 2>/dev/null; then
+        sed -i "s|^${key}=.*|${key}=${family},${size}|" "$conf"
+    else
+        echo "${key}=${family},${size}" >> "$conf"
+    fi
+}
+
+# GTK font-name in settings.ini
+set_gtk_font_name() {
+    local family="$1" size="$2"
+    for f in "$HOME/.config/gtk-3.0/settings.ini" "$HOME/.config/gtk-4.0/settings.ini"; do
+        mkdir -p "$(dirname "$f")"
+        if grep -q "^gtk-font-name=" "$f" 2>/dev/null; then
+            sed -i "s|^gtk-font-name=.*|gtk-font-name=${family} ${size}|" "$f"
+        else
+            echo "gtk-font-name=${family} ${size}" >> "$f"
+        fi
+    done
+}
+
+# Terminal mono font sync (kitty)
+sync_terminal_mono_font() {
+    local family="$1" size="$2"
+    local kitty_conf="$HOME/.config/kitty/kitty.conf"
+    if [ -f "$kitty_conf" ]; then
+        if grep -q "^font_family" "$kitty_conf" 2>/dev/null; then
+            sed -i "s|^font_family.*|font_family ${family}|" "$kitty_conf"
+        else
+            echo "font_family ${family}" >> "$kitty_conf"
+        fi
+        if grep -q "^font_size" "$kitty_conf" 2>/dev/null; then
+            sed -i "s|^font_size.*|font_size ${size}.0|" "$kitty_conf"
+        else
+            echo "font_size ${size}.0" >> "$kitty_conf"
+        fi
+    fi
+}
+
+# Terminal UI font sync (kitty)
+sync_terminal_ui_font() {
+    local family="$1" size="$2"
+    local kitty_conf="$HOME/.config/kitty/kitty.conf"
+    if [ -f "$kitty_conf" ]; then
+        if grep -q "^font_family" "$kitty_conf" 2>/dev/null; then
+            sed -i "s|^font_family.*|font_family ${family}|" "$kitty_conf"
+        else
+            echo "font_family ${family}" >> "$kitty_conf"
+        fi
+        if grep -q "^font_size" "$kitty_conf" 2>/dev/null; then
+            sed -i "s|^font_size.*|font_size ${size}.0|" "$kitty_conf"
+        else
+            echo "font_size ${size}.0" >> "$kitty_conf"
+        fi
+    fi
+}
+
+# Hyprlock font sync - updates colors.conf variables
+sync_hyprlock_font() {
+    local family="$1" size="$2"
+    local colors_conf="$HOME/.config/hypr/hyprlock/colors.conf"
+    if [ -f "$colors_conf" ]; then
+        sed -i 's|^\$font_family = .*|$font_family = '"${family}"'|' "$colors_conf"
+        sed -i 's|^\$font_family_clock = .*|$font_family_clock = '"${family}"'|' "$colors_conf"
+    fi
+}
+
 action="$1"
 shift
 
@@ -105,10 +176,22 @@ case "$action" in
         if [ "$role" = "mono" ]; then
             set_qt_font fixed "$family" "$size"
             gsettings set org.gnome.desktop.interface monospace-font-name "$family $size" 2>/dev/null
+            # Qt5 monospace font
+            set_qt5_font fixed "$family" "$size"
+            # Terminal mono font sync
+            sync_terminal_mono_font "$family" "$size"
         else
             for key in font menuFont toolBarFont; do set_qt_font "$key" "$family" "$size"; done
             set_qt_font smallestReadableFont "$family" "$((size > 2 ? size - 2 : size))"
             gsettings set org.gnome.desktop.interface font-name "$family $size" 2>/dev/null
+            # Qt5 UI font
+            set_qt5_font font "$family" "$size"
+            # GTK font-name in settings.ini
+            set_gtk_font_name "$family" "$size"
+            # Terminal UI font sync
+            sync_terminal_ui_font "$family" "$size"
+            # Hyprlock font sync
+            sync_hyprlock_font "$family" "$size"
         fi
         ;;
     *)

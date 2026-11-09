@@ -259,6 +259,10 @@ Item {
                     NavigationRailTabArray {
                         currentIndex: root.currentPage
                         expanded: navRail.expanded
+                        // Take the space the column has left over, so an
+                        // overflowing tab list scrolls instead of being pushed
+                        // past the bottom of the card.
+                        Layout.fillHeight: true
                         colToggled: root.showingProfile ? "transparent" : Appearance.colors.colSecondaryContainer
                         Repeater {
                             model: root.pages
