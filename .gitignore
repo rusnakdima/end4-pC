@@ -1,4 +1,5 @@
 translations/es_MX.json
+*.bak
 /.omp/
 /file:/
 /dots/
