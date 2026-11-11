@@ -42,8 +42,8 @@ ContentPage {
                 sourceSize.height: card.fixedHeight * 1.5
             }
 
-            // Card stills only — the wallpaper's single live decode is the
-            // desktop player.
+            // Card stills only: the desktop player is the single live
+            // instance (picker hover is the sole in-shell exception).
         }
     }
 

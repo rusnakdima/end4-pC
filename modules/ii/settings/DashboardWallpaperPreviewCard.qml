@@ -58,9 +58,8 @@ DashboardCard {
             sourceSize.height: 405
         }
 
-        // The still is the whole surface: the desktop player (mpvpaper) is
-        // the single live instance of the wallpaper.
-
+        // Still only: the desktop player is the single live instance
+        // (the picker's hover preview is the sole in-shell exception).
         MouseArea {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor

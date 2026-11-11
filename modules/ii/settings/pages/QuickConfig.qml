@@ -400,11 +400,12 @@ ContentPage {
                     }
                 }
 
-                // Deliberately a sibling of wallpaperImg and not a child: that
-                // item is the backdrop for every GlassCard below through a
-                // ShaderEffectSource, and anything moving inside it would make
-                // six FastBlur radius-128 passes re-run on every video frame.
-                // The glass keeps the still frame; only the hero moves.
+                // Single-instance wallpaper policy: like every other shell
+                // surface the hero shows the wallpaper's still — the desktop
+                // mpvpaper is the ONE live decode (the picker's hover preview
+                // is the only exception). wallpaperImg stays a sibling of the
+                // GlassCards because it is their backdrop via
+                // ShaderEffectSource, so it must never move under the blurs.
                 GlassCard {
                     id: bottomBar
                     backdrop: wallpaperImg
