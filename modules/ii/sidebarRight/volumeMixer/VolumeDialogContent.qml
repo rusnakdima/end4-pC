@@ -29,6 +29,7 @@ ColumnLayout {
             }
             required property var modelData
             node: modelData
+            clampItem: root
         }
         PagePlaceholder {
             icon: "widgets"
@@ -52,7 +53,6 @@ ColumnLayout {
             }
         })
         onActivated: (index) => {
-            print(index)
             const item = root.devices[index]
             if (root.isSink) {
                 Audio.setDefaultSink(item)

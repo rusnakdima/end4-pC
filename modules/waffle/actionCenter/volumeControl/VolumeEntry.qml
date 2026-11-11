@@ -14,6 +14,8 @@ import qs.modules.waffle.actionCenter
 RowLayout {
     id: root
     required property PwNode node
+    // Bounds the per-stream device popup is clamped to (set by the sound panel)
+    property Item clampItem: null
     property alias icon: iconButton.iconName
     property alias monochrome: iconButton.monochrome
     monochrome: false
@@ -50,5 +52,12 @@ RowLayout {
         Layout.rightMargin: 10
         value: root.node?.audio.volume ?? 0
         onMoved: root.node.audio.volume = value
+    }
+
+    StreamDeviceSelector {
+        Layout.alignment: Qt.AlignVCenter
+        node: root.node
+        clampItem: root.clampItem
+        maximumWidth: 110
     }
 }

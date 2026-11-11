@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import qs.modules.common
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Services.Pipewire
 
 /**
@@ -79,6 +80,76 @@ Singleton {
 
     function setDefaultSource(node) {
         Pipewire.preferredDefaultAudioSource = node;
+    }
+
+    // Per-stream device routing (via pipewire-pulse's pactl move-sink-input /
+    // move-source-output). The pulse index of a stream is its PipeWire
+    // object.serial, and the pulse name of a device is its node.name.
+    // "Reset" is just a move back to the current default device: no pinning
+    // property is written, so the stream keeps following default changes.
+    property bool routeAvailable: false
+
+    function streamSerial(node) {
+        const serial = node?.properties?.["object.serial"];
+        return (serial === undefined || serial === null) ? null : String(serial);
+    }
+
+    function defaultDevice(isSink) {
+        return isSink ? Pipewire.defaultAudioSink : Pipewire.defaultAudioSource;
+    }
+
+    // Device a stream is currently routed to, read live from the link groups
+    // (playback: stream -> device, capture: device -> stream).
+    function streamDevice(node) {
+        if (!node) return null;
+        for (const group of Pipewire.linkGroups.values) {
+            if (node.isSink) {
+                if (group.source === node && group.target && !group.target.isStream) return group.target;
+            } else if (group.target === node && group.source && !group.source.isStream) {
+                return group.source;
+            }
+        }
+        return null;
+    }
+
+    function deviceIcon(node) {
+        if (!node) return "speaker";
+        if (!node.isSink) return "mic";
+        const about = `${node.nickname ?? ""} ${node.description ?? ""} ${node.name ?? ""}`.toLowerCase();
+        if (/headset|headphone|bluez|wireless/.test(about)) return "headphones";
+        if (/hdmi|display|tv|monitor/.test(about)) return "tv";
+        return "speaker";
+    }
+
+    // device = null resets the stream to the system default device.
+    function moveStreamToDevice(node, device) {
+        const serial = root.streamSerial(node);
+        if (!serial) {
+            console.warn("Audio: cannot route stream without object.serial:", node?.name ?? "?");
+            return false;
+        }
+        const target = device ?? root.defaultDevice(node.isSink);
+        if (!target || !target.name) {
+            console.warn("Audio: no target device to route stream to");
+            return false;
+        }
+        const verb = node.isSink ? "move-sink-input" : "move-source-output";
+        Quickshell.execDetached(["pactl", verb, serial, String(target.name)]);
+        return true;
+    }
+
+    // Hide the per-stream device UI when pipewire-pulse/pactl is unavailable
+    Process {
+        id: routeProbe
+        command: ["pactl", "--version"]
+        running: true
+        stdout: StdioCollector {
+            id: routeProbeOutput
+            onStreamFinished: root.routeAvailable = routeProbeOutput.text.includes("pactl")
+        }
+        onExited: (exitCode) => {
+            if (exitCode === 0) root.routeAvailable = true;
+        }
     }
 
     // Internals

@@ -10,6 +10,8 @@ import Qt5Compat.GraphicalEffects
 Item {
     id: root
     required property PwNode node
+    // Bounds the per-stream device popup is clamped to (set by the mixer content)
+    property Item clampItem: null
     PwObjectTracker {
         objects: [root.node]
     }
@@ -84,16 +86,29 @@ Item {
             Layout.fillWidth: true
             spacing: -4
 
-            StyledText {
+            RowLayout {
+                id: titleRow
                 Layout.fillWidth: true
-                font.pixelSize: Appearance.font.pixelSize.small
-                color: Appearance.colors.colSubtext
-                elide: Text.ElideRight
-                text: {
-                    // application.name -> description -> name
-                    const app = Audio.appNodeDisplayName(root.node);
-                    const media = root.node.properties["media.name"];
-                    return media != undefined ? `${app} • ${media}` : app;
+                spacing: 6
+
+                StyledText {
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.colors.colSubtext
+                    elide: Text.ElideRight
+                    text: {
+                        // application.name -> description -> name
+                        const app = Audio.appNodeDisplayName(root.node);
+                        const media = root.node.properties["media.name"];
+                        return media != undefined ? `${app} • ${media}` : app;
+                    }
+                }
+
+                StreamDeviceSelector {
+                    Layout.alignment: Qt.AlignVCenter
+                    node: root.node
+                    clampItem: root.clampItem
                 }
             }
 

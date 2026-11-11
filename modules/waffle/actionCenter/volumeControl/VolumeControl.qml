@@ -144,6 +144,7 @@ Item {
             node: root.output ? Audio.sink : Audio.source
             icon: root.output ? "speaker" : "mic-on"
             monochrome: true
+            clampItem: flickable
         }
 
         Repeater {
@@ -153,6 +154,7 @@ Item {
             delegate: VolumeEntry {
                 required property var modelData
                 node: modelData
+                clampItem: flickable
             }
         }
     }
