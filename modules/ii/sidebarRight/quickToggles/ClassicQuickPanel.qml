@@ -31,6 +31,11 @@ AbstractQuickPanel {
                 root.openBluetoothDialog();
             }
         }
+        HotspotToggle {
+            altAction: () => {
+                root.openHotspotDialog();
+            }
+        }
         NightLight {}
         LiveWallpaperToggle {}
         GameMode {}

@@ -29,7 +29,7 @@ AbstractQuickPanel {
     readonly property real baseCellHeight: 56
 
     readonly property list<string> availableToggleTypes: {
-        const base = ["network", "bluetooth", "idleInhibitor", "easyEffects", "nightLight", "darkMode", "cloudflareWarp", "gameMode", "screenSnip", "colorPicker", "onScreenKeyboard", "mic", "audio", "notifications", "powerProfile","musicRecognition", "antiFlashbang", "vpn", "liveWallpaper"]
+        const base = ["network", "bluetooth", "idleInhibitor", "easyEffects", "nightLight", "darkMode", "cloudflareWarp", "gameMode", "screenSnip", "colorPicker", "onScreenKeyboard", "mic", "audio", "notifications", "powerProfile","musicRecognition", "antiFlashbang", "vpn", "liveWallpaper", "hotspot"]
         return WM.compositor === "hyprland" ? base : base.filter(t => t !== "gameMode")
     }
     readonly property int columns: Config.options.sidebar.quickToggles.android.columns
@@ -118,6 +118,7 @@ AbstractQuickPanel {
                             onOpenNightLightDialog: root.openNightLightDialog()
                             onOpenWifiDialog: root.openWifiDialog()
                             onOpenVpnDialog: root.openVpnDialog()
+                            onOpenHotspotDialog: root.openHotspotDialog()
                         }
                     }
                 }

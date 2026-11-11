@@ -126,6 +126,14 @@ Item {
             iconSize: Appearance.font.pixelSize.larger
             color: root.iconColor
         }
+        Revealer {
+            reveal: Hotspot.active
+            MaterialSymbol {
+                text: "wifi_tethering"
+                iconSize: Appearance.font.pixelSize.larger
+                color: root.iconColor
+            }
+        }
         MaterialSymbol {
             visible: BluetoothStatus.available
             text: BluetoothStatus.connected ? "bluetooth_connected" : BluetoothStatus.enabled ? "bluetooth" : "bluetooth_disabled"

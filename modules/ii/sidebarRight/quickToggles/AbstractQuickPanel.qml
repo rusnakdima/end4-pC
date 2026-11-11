@@ -13,4 +13,5 @@ Rectangle {
     signal openNightLightDialog()
     signal openWifiDialog()
     signal openVpnDialog()
+    signal openHotspotDialog()
 }

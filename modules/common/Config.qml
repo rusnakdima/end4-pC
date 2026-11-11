@@ -90,6 +90,12 @@ Singleton {
 
             property string panelFamily: "ii" // "ii", "waffle"
 
+            property JsonObject hotspot: JsonObject {
+                property string ssid: "archpc-ap"
+                property string passphrase: "aic8800ap" // 9 chars, satisfies hostapd's 8..63
+                property int channel: 0 // 0 = follow the STA channel (fallback 6)
+            }
+
             property JsonObject policies: JsonObject {
                 property int ai: 1 // 0: No | 1: Yes | 2: Local
                 property int weeb: 1 // 0: No | 1: Open | 2: Closet

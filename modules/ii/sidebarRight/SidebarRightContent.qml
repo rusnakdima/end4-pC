@@ -20,6 +20,7 @@ import qs.modules.ii.sidebarRight.nightLight
 import qs.modules.ii.sidebarRight.volumeMixer
 import qs.modules.ii.sidebarRight.wifiNetworks
 import qs.modules.ii.sidebarRight.vpn
+import qs.modules.ii.sidebarRight.hotspot
 import qs.modules.ii.sidebarRight.iconPicker
 
 Item {
@@ -32,6 +33,7 @@ Item {
     property bool showNightLightDialog: false
     property bool showWifiDialog: false
     property bool showVpnDialog: false
+    property bool showHotspotDialog: false
     property bool editMode: false
     property string editTab: Config.options.sidebar.quickToggles.style === "android" ? "toggles" : "layout"
     readonly property var editTabs: Config.options.sidebar.quickToggles.style === "android"
@@ -281,7 +283,7 @@ Item {
                             // it inherits the cover geometry (x/y/width/height)
                             // and the press-and-hold panning, and the mask above
                             // rounds it along with them.
-                            LiveWallpaperPreview {
+                            WallpaperVideoSurface {
                                 anchors.fill: bannerImage
                                 path: Config.options.sidebar.bannerImage !== ""
                                     ? Config.options.sidebar.bannerImage
@@ -495,6 +497,7 @@ Item {
                 function onOpenNightLightDialog() { root.showNightLightDialog = true; }
                 function onOpenWifiDialog() { root.showWifiDialog = true; }
                 function onOpenVpnDialog() { root.showVpnDialog = true; }
+                function onOpenHotspotDialog() { root.showHotspotDialog = true; }
             }
 
             Connections {
@@ -505,6 +508,7 @@ Item {
                 function onOpenNightLightDialog() { root.showNightLightDialog = true; }
                 function onOpenWifiDialog() { root.showWifiDialog = true; }
                 function onOpenVpnDialog() { root.showVpnDialog = true; }
+                function onOpenHotspotDialog() { root.showHotspotDialog = true; }
             }
         }
     }
@@ -624,6 +628,12 @@ Item {
         shownPropertyString: "showVpnDialog"
         dialog: VpnDialog {}
         onShownChanged: if (shown) Vpn.refresh()
+    }
+
+    ToggleDialog {
+        shownPropertyString: "showHotspotDialog"
+        dialog: HotspotDialog {}
+        onShownChanged: if (shown) Hotspot.refresh()
     }
 
     ToggleDialog {
