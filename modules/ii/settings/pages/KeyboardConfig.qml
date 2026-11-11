@@ -136,7 +136,9 @@ ContentPage {
     // ------------------------------------------------------
     // Shortcut capture
     // ------------------------------------------------------
-    // The action whose key combination is being captured right now.
+    // The id whose key combination is being captured right now: the name of
+    // a shell action, or the bind_<key> id of one of the compositor's own
+    // binds.
     property string capturing: ""
 
     function startCapture(action) {
@@ -448,7 +450,7 @@ ContentPage {
                     ContentSection {
                         icon: "keyboard"
                         title: Translation.tr("Other keybinds")
-                        hint: Translation.tr("The compositor's own binds. They are shown for reference; only the shell shortcuts above can be changed.")
+                        hint: Translation.tr("The compositor's own binds. Click a bind to give it another key combination.")
                         collapsible: true
                         ColumnLayout {
                             Layout.fillWidth: true
@@ -621,14 +623,20 @@ ContentPage {
         }
     }
 
-    // A keybind that is not a shell action. Read only.
+    // A keybind that is not a shell action. It is stored under the key it
+    // was written with, so a rebind writes "bind_<key> = <combo>" into the
+    // overrides file and the wrapper in custom/env.lua moves the bind on
+    // the next reload. That wrapper skips shell shortcuts, which is why
+    // this bind and a shortcut can share a key without moving together.
     component OtherBindRow: Rectangle {
         id: otherBindRow
         required property var bindData
-        readonly property string combo: HyprlandKeybinds.comboOf(bindData)
-        // Who else uses this combination; a shell action that has been
-        // rebound onto it counts through its override.
-        readonly property var conflicts: HyprlandKeybinds.comboUsers(otherBindRow.combo, "", bindData)
+
+        readonly property string originalCombo: HyprlandKeybinds.comboOf(bindData)
+        readonly property string overrideId: "bind_" + otherBindRow.originalCombo.replace(/[^A-Za-z0-9_]/g, "_")
+        readonly property string combo: HyprlandBindOverrides.comboFor(otherBindRow.overrideId, otherBindRow.originalCombo)
+        readonly property bool overridden: HyprlandBindOverrides.isOverridden(otherBindRow.overrideId)
+        readonly property bool capturing: page.capturing === otherBindRow.overrideId
 
         Layout.fillWidth: true
         implicitHeight: otherBindRowLayout.implicitHeight + 16
@@ -641,16 +649,38 @@ ContentPage {
             anchors.margins: 8
             spacing: 12
 
-            Row {
-                spacing: 4
+            StyledText {
+                visible: otherBindRow.capturing
+                text: Translation.tr("Press a key combination...")
+                font.pixelSize: Appearance.font.pixelSize.normal
+                color: Appearance.colors.colPrimary
+            }
 
-                Repeater {
-                    model: otherBindRow.combo.split(" + ")
-                    delegate: KeyboardKey {
-                        required property var modelData
-                        key: modelData
-                        pixelSize: Appearance.font.pixelSize.smaller
+            Item {
+                id: otherCaps
+                visible: !otherBindRow.capturing
+                implicitWidth: otherCapsRow.implicitWidth
+                implicitHeight: otherCapsRow.implicitHeight
+
+                Row {
+                    id: otherCapsRow
+                    spacing: 4
+
+                    Repeater {
+                        model: otherBindRow.combo.split(" + ")
+                        delegate: KeyboardKey {
+                            required property var modelData
+                            key: modelData
+                            pixelSize: Appearance.font.pixelSize.smaller
+                        }
                     }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -6
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: page.startCapture(otherBindRow.overrideId)
                 }
             }
 
@@ -660,20 +690,50 @@ ContentPage {
 
                 StyledText {
                     Layout.fillWidth: true
-                    text: otherBindRow.bindData.comment ?? ""
+                    text: (otherBindRow.bindData.comment ?? "") !== ""
+                        ? otherBindRow.bindData.comment
+                        : otherBindRow.originalCombo
                     font.pixelSize: Appearance.font.pixelSize.smaller
                     color: Appearance.colors.colOnLayer1
                     elide: Text.ElideRight
                 }
+            }
 
-                // Yellow under the option: who else is on this combination.
-                StyledText {
-                    Layout.fillWidth: true
-                    visible: otherBindRow.conflicts.length > 0
-                    text: Translation.tr("Also used by %1").arg(otherBindRow.conflicts.map(c => c.label).join(", "))
-                    font.pixelSize: Appearance.font.pixelSize.smaller
-                    color: page.conflictColor
-                    wrapMode: Text.Wrap
+            // A visible edit affordance, the same one the shortcut rows have.
+            Item {
+                visible: !otherBindRow.capturing
+                implicitWidth: 20
+                implicitHeight: 20
+
+                MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "edit"
+                    iconSize: Appearance.font.pixelSize.normal
+                    color: Appearance.colors.colSubtext
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -6
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: page.startCapture(otherBindRow.overrideId)
+                }
+            }
+
+            MaterialSymbol {
+                visible: otherBindRow.overridden && !otherBindRow.capturing
+                iconSize: Appearance.font.pixelSize.larger
+                color: Appearance.colors.colSubtext
+                text: "restart_alt"
+
+                MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -6
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        HyprlandBindOverrides.clearOverride(otherBindRow.overrideId);
+                        page.stopCapture();
+                    }
                 }
             }
         }
