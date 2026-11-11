@@ -65,15 +65,21 @@ Singleton {
         return Array.from(out.values());
     }
 
-    // Everything that is not a shell action, grouped by category.
+    // Everything that is not a shell action, grouped by category. Each bind
+    // carries the file it came from ("main" for hyprland/keybinds.lua,
+    // "custom" for custom/keybinds.lua) so a repeat warning can say where
+    // the other holder lives.
     readonly property var otherSections: {
         const out = [];
-        const collect = section => {
-            const binds = (section?.keybinds ?? []).filter(bind => (bind?.action ?? "") === "");
+        const collect = (section, file) => {
+            const binds = (section?.keybinds ?? [])
+                .filter(bind => (bind?.action ?? "") === "")
+                .map(bind => Object.assign({}, bind, { "file": file }));
             if (binds.length > 0) out.push({ name: section?.name ?? "", binds: binds });
-            for (const child of (section?.children ?? [])) collect(child);
+            for (const child of (section?.children ?? [])) collect(child, file);
         };
-        collect(root.keybinds);
+        collect(root.defaultKeybinds, "main");
+        collect(root.userKeybinds, "custom");
         return out;
     }
 
@@ -84,29 +90,72 @@ Singleton {
         return [...mods, key].filter(part => part !== "").join(" + ");
     }
 
-    // The other shell actions that bind a combination right now, so a row
-    // can say which shortcut shares its key. Only shell shortcuts count:
-    // the theme deliberately repeats a shortcut's key as a fallback bind
-    // (it runs only when the shell is dead), and warning about those would
-    // point at the feature the row already describes. Actions are counted
-    // through their override, so a rebind shows up here immediately, and
-    // the action of the row itself is left out.
-    function comboUsers(combo, excludeAction) {
+    // Every combination with the binds that hold it, counted across both
+    // config files (the theme's hyprland/keybinds.lua and the user's
+    // custom/keybinds.lua) and through their overrides. Two holders means a
+    // real repeat: pressing the key dispatches both binds. A shell shortcut
+    // contributes its displayed combination (or, without an override, each
+    // of its aliases, because every line of it stays bound); a plain bind
+    // contributes the combination the overrides file may have moved it to.
+    readonly property var repeatIndex: {
+        const index = new Map();
+        const put = (combo, holder) => {
+            if (combo === "") return;
+            const holders = index.get(combo);
+            if (holders === undefined) index.set(combo, [holder]);
+            else holders.push(holder);
+        };
+        const collect = (tree, file) => {
+            const actions = new Map();
+            const walk = section => {
+                for (const bind of (section?.keybinds ?? [])) {
+                    const action = bind?.action ?? "";
+                    const combo = root.comboOf(bind);
+                    if (action !== "") {
+                        if (!actions.has(action)) actions.set(action, { combos: [], comment: bind?.comment ?? "" });
+                        const entry = actions.get(action);
+                        if (!entry.combos.includes(combo)) entry.combos.push(combo);
+                    } else {
+                        const id = "bind_" + combo.replace(/[^A-Za-z0-9_]/g, "_");
+                        put(HyprlandBindOverrides.comboFor(id, combo), {
+                            "id": file + "\u0000" + id,
+                            "label": (bind?.comment ?? "") !== "" ? bind.comment : combo,
+                            "file": file
+                        });
+                    }
+                }
+                for (const child of (section?.children ?? [])) walk(child);
+            };
+            walk(tree);
+            for (const [action, entry] of actions) {
+                const label = entry.comment !== "" ? entry.comment : action;
+                const override = HyprlandBindOverrides.comboFor(action, "");
+                if (override !== "") {
+                    // The override moves every line of the action onto one key.
+                    put(override, { "id": action, "label": label, "file": file });
+                } else {
+                    // Without one each line keeps its own key, and an alias
+                    // is a real binding that can be repeated too.
+                    for (const combo of entry.combos) {
+                        put(combo, { "id": action, "label": label, "file": file });
+                    }
+                }
+            }
+        };
+        collect(root.defaultKeybinds, "main");
+        collect(root.userKeybinds, "custom");
+        return index;
+    }
+
+    // The other binds that hold the same combination right now, so a row can
+    // show the repeat before the user has to discover it by pressing the
+    // key. selfId keeps the row itself out: the action name for a shortcut
+    // row, "file\0bind_<key>" for a plain bind row (the same combination can
+    // be written in both config files, and those are two different binds).
+    function repeatUsers(combo, selfId) {
         const wanted = String(combo ?? "").trim();
         if (wanted === "") return [];
-        const out = [];
-        const seen = new Set();
-        for (const entry of root.shellActions) {
-            if (entry.action === excludeAction) continue;
-            const effective = HyprlandBindOverrides.comboFor(entry.action, entry.combos[0] ?? "");
-            if (effective !== wanted) continue;
-            const label = (entry.description ?? "") !== "" ? entry.description : entry.action;
-            const id = label + "\u0000" + entry.action;
-            if (seen.has(id)) continue;
-            seen.add(id);
-            out.push({ "label": label, "action": entry.action });
-        }
-        return out;
+        return (root.repeatIndex.get(wanted) ?? []).filter(holder => holder.id !== selfId);
     }
 
     // Flat list of the binds of one category. "" is the uncategorized group

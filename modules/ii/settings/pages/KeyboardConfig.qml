@@ -29,6 +29,16 @@ ContentPage {
     // readable on light and dark surfaces alike.
     readonly property color conflictColor: Appearance.m3colors.darkmode ? "#FFCA5B" : "#8A5300"
 
+    // The yellow line under a row: the other binds that hold the same
+    // combination, with a tag for the ones that live in the user's own
+    // custom/keybinds.lua instead of the theme's config.
+    function repeatSentence(repeats) {
+        const labels = repeats.map(holder => holder.file === "custom"
+            ? Translation.tr("%1 (custom)").arg(holder.label)
+            : holder.label);
+        return Translation.tr("Also used by %1").arg(labels.join(", "));
+    }
+
     // ------------------------------------------------------
     // Keyboard colour
     // ------------------------------------------------------
@@ -494,10 +504,11 @@ ContentPage {
         readonly property string defaultCombo: actionData?.combos?.[0] ?? ""
         readonly property string combo: HyprlandBindOverrides.comboFor(actionData?.action ?? "", shortcutRow.defaultCombo)
         readonly property var aliases: (actionData?.combos ?? []).slice(1)
-        // Who else uses this combination, so a clash is visible before the
-        // user has to discover it by pressing the key. Shell shortcuts
-        // only: a shared key that is a deliberate fallback is not a clash.
-        readonly property var conflicts: HyprlandKeybinds.comboUsers(shortcutRow.combo, shortcutRow.actionData?.action ?? "")
+        // Who else holds this combination right now, so a repeat is visible
+        // before the user has to discover it by pressing the key. Counted
+        // across the theme's and the user's keybind file; the row's own
+        // action is left out.
+        readonly property var repeats: HyprlandKeybinds.repeatUsers(shortcutRow.combo, shortcutRow.actionData?.action ?? "")
 
         Layout.fillWidth: true
         implicitHeight: shortcutRowLayout.implicitHeight + 24
@@ -538,8 +549,8 @@ ContentPage {
                 // Yellow under the option: who else is on this combination.
                 StyledText {
                     Layout.fillWidth: true
-                    visible: !shortcutRow.capturing && shortcutRow.conflicts.length > 0
-                    text: Translation.tr("Also used by %1").arg(shortcutRow.conflicts.map(c => c.label).join(", "))
+                    visible: !shortcutRow.capturing && shortcutRow.repeats.length > 0
+                    text: page.repeatSentence(shortcutRow.repeats)
                     font.pixelSize: Appearance.font.pixelSize.smaller
                     color: page.conflictColor
                     wrapMode: Text.Wrap
@@ -626,8 +637,12 @@ ContentPage {
     // A keybind that is not a shell action. It is stored under the key it
     // was written with, so a rebind writes "bind_<key> = <combo>" into the
     // overrides file and the wrapper in custom/env.lua moves the bind on
-    // the next reload. That wrapper skips shell shortcuts, which is why
-    // this bind and a shortcut can share a key without moving together.
+    // the next reload. The wrapper skips shell shortcuts, which is why
+    // this bind and a shortcut can share a key without moving together —
+    // the yellow line still shows the share, because both dispatches run.
+    //
+    // The layout is the shortcut row's: description on the left in the same
+    // size, key caps after it, the edit affordance and the reset last.
     component OtherBindRow: Rectangle {
         id: otherBindRow
         required property var bindData
@@ -637,17 +652,50 @@ ContentPage {
         readonly property string combo: HyprlandBindOverrides.comboFor(otherBindRow.overrideId, otherBindRow.originalCombo)
         readonly property bool overridden: HyprlandBindOverrides.isOverridden(otherBindRow.overrideId)
         readonly property bool capturing: page.capturing === otherBindRow.overrideId
+        // Same combination, other holder: the keybind files are counted
+        // per file, so the row excludes itself by file and id and still
+        // sees the twin written in the other config file.
+        readonly property var repeats: HyprlandKeybinds.repeatUsers(
+            otherBindRow.combo,
+            (otherBindRow.bindData?.file ?? "main") + "\u0000" + otherBindRow.overrideId)
 
         Layout.fillWidth: true
-        implicitHeight: otherBindRowLayout.implicitHeight + 16
+        implicitHeight: otherBindRowLayout.implicitHeight + 24
         color: Appearance.colors.colLayer1
         radius: Appearance.rounding.normal
+        border.width: otherBindRow.capturing ? 1 : 0
+        border.color: Appearance.colors.colPrimary
 
         RowLayout {
             id: otherBindRowLayout
             anchors.fill: parent
-            anchors.margins: 8
+            anchors.margins: 12
             spacing: 12
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 2
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: (otherBindRow.bindData.comment ?? "") !== ""
+                        ? otherBindRow.bindData.comment
+                        : otherBindRow.originalCombo
+                    font.pixelSize: Appearance.font.pixelSize.normal
+                    color: Appearance.colors.colOnLayer1
+                    elide: Text.ElideRight
+                }
+
+                // Yellow under the row: who else is on this combination.
+                StyledText {
+                    Layout.fillWidth: true
+                    visible: !otherBindRow.capturing && otherBindRow.repeats.length > 0
+                    text: page.repeatSentence(otherBindRow.repeats)
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    color: page.conflictColor
+                    wrapMode: Text.Wrap
+                }
+            }
 
             StyledText {
                 visible: otherBindRow.capturing
@@ -681,21 +729,6 @@ ContentPage {
                     anchors.margins: -6
                     cursorShape: Qt.PointingHandCursor
                     onClicked: page.startCapture(otherBindRow.overrideId)
-                }
-            }
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 2
-
-                StyledText {
-                    Layout.fillWidth: true
-                    text: (otherBindRow.bindData.comment ?? "") !== ""
-                        ? otherBindRow.bindData.comment
-                        : otherBindRow.originalCombo
-                    font.pixelSize: Appearance.font.pixelSize.smaller
-                    color: Appearance.colors.colOnLayer1
-                    elide: Text.ElideRight
                 }
             }
 

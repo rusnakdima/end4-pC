@@ -4,13 +4,13 @@ import qs.services
 
 /**
  * The keybind list of the settings panel: how a combination is formatted
- * and which other shortcuts a row has to warn about.
+ * and which other binds a row has to warn about.
  *
- * The warning rule is shell-shortcut to shell-shortcut only: the theme
- * deliberately repeats a shortcut's key as a fallback bind (it runs when
- * the shell is dead), and warning about those would point at the feature
- * the row already describes. The service reads the live keybind files, so
- * the tests install their own tree and put the real one back afterwards.
+ * The warning rule is "two holders of one key": the theme's keybind file
+ * and the user's custom one are both counted, shell shortcuts and the
+ * compositor's own binds alike, because every matching bind dispatches on
+ * one press. The service reads the live keybind files, so the tests install
+ * their own tree and put the real one back afterwards.
  */
 TestCase {
     id: testCase
@@ -44,33 +44,59 @@ TestCase {
         compare(HyprlandKeybinds.comboOf({ "mods": [], "key": "mouse:274" }), "mouse:274");
     }
 
-    function test_combo_users_never_lists_the_row_itself() {
-        const users = HyprlandKeybinds.comboUsers("SUPER + F6", "actionOne");
+    function test_repeat_users_never_lists_the_row_itself() {
+        const users = HyprlandKeybinds.repeatUsers("SUPER + F6", "actionOne");
         compare(users.length, 1);
-        compare(users[0].action, "actionTwo");
         compare(users[0].label, "Second");
-        // A combination no shortcut holds warns about nothing.
-        compare(HyprlandKeybinds.comboUsers("SUPER + F8", "actionOne").length, 0);
+        compare(users[0].file, "main");
+        // A combination nobody holds warns about nothing.
+        compare(HyprlandKeybinds.repeatUsers("SUPER + F8", "actionOne").length, 0);
+        compare(HyprlandKeybinds.repeatUsers("", "actionOne").length, 0);
     }
 
-    function test_combo_users_reports_a_key_two_shortcuts_share() {
-        const users = HyprlandKeybinds.comboUsers("SUPER + F6", "actionTwo");
+    function test_repeat_users_reports_a_key_two_shortcuts_share() {
+        const users = HyprlandKeybinds.repeatUsers("SUPER + F6", "actionTwo");
         compare(users.length, 1);
-        compare(users[0].action, "actionOne");
         compare(users[0].label, "First");
-        // The row on the shifted combination sees both keys it does not hold
-        // as separate: only the ones it shares count.
-        const shifted = HyprlandKeybinds.comboUsers("SUPER + SHIFT + F6", "actionThree");
-        compare(shifted.length, 0);
-        compare(HyprlandKeybinds.comboUsers("SUPER + F6", "actionThree").length, 2);
+        // The row on the shifted combination sees only the keys it shares.
+        compare(HyprlandKeybinds.repeatUsers("SUPER + SHIFT + F6", "actionThree").length, 0);
+        compare(HyprlandKeybinds.repeatUsers("SUPER + F6", "actionThree").length, 2);
     }
 
-    function test_combo_users_ignores_the_compositors_own_binds() {
-        // F7 is held by a plain bind only; a shell shortcut row must not
-        // warn about it, and an unshared or empty key warns about nothing.
-        compare(HyprlandKeybinds.comboUsers("SUPER + F7", "").length, 0);
-        compare(HyprlandKeybinds.comboUsers("SUPER + F9", "").length, 0);
-        compare(HyprlandKeybinds.comboUsers("", "").length, 0);
+    function test_a_plain_bind_and_a_shortcut_on_one_key_see_each_other() {
+        // F7 is held by a plain bind: a shortcut row on that key must see
+        // it, and the plain bind's own row must not list itself. Its id is
+        // "file\0bind_<key>", the same the settings rows build.
+        const plainId = "main\u0000bind_" + "SUPER + F7".replace(/[^A-Za-z0-9_]/g, "_");
+        const holders = HyprlandKeybinds.repeatUsers("SUPER + F7", "");
+        compare(holders.length, 1);
+        compare(holders[0].label, "Plain");
+        compare(holders[0].file, "main");
+        compare(HyprlandKeybinds.repeatUsers("SUPER + F7", plainId).length, 0);
+        compare(HyprlandKeybinds.repeatUsers("SUPER + F9", plainId).length, 0);
+    }
+
+    function test_a_twin_in_the_custom_file_is_a_repeat() {
+        // The same combination written in custom/keybinds.lua is the case
+        // the user cares about: it must show up for the main-file holder,
+        // with a marker saying where the other bind lives.
+        HyprlandKeybinds.userKeybinds = {
+            "name": "", "children": [], "keybinds": [
+                { "mods": ["SUPER"], "key": "F7", "dispatcher": "hl.dsp.exec_cmd", "params": "", "comment": "Custom twin", "action": "" }
+            ]
+        };
+        const plainId = "main\u0000bind_" + "SUPER + F7".replace(/[^A-Za-z0-9_]/g, "_");
+        const customId = "custom\u0000bind_" + "SUPER + F7".replace(/[^A-Za-z0-9_]/g, "_");
+
+        const forMain = HyprlandKeybinds.repeatUsers("SUPER + F7", plainId);
+        compare(forMain.length, 1);
+        compare(forMain[0].label, "Custom twin");
+        compare(forMain[0].file, "custom");
+
+        const forCustom = HyprlandKeybinds.repeatUsers("SUPER + F7", customId);
+        compare(forCustom.length, 1);
+        compare(forCustom[0].label, "Plain");
+        compare(forCustom[0].file, "main");
     }
 
     function test_a_plain_bind_is_not_a_shell_action() {
