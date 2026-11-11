@@ -196,4 +196,60 @@ TestCase {
         compare(byKey["input:kb_options"], "grp:alt_shift_toggle");
         verify(byKey["binds:allow_workspace_cycles"] === undefined);
     }
+
+    // --- hypridle.conf vs the saved config ---
+
+    function test_idle_timeouts_are_read_back_from_the_config_file() {
+        const text = [
+            "$suspend_cmd = systemctl suspend || loginctl suspend",
+            "",
+            "listener {",
+            "    timeout = 300",
+            "    on-timeout = loginctl lock-session",
+            "}",
+            "",
+            "listener {",
+            "    timeout = 600",
+            "    on-timeout = hyprctl dispatch 'hl.dsp.dpms({ action = \"disable\" })'",
+            "    on-resume = hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'",
+            "}",
+            ""
+        ].join("\n");
+        const timeouts = HyprlandConfig.idleTimeoutsFrom(text);
+        compare(timeouts.lock, 300);
+        compare(timeouts.screenOff, 600);
+        // No suspend listener: the configurator writes 0 for "off".
+        compare(timeouts.suspend, 0);
+    }
+
+    function test_idle_timeouts_read_a_suspend_listener_too() {
+        const text = [
+            "listener {",
+            "    timeout = 216000",
+            "    on-timeout = $suspend_cmd",
+            "}"
+        ].join("\n");
+        const timeouts = HyprlandConfig.idleTimeoutsFrom(text);
+        compare(timeouts.suspend, 216000);
+        compare(timeouts.lock, 0);
+        compare(timeouts.screenOff, 0);
+    }
+
+    function test_idle_needs_no_reapply_when_the_file_matches_the_config() {
+        const config = { "lock": 300, "screenOff": 600, "suspend": 0 };
+        verify(!HyprlandConfig.idleDiffers({ "lock": 300, "screenOff": 600, "suspend": 0 }, config));
+        // The drift the settings used to show: a 60 hour listener the config
+        // has long forgotten about.
+        verify(HyprlandConfig.idleDiffers({ "lock": 300, "screenOff": 600, "suspend": 216000 }, config));
+        verify(HyprlandConfig.idleDiffers({ "lock": 0, "screenOff": 600, "suspend": 0 }, config));
+    }
+
+    function test_an_empty_file_disagrees_with_any_config_value() {
+        const empty = HyprlandConfig.idleTimeoutsFrom("");
+        compare(empty.lock, 0);
+        compare(empty.screenOff, 0);
+        compare(empty.suspend, 0);
+        verify(HyprlandConfig.idleDiffers(empty, { "lock": 300, "screenOff": 600, "suspend": 0 }));
+        verify(!HyprlandConfig.idleDiffers(empty, { "lock": 0, "screenOff": 0, "suspend": 0 }));
+    }
 }

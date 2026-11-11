@@ -2,6 +2,7 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Hyprland
 import qs.modules.common
 import qs.modules.common.functions
@@ -164,6 +165,83 @@ Singleton {
         HyprlandOptions.applyAllFromConfig()
     }
 
+    // hypridle.conf is written by setIdle; config.json is what the settings
+    // show. When the two disagree - a write lost to a reload, a manual edit,
+    // a value from before the write path was sequenced - the file is the
+    // stale side, and the start-up check below brings it back in line.
+    property string idleText: ""
+
+    // Set once the file has been read (or is known to be missing). Without
+    // it a config that becomes ready before the read would compare against
+    // an empty text, read that as "no listeners" and restart hypridle for
+    // nothing on every shell start.
+    property bool idleFileLoaded: false
+
+    // The three listeners are told apart by what they run, the same way
+    // hypridleconfigurator.py matches them. A listener that is not in the
+    // file has a timeout of 0: that is how the configurator writes "off".
+    function idleTimeoutsFrom(text) {
+        const found = { "lock": 0, "screenOff": 0, "suspend": 0 };
+        const blocks = [];
+        let current = null;
+        let depth = 0;
+        for (const line of String(text ?? "").split("\n")) {
+            if (current === null) {
+                if (/^\s*listener\s*\{/.test(line)) {
+                    current = [line];
+                    depth = (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+                }
+                continue;
+            }
+            current.push(line);
+            depth += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+            if (depth <= 0) {
+                blocks.push(current.join("\n"));
+                current = null;
+            }
+        }
+        for (const block of blocks) {
+            const match = block.match(/timeout\s*=\s*(\d+)/);
+            if (!match) continue;
+            const seconds = parseInt(match[1], 10);
+            if (block.includes("loginctl lock-session")) found.lock = seconds;
+            else if (block.includes("dpms")) found.screenOff = seconds;
+            else if (block.includes("$suspend_cmd")) found.suspend = seconds;
+        }
+        return found;
+    }
+
+    function idleDiffers(fileTimeouts, config) {
+        return fileTimeouts.lock !== config.lock
+            || fileTimeouts.screenOff !== config.screenOff
+            || fileTimeouts.suspend !== config.suspend;
+    }
+
+    function reconcileIdle() {
+        if (WM.compositor !== "hyprland" || !Config.ready || !root.idleFileLoaded) return;
+        if (!root.idleDiffers(root.idleTimeoutsFrom(root.idleText), Config.options.hyprland.idle)) return;
+        const idle = Config.options.hyprland.idle;
+        root.setIdle(idle.lock, idle.screenOff, idle.suspend);
+    }
+
+    FileView {
+        id: idleFile
+        path: root.hypridlePath
+        preload: true
+        onLoaded: {
+            root.idleText = text();
+            root.idleFileLoaded = true;
+            root.reconcileIdle();
+        }
+        // No file at all is the same disagreement: everything the config
+        // holds has to be written out.
+        onLoadFailed: {
+            root.idleText = "";
+            root.idleFileLoaded = true;
+            root.reconcileIdle();
+        }
+    }
+
     // The palette can be loaded before the config, in which case the first
     // apply from MaterialThemeLoader was skipped.
     Connections {
@@ -172,6 +250,7 @@ Singleton {
             if (Config.ready) {
                 root.applyBorderColors()
                 root.applyFromConfig()
+                root.reconcileIdle()
             }
         }
     }
