@@ -43,8 +43,46 @@ QtObject {
         "hyprland:opt:master:new_status": hyprSelect("master:new_status", "slave", [{ displayName: Translation.tr("Master"), icon: "star", value: "master" }, { displayName: Translation.tr("Slave"), icon: "view_agenda", value: "slave" }, { displayName: Translation.tr("Inherit"), icon: "content_copy", value: "inherit" }]),
         "hyprland:opt:master:orientation": hyprSelect("master:orientation", "left", [{ displayName: Translation.tr("Left"), icon: "align_horizontal_left", value: "left" }, { displayName: Translation.tr("Right"), icon: "align_horizontal_right", value: "right" }, { displayName: Translation.tr("Top"), icon: "align_vertical_top", value: "top" }, { displayName: Translation.tr("Bottom"), icon: "align_vertical_bottom", value: "bottom" }, { displayName: Translation.tr("Center"), icon: "align_horizontal_center", value: "center" }]),
         "hyprland:opt:master:mfact": hyprSpin("master:mfact", 10, 90, 5, 100, 0),
-        "hyprland:opt:input:kb_variant": hyprText("input:kb_variant"),
-        "hyprland:opt:input:kb_options": hyprText("input:kb_options"),
+        "hyprland:opt:input:kb_variant": {
+            type: "select",
+            // The card edits the first layout's slot: the nth variant
+            // belongs to the nth layout, and the full positional list
+            // stays on the Input page.
+            get: () => {
+                const parts = String(HyprlandOptions.get("input:kb_variant", "")).split(",").map(part => part.trim());
+                return parts[0] ?? "";
+            },
+            set: v => {
+                const parts = String(HyprlandOptions.get("input:kb_variant", "")).split(",").map(part => part.trim());
+                while (parts.length < 1) parts.push("");
+                parts[0] = v;
+                while (parts.length > 0 && parts[parts.length - 1] === "") parts.pop();
+                HyprlandOptions.apply("input:kb_variant", parts.join(","));
+            },
+            // The variants of the layout the system currently has, so an
+            // option that belongs to another layout cannot be picked.
+            get options() {
+                return [
+                    { "value": "", "displayName": Translation.tr("Default (no variant)") },
+                    ...XkbRules.variantOptions(Config.options.hyprland.input.kbLayout)
+                ];
+            }
+        },
+        "hyprland:opt:input:kb_options": {
+            type: "select",
+            // A set, not a single value: picking one adds it, because the
+            // Input page field holds several options at once.
+            get: () => String(HyprlandOptions.get("input:kb_options", "")),
+            set: v => {
+                if (v === "") return;
+                const items = String(HyprlandOptions.get("input:kb_options", "")).split(",").map(part => part.trim()).filter(part => part.length > 0);
+                if (!items.includes(v)) items.push(v);
+                HyprlandOptions.apply("input:kb_options", items.join(","));
+            },
+            get options() {
+                return [{ "value": "", "displayName": Translation.tr("Add…") }, ...XkbRules.options];
+            }
+        },
         "hyprland:opt:input:sensitivity": hyprSpin("input:sensitivity", -10, 10, 1, 10, 0),
         "hyprland:opt:input:accel_profile": hyprSelect("input:accel_profile", "", [{ displayName: Translation.tr("Default"), icon: "settings_backup_restore", value: "" }, { displayName: Translation.tr("Flat"), icon: "horizontal_rule", value: "flat" }, { displayName: Translation.tr("Adaptive"), icon: "show_chart", value: "adaptive" }]),
         "hyprland:opt:input:force_no_accel": hyprToggle("input:force_no_accel"),
@@ -647,8 +685,8 @@ QtObject {
                 { type: "toggle", key: "hyprland:Numlock by default", title: Translation.tr("Numlock by default"), icon: "pin" },
                 { type: "spin", key: "hyprland:Repeat delay (ms)", title: Translation.tr("Repeat delay (ms)"), icon: "timer" },
                 { type: "spin", key: "hyprland:Repeat rate", title: Translation.tr("Repeat rate"), icon: "speed" },
-                { type: "text", key: "hyprland:opt:input:kb_variant", title: Translation.tr("Keyboard variant"), icon: "keyboard_alt", w: 2 },
-                { type: "text", key: "hyprland:opt:input:kb_options", title: Translation.tr("Keyboard options"), icon: "keyboard_command_key", w: 2 }
+                { type: "combo", key: "hyprland:opt:input:kb_variant", title: Translation.tr("Keyboard variant"), icon: "keyboard_alt", w: 2 },
+                { type: "combo", key: "hyprland:opt:input:kb_options", title: Translation.tr("Keyboard options"), icon: "keyboard_command_key", w: 2 }
             ]
         },
         {

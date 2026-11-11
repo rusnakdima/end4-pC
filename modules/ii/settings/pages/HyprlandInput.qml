@@ -28,23 +28,21 @@ ContentPage {
                 title: Translation.tr("Keyboard")
 
                 GroupedList {
-                    ConfigTextArea {
-                        id: kbLayoutField
+                    ConfigMultiSelect {
                         Layout.fillWidth: true
                         buttonIcon: "keyboard"
                         text: Translation.tr("Keyboard layout")
-                        placeholderText: Translation.tr("e.g., us, es, latam")
-                        Component.onCompleted: value = Config.options.hyprland.input.kbLayout
-                        onValueChanged: kbLayoutDebounceTimer.restart()
-
-                        Timer {
-                            id: kbLayoutDebounceTimer
-                            interval: 1000
-                            repeat: false
-                            onTriggered: {
-                                Config.options.hyprland.input.kbLayout = kbLayoutField.value
-                                HyprlandConfig.set("input:kb_layout", kbLayoutField.value)
-                            }
+                        description: Translation.tr("Each chip is one layout; the first one is the active layout")
+                        model: XkbRules.layouts
+                        value: Config.options.hyprland.input.kbLayout
+                        onEdited: newValue => {
+                            Config.options.hyprland.input.kbLayout = newValue;
+                            HyprlandConfig.set("input:kb_layout", newValue);
+                            // The nth variant belongs to the nth layout, so
+                            // changing the layouts can invalidate slots.
+                            const variant = String(HyprlandOptions.get("input:kb_variant", ""));
+                            const clean = XkbRules.sanitizeVariant(variant, newValue);
+                            if (clean !== variant) HyprlandOptions.apply("input:kb_variant", clean);
                         }
                     }
                     ConfigSwitch {
@@ -84,19 +82,23 @@ ContentPage {
                             }
                         }
                     }
-                    HyprOptionText {
-                        optionKey: "input:kb_variant"
+                    ConfigMultiSelect {
                         Layout.fillWidth: true
+                        positional: true
                         buttonIcon: "keyboard_alt"
                         text: Translation.tr("Keyboard variant")
-                        placeholderText: Translation.tr("e.g., intl, dvorak")
+                        description: Translation.tr("One chip per layout, in order — the nth variant belongs to the nth layout")
+                        model: XkbRules.variantEntries(Config.options.hyprland.input.kbLayout)
+                        value: XkbRules.sanitizeVariant(String(HyprlandOptions.get("input:kb_variant", "")), Config.options.hyprland.input.kbLayout)
+                        onEdited: newValue => HyprlandOptions.apply("input:kb_variant", newValue)
                     }
-                    HyprOptionText {
-                        optionKey: "input:kb_options"
+                    ConfigMultiSelect {
                         Layout.fillWidth: true
                         buttonIcon: "keyboard_command_key"
                         text: Translation.tr("Keyboard options")
-                        placeholderText: Translation.tr("e.g., caps:escape, grp:alt_shift_toggle")
+                        model: XkbRules.options
+                        value: String(HyprlandOptions.get("input:kb_options", ""))
+                        onEdited: newValue => HyprlandOptions.apply("input:kb_options", newValue)
                     }
                     ConfigSelectionArray {
                         text: Translation.tr("Follow mouse")

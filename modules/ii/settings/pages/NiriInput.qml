@@ -28,23 +28,14 @@ ContentPage {
                 title: Translation.tr("Keyboard")
 
                 GroupedList {
-                    ConfigTextArea {
-                        id: kbLayoutField
+                    ConfigMultiSelect {
                         Layout.fillWidth: true
                         buttonIcon: "keyboard"
                         text: Translation.tr("Keyboard layout")
-                        placeholderText: Translation.tr("e.g., us, es, latam")
-                        Component.onCompleted: value = NiriConfig.options.input.kbLayout
-                        onValueChanged: kbLayoutDebounceTimer.restart()
-
-                        Timer {
-                            id: kbLayoutDebounceTimer
-                            interval: 1000
-                            repeat: false
-                            onTriggered: {
-                                NiriConfig.options.input.kbLayout = kbLayoutField.value
-                            }
-                        }
+                        description: Translation.tr("Each chip is one layout; the first one is the active layout")
+                        model: XkbRules.layouts
+                        value: NiriConfig.options.input.kbLayout
+                        onEdited: newValue => NiriConfig.options.input.kbLayout = newValue
                     }
 
                     ConfigSwitch {

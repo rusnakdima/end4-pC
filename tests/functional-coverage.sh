@@ -57,6 +57,7 @@ declare -A EXPLICIT_MAP=(
     [WindowMode]="tst_window_mode.qml"
     [AppWindowRules]="tst_app_window_rules.qml"
     [HyprlandKeybinds]="tst_keybinds.qml"
+    [XkbRules]="tst_xkbrules.qml"
 )
 
 # The units that hold logic: a service, or a component that declares a
