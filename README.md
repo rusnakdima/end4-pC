@@ -68,6 +68,18 @@ git clone https://github.com/pctrade/end4-pC.git
 killall qs 2>/dev/null; qs -c end4-pC > /dev/null 2>&1 & disown
 ```
 
+### 📶 Hotspot (Wi-Fi AP)
+
+The bar/sidebar Hotspot toggle needs one-time system provisioning (root helper,
+sudoers, NetworkManager rule, regulatory domain). After installing, run:
+
+```bash
+cd ~/.config/quickshell/end4-pC/scripts/hotspot
+sudo ./setup-hotspot.sh        # install (idempotent)  ·  ./setup-hotspot.sh --check  ·  --uninstall
+```
+
+Full guide — hardware paths (onboard MT7922 vs AIC8800D80 dongle), troubleshooting — in [`scripts/hotspot/README.md`](scripts/hotspot/README.md).
+
 ### 🔧 Set as your default shell (optional)
 
 If you like it and want it to load by default instead of `ii`, edit:

@@ -50,6 +50,12 @@ install_packages() {
         neovim
         libqalculate
         papirus-icon-theme
+        # hotspot (AP) feature — see scripts/hotspot/README.md
+        wireless-regdb # regulatory.db; without it 5 GHz AP channels are NO-IR
+        hostapd        # AP daemon (helper runs its own instance, not the unit)
+        dnsmasq        # DHCP/DNS for ap0 (helper runs its own instance)
+        iptables       # AIC_AP_FWD / AIC_AP_NAT chains
+        python         # aic-hotspot status: client list (leases ∩ station dump)
     )
 
     # AUR packages. makepkg refuses to run as root, so they are only installed

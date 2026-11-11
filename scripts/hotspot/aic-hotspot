@@ -1,0 +1,255 @@
+#!/bin/bash
+# aic-hotspot — parallel STA+AP helper for the AIC8800D80 (wlan0 + ap0 vif).
+# Subcommands: start <ssid> <passphrase> <channel> | stop | status
+# channel 0 = follow STA channel (fallback 6). Never touches wlan0's mode,
+# never reloads aic modules (module reloads brick the device until reboot).
+set -euo pipefail
+
+AP_IFACE=ap0
+AP_IP=192.168.150.1
+AP_NET=192.168.150.0/24
+RUN_DIR=/run/aic-hotspot
+HOSTAPD_CONF="$RUN_DIR/hostapd.conf"
+HOSTAPD_PID="$RUN_DIR/hostapd.pid"
+DNSMASQ_PID="$RUN_DIR/dnsmasq.pid"
+LEASES=/var/lib/misc/dnsmasq-aic.leases
+
+die_json() { # <error message> -> JSON on stdout, exit 1
+    printf '{"active":false,"error":"%s"}\n' "$1"
+    logger -t aic-hotspot "error: $1"
+    exit 1
+}
+
+cleanup_partial() { # kill daemons, drop rules, delete ap0 — never wlan0
+    [ -f "$HOSTAPD_PID" ] && { kill -TERM "$(cat "$HOSTAPD_PID")" 2>/dev/null || true; rm -f "$HOSTAPD_PID"; }
+    [ -f "$DNSMASQ_PID" ] && { kill -TERM "$(cat "$DNSMASQ_PID")" 2>/dev/null || true; rm -f "$DNSMASQ_PID"; }
+    while iptables -C FORWARD -j AIC_AP_FWD 2>/dev/null; do iptables -D FORWARD -j AIC_AP_FWD; done
+    iptables -F AIC_AP_FWD 2>/dev/null || true
+    iptables -X AIC_AP_FWD 2>/dev/null || true
+    iptables -t nat -C POSTROUTING -j AIC_AP_NAT 2>/dev/null && iptables -t nat -D POSTROUTING -j AIC_AP_NAT || true
+    iptables -t nat -F AIC_AP_NAT 2>/dev/null || true
+    iptables -t nat -X AIC_AP_NAT 2>/dev/null || true
+    ufw --force delete allow in on ap0 to any port 67 proto udp comment 'aic-hotspot DHCP' >/dev/null 2>&1 || true
+    ufw --force delete allow in on ap0 to any port 53 proto udp comment 'aic-hotspot DNS-udp' >/dev/null 2>&1 || true
+    ufw --force delete allow in on ap0 to any port 53 proto tcp comment 'aic-hotspot DNS-tcp' >/dev/null 2>&1 || true
+    # this driver rejects RTM_DELLINK (RTNETLINK: Operation not supported),
+    # the vif must be removed through nl80211 (`iw dev <name> del`)
+    iw dev "$AP_IFACE" del 2>/dev/null || ip link del "$AP_IFACE" 2>/dev/null || true
+    rm -rf "$RUN_DIR"
+}
+
+cmd_stop() {
+    cleanup_partial
+    printf '{"active":false,"error":""}\n'
+}
+
+pid_alive() { [ -f "$1" ] && kill -0 "$(cat "$1" 2>/dev/null)" 2>/dev/null; }
+
+sta_freq() { # prints integer freq if wlan0 associated, else nothing
+    iw dev wlan0 link 2>/dev/null | awk '/freq:/ {gsub(/[^0-9.]/,"",$2); print int($2); exit}'
+}
+
+freq_to_channel() {
+    local f="$1"
+    if [ "$f" -le 2484 ]; then
+        awk -v f="$f" 'BEGIN{ print (f==2484)?14:(f-2407)/5 }'
+    else
+        awk -v f="$f" 'BEGIN{ print (f-5000)/5 }'
+    fi
+}
+
+cmd_start() { # <ssid> <passphrase> <channel>
+    local ssid="${1:-}" pass="${2:-}" chan="${3:-0}"
+    [ -n "$ssid" ] && [ -n "$pass" ] || die_json "usage: start <ssid> <passphrase> <channel>"
+    local plen=${#pass}
+    [ "$plen" -ge 8 ] && [ "$plen" -le 63 ] || die_json "passphrase must be 8-63 characters"
+    [[ "$chan" =~ ^[0-9]+$ ]] || die_json "channel must be a number"
+    [ "$chan" -le 165 ] || die_json "channel must be 0-165"
+    [ -d /sys/class/net/wlan0 ] || die_json "wlan0/driver not loaded"
+    grep -q '^aic8800_fdrv ' /proc/modules || die_json "wlan0/driver not loaded"
+    pid_alive "$HOSTAPD_PID" && die_json "already active"
+
+    # channel: 0 = follow STA, fallback 6
+    local hw_mode
+    if [ "$chan" = "0" ]; then
+        local f
+        f=$(sta_freq || true)
+        if [ -n "${f:-}" ]; then
+            chan=$(freq_to_channel "$f")
+        else
+            chan=6
+        fi
+    fi
+    if [ "$chan" -le 14 ]; then hw_mode=g; else hw_mode=a; fi
+
+    mkdir -p "$RUN_DIR"
+
+    # second vif — parallel requirement: never convert wlan0 to AP mode
+    if [ ! -d "/sys/class/net/$AP_IFACE" ]; then
+        iw dev wlan0 interface add "$AP_IFACE" type __ap 2>/dev/null \
+            || { rm -rf "$RUN_DIR"; die_json "driver refused second interface"; }
+    fi
+    nmcli device set "$AP_IFACE" managed no 2>/dev/null || true
+    ip link set "$AP_IFACE" up
+    ip addr replace "$AP_IP/24" dev "$AP_IFACE"
+    # ufw is active with default deny-incoming; without these, DHCP/DNS
+    # addressed to this machine on ap0 are dropped (phone: "IP configuration
+    # failure"). ICMP echo-request needs no rule — ufw-before-input allows it.
+    ufw allow in on ap0 to any port 67 proto udp comment 'aic-hotspot DHCP' >/dev/null 2>&1 || true
+    ufw allow in on ap0 to any port 53 proto udp comment 'aic-hotspot DNS-udp' >/dev/null 2>&1 || true
+    ufw allow in on ap0 to any port 53 proto tcp comment 'aic-hotspot DNS-tcp' >/dev/null 2>&1 || true
+
+    # hostapd config: WPA2-PSK, no DFS (no country_code → no CAC).
+    # Band-conditional speed profile: 2.4 GHz stays HT20; 5 GHz gets HT40 +
+    # VHT80 (80 MHz) so the radio PHY (433 Mbps, 1 stream) no longer caps
+    # clients below the ~80-86 Mbps line. All flags per /etc/hostapd/hostapd.conf docs.
+    local ht_line="ht_capab=[HT20][SHORT-GI-20]"
+    local vht_lines=""
+    if [ "$hw_mode" = "a" ]; then
+        local ht40=""
+        case "$chan" in
+            36|44|52|60|100|108|116|124|132|140|149|157) ht40="HT40+" ;;
+            40|48|56|64|104|112|120|128|136|144|153|161) ht40="HT40-" ;;
+        esac
+        if [ -n "$ht40" ]; then
+            ht_line="ht_capab=[${ht40}][SHORT-GI-20][SHORT-GI-40]"
+        fi
+        vht_lines="ieee80211ac=1"
+        case "$chan" in
+            36|40|44|48)     vht_lines="${vht_lines}"$'\n'"vht_oper_chwidth=1"$'\n'"vht_oper_centr_freq_seg0_idx=42" ;;
+            149|153|157|161) vht_lines="${vht_lines}"$'\n'"vht_oper_chwidth=1"$'\n'"vht_oper_centr_freq_seg0_idx=155" ;;
+        esac
+    fi
+    {
+        echo "interface=$AP_IFACE"
+        echo "driver=nl80211"
+        echo "ssid=$ssid"
+        echo "hw_mode=$hw_mode"
+        echo "channel=$chan"
+        echo "ieee80211n=1"
+        echo "$ht_line"
+        if [ -n "$vht_lines" ]; then
+            printf '%s\n' "$vht_lines"
+        fi
+        echo "wpa=2"
+        echo "wpa_key_mgmt=WPA-PSK"
+        echo "rsn_pairwise=CCMP"
+        echo "wpa_passphrase=$pass"
+        echo "ignore_broadcast_ssid=0"
+    } > "$HOSTAPD_CONF"
+    chmod 644 "$HOSTAPD_CONF"
+
+    # health-check baseline: dmesg line count + STA link state
+    local dmesg_before sta_before
+    dmesg_before=$(dmesg | wc -l)
+    sta_before=$(sta_freq || true)
+
+    # redirect BOTH streams: hostapd prints "AP-ENABLED" noise on stdout,
+    # and this script's stdout must stay a single JSON line for the QML side
+    hostapd -B -P "$HOSTAPD_PID" "$HOSTAPD_CONF" >"$RUN_DIR/hostapd.out" 2>"$RUN_DIR/hostapd.err" \
+        || { cleanup_partial; die_json "hostapd failed to start"; }
+
+    dnsmasq --conf-file=/dev/null \
+        --interface="$AP_IFACE" --bind-dynamic --except-interface=lo \
+        --listen-address="$AP_IP" \
+        --dhcp-range=192.168.150.50,192.168.150.250,255.255.255.0,12h \
+        --dhcp-option=option:router,"$AP_IP" \
+        --dhcp-option=option:dns-server,"$AP_IP" \
+        --server=1.1.1.1 --server=8.8.8.8 \
+        --dhcp-authoritative --domain-needed --bogus-priv \
+        --dhcp-leasefile="$LEASES" \
+        --pid-file="$DNSMASQ_PID" 2>"$RUN_DIR/dnsmasq.err" \
+        || { cleanup_partial; die_json "dnsmasq failed to start"; }
+
+    # iptables: idempotent chains (FORWARD policy is DROP because of docker)
+    iptables -N AIC_AP_FWD 2>/dev/null || iptables -F AIC_AP_FWD
+    iptables -A AIC_AP_FWD -i "$AP_IFACE" -s "$AP_NET" -j ACCEPT
+    iptables -A AIC_AP_FWD -o "$AP_IFACE" -d "$AP_NET" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+    iptables -C FORWARD -j AIC_AP_FWD 2>/dev/null || iptables -I FORWARD 1 -j AIC_AP_FWD
+    iptables -t nat -N AIC_AP_NAT 2>/dev/null || iptables -t nat -F AIC_AP_NAT
+    iptables -t nat -A AIC_AP_NAT -s "$AP_NET" ! -o "$AP_IFACE" -j MASQUERADE
+    iptables -t nat -C POSTROUTING -j AIC_AP_NAT 2>/dev/null || iptables -t nat -I POSTROUTING 1 -j AIC_AP_NAT
+
+    # health check: hostapd alive, no firmware/USB crash, STA link preserved
+    sleep 4
+    local reason="" new_lines
+    pid_alive "$HOSTAPD_PID" || reason="hostapd exited"
+    new_lines=$(dmesg | tail -n +"$((dmesg_before + 1))" || true)
+    if printf '%s' "$new_lines" | grep -qiE 'USB disconnect|rwnx_.*(error|assert)|firmware.*(crash|assert)'; then
+        reason="firmware crash during AP start (device re-enumerated)"
+    fi
+    if [ -z "$reason" ]; then
+        local sta_now
+        sta_now=$(sta_freq || true)
+        if [ -n "${sta_before:-}" ] && [ -z "${sta_now:-}" ]; then
+            reason="STA link dropped when AP started"
+        fi
+    fi
+    if [ -n "$reason" ]; then
+        local only_hostapd=0
+        [ "$reason" = "hostapd exited" ] && [ -z "$(printf '%s' "$new_lines" | grep -qiE 'USB disconnect|rwnx_' || true)" ] && only_hostapd=1
+        cleanup_partial
+        # retry once on a pure hostapd failure in auto-channel mode (STA 5 GHz
+        # channel + g-mode mismatch etc.); firmware/USB failures never retried
+        if [ "$only_hostapd" = "1" ] && [ "$3" = "0" ] && [ "${AIC_HS_RETRY:-0}" = "0" ]; then
+            AIC_HS_RETRY=1 cmd_start "$ssid" "$pass" 6
+            return $?
+        fi
+        die_json "$reason"
+    fi
+
+    logger -t aic-hotspot "AP started ssid=$ssid channel=$chan"
+    cmd_status
+}
+
+cmd_status() {
+    local active=false ssid="" chan="" freq="" err=""
+    if pid_alive "$HOSTAPD_PID" && [ -f "$HOSTAPD_CONF" ]; then
+        active=true
+        ssid=$(awk -F= '/^ssid=/{print $2; exit}' "$HOSTAPD_CONF" || true)
+        chan=$(awk -F= '/^channel=/{print $2; exit}' "$HOSTAPD_CONF" || true)
+        [ -n "$chan" ] && freq=$((chan <= 14 ? chan * 5 + 2407 : chan * 5 + 5000))
+    fi
+    local uplink
+    uplink=$(ip -o route show default 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="dev") print $(i+1); exit}' || true)
+
+    # clients: join dnsmasq leases with iw station dump
+    local clients="[]"
+    if [ "$active" = true ] && [ -d "/sys/class/net/$AP_IFACE" ]; then
+        clients=$(python3 - "$LEASES" "$AP_IFACE" <<'PYEOF'
+import json, subprocess, sys
+leases = {}
+try:
+    for line in open(sys.argv[1]):
+        p = line.split()
+        if len(p) >= 4:
+            leases[p[1].lower()] = (p[2], p[3])  # ip, host
+except OSError:
+    pass
+macs = []
+try:
+    out = subprocess.run(["iw", "dev", sys.argv[2], "station", "dump"],
+                         capture_output=True, text=True, timeout=5).stdout
+    macs = [l.split()[1].lower() for l in out.splitlines() if l.startswith("Station ")]
+except Exception:
+    pass
+# A client is real only while it is associated on ap0: dnsmasq keeps its
+# lease for 12 h across disconnects and AP restarts, so lease-only rows
+# were ghosts (verified: station dump empty, lease present, status still listed it).
+rows = [{"ip": leases.get(m, ("", ""))[0], "mac": m, "host": leases.get(m, ("", ""))[1]}
+        for m in macs]
+print(json.dumps(rows))
+PYEOF
+)
+    fi
+    [ -n "$err" ] || err=""
+    printf '{"active":%s,"ssid":"%s","channel":%s,"freq":%s,"ip":"%s","uplink":"%s","clients":%s,"error":"%s"}\n' \
+        "$active" "$ssid" "${chan:-0}" "${freq:-0}" "$AP_IP" "${uplink:-}" "$clients" "$err"
+}
+
+case "${1:-}" in
+    start)  shift; cmd_start "$@" ;;
+    stop)   cmd_stop ;;
+    status) cmd_status ;;
+    *)      echo "usage: aic-hotspot {start <ssid> <passphrase> <channel>|stop|status}" >&2; exit 2 ;;
+esac
