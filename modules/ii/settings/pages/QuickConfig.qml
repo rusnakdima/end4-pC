@@ -405,24 +405,6 @@ ContentPage {
                 // ShaderEffectSource, and anything moving inside it would make
                 // six FastBlur radius-128 passes re-run on every video frame.
                 // The glass keeps the still frame; only the hero moves.
-                Item {
-                    anchors.fill: parent
-                    layer.enabled: heroPreview.isVideo
-                    layer.effect: OpacityMask {
-                        maskSource: Rectangle {
-                            width: mBox.width
-                            height: mBox.height
-                            radius: mBox.radius
-                        }
-                    }
-
-                    WallpaperVideoSurface {
-                        id: heroPreview
-                        anchors.fill: parent
-                        path: Config.options.background.wallpaperPath
-                    }
-                }
-
                 GlassCard {
                     id: bottomBar
                     backdrop: wallpaperImg

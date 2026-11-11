@@ -58,10 +58,8 @@ DashboardCard {
             sourceSize.height: 405
         }
 
-        WallpaperVideoSurface {
-            anchors.fill: parent
-            path: tile.path
-        }
+        // The still is the whole surface: the desktop player (mpvpaper) is
+        // the single live instance of the wallpaper.
 
         MouseArea {
             anchors.fill: parent

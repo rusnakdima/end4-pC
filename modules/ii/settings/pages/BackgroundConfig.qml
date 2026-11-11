@@ -42,10 +42,8 @@ ContentPage {
                 sourceSize.height: card.fixedHeight * 1.5
             }
 
-            WallpaperVideoSurface {
-                anchors.fill: parent
-                path: FileUtils.trimFileProtocol(card.rawPath)
-            }
+            // Card stills only — the wallpaper's single live decode is the
+            // desktop player.
         }
     }
 
