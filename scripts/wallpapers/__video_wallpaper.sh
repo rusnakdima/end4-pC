@@ -2,6 +2,8 @@
 # Single entry point for the Hyprland video wallpaper.
 #
 #   __video_wallpaper.sh <video-file>   start: proxy + detached supervisor
+#   __video_wallpaper.sh --prefetch f   build/reuse f's proxy without touching
+#                                        the player; prints the file to play
 #   __video_wallpaper.sh --stop         stop: supervisor + mpvpaper, deterministically
 #
 # One mpvpaper instance covers ALL outputs (one decode, one layer surface per
@@ -14,7 +16,11 @@ set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_PATH="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
-PROXY_DIR="$SCRIPT_DIR/mpvpaper_proxies"
+# One proxy cache for every copy of this script: the checkout's copy also
+# runs it (shell previews), and a per-directory PROXY_DIR would split the
+# cache between the quickshell config and this custom dir — a file built by
+# a preview would then be encoded again on the next apply.
+PROXY_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/hypr/custom/scripts/mpvpaper_proxies"
 PIDFILE="$SCRIPT_DIR/.video_wallpaper.pid"
 MPVPAPER_PIDFILE="$SCRIPT_DIR/.video_wallpaper.mpvpaper.pid"
 LOGFILE="$SCRIPT_DIR/.video_wallpaper.log"
@@ -323,12 +329,20 @@ main() {
         --stop)
             stop_video_wallpaper
             ;;
+        --prefetch)
+            shift
+            # Build (or reuse) the proxy for a file WITHOUT starting or
+            # stopping anything: callers run this BEFORE killing the current
+            # player so the old wallpaper keeps playing during the encode.
+            # Prints the file that should be handed to mpvpaper.
+            resolve_playfile "${1:-}"
+            ;;
         --supervise)
             shift
             supervise "$@"
             ;;
         "")
-            log "usage: $0 <video-file> | --stop"
+            log "usage: $0 <video-file> | --prefetch <file> | --stop"
             return 1
             ;;
         *)

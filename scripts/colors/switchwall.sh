@@ -256,15 +256,12 @@ install_video_wallpaper_supervisor() {
     local src="$SCRIPT_DIR/../wallpapers/__video_wallpaper.sh"
     [[ -f "$src" ]] || return 1
     mkdir -p "$RESTORE_SCRIPT_DIR" || return 1
-    # The supervisor is user-owned once it is deployed, so an existing copy
-    # is only replaced when it is still the one this shell shipped.
-    if [[ -f "$VIDEO_WALLPAPER_SCRIPT" ]] && ! cmp -s "$src" "$VIDEO_WALLPAPER_SCRIPT"; then
-        if ! grep -q "MPVCONF_DIR" "$VIDEO_WALLPAPER_SCRIPT" 2>/dev/null; then
-            # An older supervisor: it passes the mpv options with -o, which
-            # segfaults mpvpaper when /tmp is not writable. It is replaced.
-            install -m 755 "$src" "$VIDEO_WALLPAPER_SCRIPT.tmp" 2>/dev/null &&
-                mv -f "$VIDEO_WALLPAPER_SCRIPT.tmp" "$VIDEO_WALLPAPER_SCRIPT" || return 1
-        fi
+    # The copy this shell ships (kept in sync with the checkout) is the
+    # canonical one: the deployed copy in the live-only custom/ dir is
+    # refreshed whenever they differ, so new flags (--prefetch) and fixes
+    # actually reach the script that runs the supervisor. Atomic replace;
+    # a running supervisor keeps its already-loaded copy.
+    if cmp -s "$src" "$VIDEO_WALLPAPER_SCRIPT" 2>/dev/null; then
         return 0
     fi
     install -m 755 "$src" "$VIDEO_WALLPAPER_SCRIPT.tmp" 2>/dev/null &&
@@ -491,6 +488,20 @@ switch() {
             colors_only_restart=1
         fi
         if [[ -z "$colors_only_flag" || "$colors_only_restart" -eq 1 ]]; then
+            # Build the proxy BEFORE the current player dies: the old
+            # wallpaper keeps playing while ffmpeg works instead of leaving
+            # a frozen desktop for the whole encode (choosing an uncached
+            # video used to freeze until the proxy finished). Cached
+            # proxies return instantly, so the common case is unchanged.
+            # The deployed copy must be refreshed first: it lives in the
+            # live-only custom/ dir, so checkout changes (like --prefetch)
+            # only reach it through the installer.
+            if is_video "$imgpath"; then
+                install_video_wallpaper_supervisor || true
+                if [[ -x "$VIDEO_WALLPAPER_SCRIPT" ]]; then
+                    "$VIDEO_WALLPAPER_SCRIPT" --prefetch "$imgpath" >/dev/null || true
+                fi
+            fi
             kill_existing_mpvpaper
         fi
 

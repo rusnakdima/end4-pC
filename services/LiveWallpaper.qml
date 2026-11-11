@@ -119,6 +119,10 @@ sk.close()`
         if (!root.previewing) return;
         root.previewing = false;
         root.pendingPreviewPath = "";
+        // A proxy build for the cancelled preview must not hand its file to
+        // the player afterwards; killing the process lands in onExited,
+        // which the previewing guard below rejects.
+        resolvePreviewProc.running = false;
         const wasActive = root.previewPlayerActive;
         root.previewPlayerActive = false;
         // Query still running: the player has not been switched yet, so
@@ -168,7 +172,40 @@ sk.close()`
             }
             const p = root.pendingPreviewPath;
             root.pendingPreviewPath = "";
-            root.sendLoadFile(p);
+            resolvePreviewProc.start(p);
+        }
+    }
+
+    // The picker hands the RAW file to the player: a 4K60 source saturates
+    // the iGPU (98-99% gpu_busy) and freezes the compositor, so the
+    // supervisor normally plays a scaled proxy. Previewing does the same —
+    // build (or reuse) the proxy FIRST, with the old wallpaper still
+    // playing, and only then hand the resolved file over. On failure the
+    // resolver falls back to the original file itself.
+    Process {
+        id: resolvePreviewProc
+        property string rawPath: ""
+        property string resolvedPath: ""
+
+        function start(raw) {
+            resolvePreviewProc.rawPath = raw;
+            resolvePreviewProc.resolvedPath = "";
+            resolvePreviewProc.command = ["bash", Directories.videoWallpaperScriptPath, "--prefetch", raw];
+            resolvePreviewProc.running = false;
+            resolvePreviewProc.running = true;
+        }
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                resolvePreviewProc.resolvedPath = text.trim();
+            }
+        }
+        onExited: {
+            if (!root.previewing) return;
+            const out = resolvePreviewProc.resolvedPath.length > 0
+                ? resolvePreviewProc.resolvedPath
+                : resolvePreviewProc.rawPath;
+            if (out.length > 0) root.sendLoadFile(out);
         }
     }
 
