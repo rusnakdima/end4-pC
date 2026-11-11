@@ -1570,7 +1570,6 @@
   "Gaps in": "Gaps in",
   "\"%1\" is not in the gallery": "\"%1\" is not in the gallery",
   "Move left": "Move left",
-  "The compositor's own binds. They are shown for reference; only the shell shortcuts above can be changed.": "The compositor's own binds. They are shown for reference; only the shell shortcuts above can be changed.",
   "Manage my account": "Manage my account",
   "Hide Hyprland logo": "Hide Hyprland logo",
   "Manage accounts": "Manage accounts",
@@ -1768,5 +1767,6 @@
   "Hide sussy wallpapers": "Hide sussy wallpapers",
   "Check interval (min)": "Check interval (min)",
   "Could not type the transcript": "Could not type the transcript",
-  "Also used by %1": "Also used by %1"
+  "Also used by %1": "Also used by %1",
+  "The compositor's own binds. Click a bind to give it another key combination.": "The compositor's own binds. Click a bind to give it another key combination."
 }

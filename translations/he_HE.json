@@ -1621,7 +1621,6 @@
   "Delete wallpaper": "Delete wallpaper",
   "Active Window": "Active Window",
   "Move left": "Move left",
-  "The compositor's own binds. They are shown for reference; only the shell shortcuts above can be changed.": "The compositor's own binds. They are shown for reference; only the shell shortcuts above can be changed.",
   "Left / top": "Left / top",
   "Region": "Region",
   "Hide Hyprland logo": "Hide Hyprland logo",
@@ -1775,5 +1774,6 @@
   "Title font": "Title font",
   "Check interval (min)": "Check interval (min)",
   "Could not type the transcript": "Could not type the transcript",
-  "Also used by %1": "Also used by %1"
+  "Also used by %1": "Also used by %1",
+  "The compositor's own binds. Click a bind to give it another key combination.": "The compositor's own binds. Click a bind to give it another key combination."
 }

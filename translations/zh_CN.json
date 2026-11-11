@@ -1303,7 +1303,6 @@
   "Copy region (LMB) or annotate (RMB)": "Copy region (LMB) or annotate (RMB)",
   "Inactive border": "Inactive border",
   "API key saved!": "API key saved!",
-  "The compositor's own binds. They are shown for reference; only the shell shortcuts above can be changed.": "The compositor's own binds. They are shown for reference; only the shell shortcuts above can be changed.",
   "Form": "Form",
   "Left / top": "Left / top",
   "Colorize icon": "Colorize icon",
@@ -1775,5 +1774,6 @@
   "Check interval (min)": "Check interval (min)",
   "Blur Noise (%)": "Blur Noise (%)",
   "Could not type the transcript": "Could not type the transcript",
-  "Also used by %1": "Also used by %1"
+  "Also used by %1": "Also used by %1",
+  "The compositor's own binds. Click a bind to give it another key combination.": "The compositor's own binds. Click a bind to give it another key combination."
 }
