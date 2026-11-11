@@ -57,9 +57,17 @@ Item {
     }
     
     property var pages: SettingsPages.pages
+    readonly property bool compactSidebar: Config.options.settings.sidebarDensity === "compact"
 
     Component.onCompleted: {
         Config.readWriteDelay = 0
+        // The settings pages used to own this: with the Hyprland pane split
+        // into six pages, each of them asking would race six rewrites of the
+        // same overrides file, so the shell does it once for the panel.
+        if (WM.compositor === "hyprland") {
+            HyprlandOptions.refresh()
+            HyprlandConfig.applyFromConfig()
+        }
         Qt.callLater(() => {
             for (let i = 0; i < root.pages.length; i++) {
                 let loader = pagesRepeater.itemAt(i)
@@ -144,7 +152,7 @@ Item {
                 id: navRailWrapper
                 Layout.fillHeight: true
                 Layout.margins: 0
-                implicitWidth: navRail.expanded ? 195 : fab.baseSize
+                implicitWidth: navRail.expanded ? (root.compactSidebar ? 150 : 195) : fab.baseSize
                 color: isMinimal ? "transparent" : Appearance.colors.colLayer1
                 radius: Appearance.rounding.normal
 
@@ -154,8 +162,8 @@ Item {
 
                 NavigationRail {
                     id: navRail
-                    anchors { left: parent.left; top: parent.top; bottom: parent.bottom; leftMargin: 20 }
-                    spacing: 10
+                    anchors { left: parent.left; top: parent.top; bottom: parent.bottom; leftMargin: root.compactSidebar ? 12 : 20 }
+                    spacing: root.compactSidebar ? 4 : 10
                     expanded: root.width > 900
 
                     Item {
@@ -163,7 +171,7 @@ Item {
                         visible: true
                         Layout.fillWidth: false
                         Layout.margins: isMinimal ? 0 : 5
-                        Layout.topMargin: 15
+                        Layout.topMargin: root.compactSidebar ? 8 : 15
                         Layout.bottomMargin: isMinimal ? -30 : 0
                         implicitHeight: profileRow.implicitHeight
                         implicitWidth: profileRow.implicitWidth
@@ -174,8 +182,8 @@ Item {
                             spacing: 10
 
                             UserAvatar {
-                                width: 48
-                                height: 48
+                                width: root.compactSidebar ? 36 : 48
+                                height: root.compactSidebar ? 36 : 48
                             }
 
                             ColumnLayout {
@@ -216,7 +224,7 @@ Item {
                     }
 
                     Rectangle {
-                        Layout.preferredWidth: isMinimal ? 50 : 160
+                        Layout.preferredWidth: isMinimal ? 50 : (root.compactSidebar ? 120 : 160)
                         Layout.topMargin: isMinimal ? 30 : -5
                         Layout.bottomMargin: isMinimal ? -30 : 0
                         height: 2

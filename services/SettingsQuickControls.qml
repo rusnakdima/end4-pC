@@ -233,6 +233,10 @@ Singleton {
             { displayName: Translation.tr("Default"), icon: "settings_panorama", value: "default" },
             { displayName: Translation.tr("Minimal"), icon: "settings_heart", value: "minimal" }
         ]),
+        "interface:Settings Panel/Sidebar": root.optionSelect("settings.sidebarDensity", [
+            { displayName: Translation.tr("Default"), icon: "unfold_more", value: "default" },
+            { displayName: Translation.tr("Compact"), icon: "density_small", value: "compact" }
+        ]),
         "interface:Border width": root.optionSpin("settings.borderSize", 0, 10, 1),
         "interface:Left Sidebar/Enable": root.optionSwitch("sidebar.media.enable"),
         "interface:Follow Album Colors": root.optionSwitch("sidebar.media.artColors"),

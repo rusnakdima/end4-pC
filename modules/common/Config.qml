@@ -285,6 +285,7 @@ Singleton {
 
             property JsonObject settings: JsonObject {
                 property string style: "default" // default - minimal - dashboard
+                property string sidebarDensity: "default" // default - compact
                 property real borderSize: 1
                 property real animationSpeed: 1
                 property string borderColor: "layer0Border"

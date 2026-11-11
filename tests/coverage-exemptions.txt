@@ -57,7 +57,6 @@ modules/common/widgets/DragManager.qml|it turns the live mouse press and move ev
 modules/common/widgets/DropShelf.qml|it collects the file URLs dropped on the desktop and copies the accumulated paths to the clipboard
 modules/common/widgets/FlipCard.qml|it runs a scale animation and emits flipped at its midpoint, computing no value
 modules/common/widgets/HyprOptionText.qml|it forwards an edited option value to the Hyprland options service after a debounce
-modules/common/widgets/InertialScrollEngine.qml|the fling it produces is a function of the live touchpad samples and of the Flickable it scrolls
 modules/common/widgets/LayoutSection.qml|the reflow it computes is the position of the real chips the Flow laid out, measured live
 modules/common/widgets/MonitorCanvas.qml|the overlap and normalisation it performs apply to the monitor layout the compositor currently reports
 modules/common/widgets/MonitorRect.qml|the snap it computes uses the other monitors' live logical rectangles from the compositor
@@ -137,7 +136,7 @@ modules/ii/settings/DashboardSpinCard.qml|it steps a numeric quick control that 
 modules/ii/settings/Settings.qml|it is the settings panel of the running session: its functions open and close the live layer-shell window, and the only state it owns is the global open flag of that session
 modules/ii/settings/pages/About.qml|it shows the live system information and triggers the real update scripts
 modules/ii/settings/pages/BarConfig.qml|it edits the live bar layout and monitor configuration
-modules/ii/settings/pages/HyprlandConfig.qml|it applies the Hyprland options to the live compositor, and the idle duration it converts is written straight back to that compositor
+modules/ii/settings/pages/HyprlandBehaviour.qml|it applies the Hyprland options to the live compositor, and the idle duration it converts is written straight back to that compositor
 modules/ii/sidebarLeft/aiChat/AiMessage.qml|it edits and regenerates the live AI conversation the user is having
 modules/ii/sidebarLeft/aiChat/AttachedFileIndicator.qml|it probes the attached file with file and identify, so its type and size come from live processes
 modules/ii/sidebarLeft/SidebarLeftContent.qml|it builds the visible tabs and pages from the live feature flags in the user's config

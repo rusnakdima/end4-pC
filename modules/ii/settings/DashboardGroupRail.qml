@@ -12,7 +12,8 @@ ColumnLayout {
     property var dimmed: ({})
     readonly property real speed: Math.max(0.5, Config.options.settings.animationSpeed ?? 1)
     readonly property int minGap: 6
-    readonly property real boxSize: Math.max(44, Math.min(64, (height - minGap * (groups.length - 1)) / Math.max(1, groups.length)))
+    readonly property bool compact: Config.options.settings.sidebarDensity === "compact"
+    readonly property real boxSize: Math.max(compact ? 34 : 44, Math.min(compact ? 52 : 64, (height - minGap * (groups.length - 1)) / Math.max(1, groups.length)))
 
     signal picked(string id)
 
@@ -79,9 +80,9 @@ ColumnLayout {
 
                         MaterialSymbol {
                             Layout.alignment: Qt.AlignHCenter
-                            Layout.topMargin: 6
+                            Layout.topMargin: root.compact ? 4 : 6
                             text: box.modelData.icon
-                            iconSize: Appearance.font.pixelSize.huge
+                            iconSize: root.compact ? Appearance.font.pixelSize.larger : Appearance.font.pixelSize.huge
                             fill: box.on ? 1 : 0
                             rotation: box.modelData.rotation ?? 0
                             color: box.on ? box.modelData.onAccent : box.modelData.onContainer
@@ -89,7 +90,7 @@ ColumnLayout {
 
                         StyledText {
                             Layout.alignment: Qt.AlignHCenter
-                            Layout.bottomMargin: 6
+                            Layout.bottomMargin: root.compact ? 4 : 6
                             text: box.modelData.name
                             font.pixelSize: Appearance.font.pixelSize.smallest
                             font.weight: Font.DemiBold

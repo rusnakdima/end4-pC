@@ -690,7 +690,7 @@ ContentPage {
 
         ContentSection {
             icon: "battery_android_full"
-            title: Translation.tr("Battery")
+            title: Translation.tr("Battery indicator")
             visible: page.isUsed("batteryIndicator")
 
             GroupedList {

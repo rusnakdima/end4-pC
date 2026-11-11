@@ -11,7 +11,7 @@ Item {
     default property alias data: tabBarColumn.data
     implicitHeight: tabBarColumn.implicitHeight
     implicitWidth: tabBarColumn.implicitWidth
-    Layout.topMargin: 25
+    Layout.topMargin: Config.options.settings.sidebarDensity === "compact" ? 12 : 25
 
     // The tabs are the part of the rail that grows with the number of pages,
     // so they are the part that has to scroll when the settings window is

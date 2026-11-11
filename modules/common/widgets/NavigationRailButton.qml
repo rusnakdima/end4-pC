@@ -16,8 +16,11 @@ TabButton {
     property bool showToggledHighlight: true
     readonly property real visualWidth: root.expanded ? root.baseSize + 20 + itemText.implicitWidth : root.baseSize
 
-    property real baseSize: Config.options.settings.style === "minimal" ? 46 : 56
-    property real baseHighlightHeight: 32
+    // The compact density shrinks every measure of the rail, so a page list
+    // with the split Hyprland/Niri tabs still fits without scrolling.
+    readonly property bool compact: Config.options.settings.sidebarDensity === "compact"
+    property real baseSize: compact ? 44 : (Config.options.settings.style === "minimal" ? 46 : 56)
+    property real baseHighlightHeight: compact ? 26 : 32
     property real highlightCollapsedTopMargin: 8
     padding: 0
 
@@ -102,7 +105,7 @@ TabButton {
                 id: navRailButtonIcon
                 rotation: root.buttonIconRotation
                 anchors.centerIn: parent
-                iconSize: 24
+                iconSize: root.compact ? 20 : 24
                 fill: toggled ? 1 : 0
                 font.weight: (toggled || root.hovered) ? Font.DemiBold : Font.Normal
                 text: buttonIcon
@@ -143,7 +146,7 @@ TabButton {
                 }
             }
             text: buttonText
-            font.pixelSize: 14
+            font.pixelSize: root.compact ? 12 : 14
             color: Appearance.colors.colOnLayer1
         }
     }

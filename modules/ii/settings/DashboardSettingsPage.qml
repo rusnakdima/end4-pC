@@ -32,10 +32,13 @@ Item {
         const c = Appearance.colors;
         const mix = (a, b) => ColorUtils.mix(a, b, 0.5);
         return [
-            { name: Translation.tr("General"), icon: "browse", container: mix(c.colPrimaryContainer, c.colTertiaryContainer), onContainer: mix(c.colOnPrimaryContainer, c.colOnTertiaryContainer), accent: mix(c.colPrimary, c.colTertiary), onAccent: mix(c.colOnPrimary, c.colOnTertiary) },
-            { name: Translation.tr("Interface"), icon: "bottom_app_bar", container: c.colPrimaryContainer, onContainer: c.colOnPrimaryContainer, accent: c.colPrimary, onAccent: c.colOnPrimary },
-            { name: Translation.tr("Bar"), icon: "toast", rotation: 180, container: c.colSecondaryContainer, onContainer: c.colOnSecondaryContainer, accent: c.colSecondary, onAccent: c.colOnSecondary },
+            { name: Translation.tr("Appearance"), icon: "palette", container: mix(c.colPrimaryContainer, c.colLayer1), onContainer: mix(c.colOnPrimaryContainer, c.colOnLayer1), accent: mix(c.colPrimary, c.colLayer1), onAccent: mix(c.colOnPrimary, c.colLayer1) },
             { name: Translation.tr("Desktop"), icon: "texture", container: c.colTertiaryContainer, onContainer: c.colOnTertiaryContainer, accent: c.colTertiary, onAccent: c.colOnTertiary },
+            { name: Translation.tr("Bar"), icon: "toast", rotation: 180, container: c.colSecondaryContainer, onContainer: c.colOnSecondaryContainer, accent: c.colSecondary, onAccent: c.colOnSecondary },
+            { name: Translation.tr("Interface"), icon: "bottom_app_bar", container: c.colPrimaryContainer, onContainer: c.colOnPrimaryContainer, accent: c.colPrimary, onAccent: c.colOnPrimary },
+            { name: Translation.tr("Dock & Lock"), icon: "dock_to_bottom", container: mix(c.colTertiaryContainer, c.colLayer1), onContainer: mix(c.colOnTertiaryContainer, c.colOnLayer1), accent: mix(c.colTertiary, c.colLayer1), onAccent: mix(c.colOnTertiary, c.colOnLayer1) },
+            { name: Translation.tr("Tools"), icon: "construction", container: mix(c.colSecondaryContainer, c.colLayer1), onContainer: mix(c.colOnSecondaryContainer, c.colOnLayer1), accent: mix(c.colSecondary, c.colLayer1), onAccent: mix(c.colOnSecondary, c.colOnLayer1) },
+            { name: Translation.tr("General"), icon: "browse", container: mix(c.colPrimaryContainer, c.colTertiaryContainer), onContainer: mix(c.colOnPrimaryContainer, c.colOnTertiaryContainer), accent: mix(c.colPrimary, c.colTertiary), onAccent: mix(c.colOnPrimary, c.colOnTertiary) },
             { name: Translation.tr("Hyprland"), icon: "select_window_2", container: mix(c.colPrimaryContainer, c.colSecondaryContainer), onContainer: mix(c.colOnPrimaryContainer, c.colOnSecondaryContainer), accent: mix(c.colPrimary, c.colSecondary), onAccent: mix(c.colOnPrimary, c.colOnSecondary) },
             { name: Translation.tr("Services"), icon: "settings", container: mix(c.colSecondaryContainer, c.colTertiaryContainer), onContainer: mix(c.colOnSecondaryContainer, c.colOnTertiaryContainer), accent: mix(c.colSecondary, c.colTertiary), onAccent: mix(c.colOnSecondary, c.colOnTertiary) }
         ];
@@ -449,7 +452,7 @@ Item {
             anchors.left: parent.left
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            width: 70
+            width: Config.options.settings.sidebarDensity === "compact" ? 56 : 70
             groups: root.railGroups
             current: root.group
             dimmed: root.railDimmed

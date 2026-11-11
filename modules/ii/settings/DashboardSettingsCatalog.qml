@@ -264,7 +264,7 @@ QtObject {
             ]
         },
         {
-            page: Translation.tr("Bar"), title: Translation.tr("Battery"), icon: "battery_android_full", requires: "batteryIndicator", cards: [
+            page: Translation.tr("Bar"), title: Translation.tr("Battery indicator"), icon: "battery_android_full", requires: "batteryIndicator", cards: [
                 { type: "batterystyle", key: "bar:Battery/Style", title: Translation.tr("Battery style"), icon: "style", kw: "battery bar ring icon number percentage ios macos windows android" },
                 { type: "toggle", key: "bar:Battery/Show percentage", title: Translation.tr("Show percentage"), icon: "percent" },
                 { type: "toggle", key: "bar:Battery/Show charging", title: Translation.tr("Charging bolt"), icon: "bolt" }
@@ -291,10 +291,15 @@ QtObject {
             ]
         },
         {
-            page: Translation.tr("Interface"), title: Translation.tr("Transparency"), icon: "opacity", cards: [
+            page: Translation.tr("Appearance"), title: Translation.tr("Transparency"), icon: "opacity", cards: [
                 { type: "toggle", key: "interface:Automatic (from wallpaper)", title: Translation.tr("Auto transparency"), icon: "auto_awesome" },
                 { type: "slider", key: "interface:Transparency/Background", title: Translation.tr("Background"), icon: "opacity" },
                 { type: "slider", key: "interface:Transparency/Content", title: Translation.tr("Content"), icon: "opacity" }
+            ]
+        },
+        {
+            page: Translation.tr("Interface"), title: Translation.tr("Settings Panel"), icon: "settings", cards: [
+                { type: "select", key: "interface:Settings Panel/Sidebar", title: Translation.tr("Sidebar"), icon: "left_panel_open", kw: "navigation rail density compact size tabs" }
             ]
         },
         {
@@ -356,7 +361,7 @@ QtObject {
             ]
         },
         {
-            page: Translation.tr("Interface"), title: Translation.tr("Dock"), icon: "dock_to_bottom", cards: [
+            page: Translation.tr("Dock & Lock"), title: Translation.tr("Dock"), icon: "dock_to_bottom", cards: [
                 { type: "toggle", key: "interface:Dock/Enable", title: Translation.tr("Enable"), icon: "dock_to_bottom" },
                 { type: "toggle", key: "interface:Dock/Background", title: Translation.tr("Background"), icon: "layers" },
                 { type: "toggle", key: "interface:Hover to reveal", title: Translation.tr("Hover to reveal"), icon: "visibility" },
@@ -371,7 +376,7 @@ QtObject {
             ]
         },
         {
-            page: Translation.tr("Interface"), title: Translation.tr("Dock style"), icon: "call_to_action", cards: [
+            page: Translation.tr("Dock & Lock"), title: Translation.tr("Dock style"), icon: "call_to_action", cards: [
                 { type: "select", key: "interface:Dock/Style", title: Translation.tr("Style"), icon: "dock_to_bottom", kw: "dock hug float attached screen edge frame" },
                 { type: "select", key: "interface:Dock/Position", title: Translation.tr("Position"), icon: "dock_to_bottom", kw: "dock position left right bottom side edge" },
                 { type: "spin", key: "interface:Dock/Radius", title: Translation.tr("Corner radius"), icon: "rounded_corner" },
@@ -385,7 +390,7 @@ QtObject {
             ]
         },
         {
-            page: Translation.tr("Interface"), title: Translation.tr("Lock screen"), icon: "lock", cards: [
+            page: Translation.tr("Dock & Lock"), title: Translation.tr("Lock screen"), icon: "lock", cards: [
                 { type: "toggle", key: "interface:Use Hyprlock (instead of Quickshell)", title: Translation.tr("Use Hyprlock"), icon: "lock" },
                 { type: "toggle", key: "interface:Launch on startup", title: Translation.tr("Lock on startup"), icon: "power_settings_new" },
                 { type: "toggle", key: "interface:Show Widgets", title: Translation.tr("Widgets"), icon: "widgets" },
@@ -401,7 +406,7 @@ QtObject {
             ]
         },
         {
-            page: Translation.tr("Interface"), title: Translation.tr("Overlay"), icon: "layers", cards: [
+            page: Translation.tr("Tools"), title: Translation.tr("Overlay"), icon: "layers", cards: [
                 { type: "toggle", key: "interface:Enable opening zoom animation", title: Translation.tr("Opening zoom"), icon: "zoom_out_map" },
                 { type: "toggle", key: "interface:Darken screen", title: Translation.tr("Darken screen"), icon: "brightness_low" },
                 { type: "text", key: "interface:Floating image source", title: Translation.tr("Floating image source"), icon: "imagesmode", w: 2 },
@@ -410,7 +415,7 @@ QtObject {
             ]
         },
         {
-            page: Translation.tr("Interface"), title: Translation.tr("Wallpaper selector"), icon: "wallpaper", cards: [
+            page: Translation.tr("Tools"), title: Translation.tr("Wallpaper selector"), icon: "wallpaper", cards: [
                 { type: "toggle", key: "interface:Use system file picker", title: Translation.tr("System file picker"), icon: "ad" },
                 { type: "toggle", key: "interface:Show home directory in quick access", title: Translation.tr("Home in quick access"), icon: "home" },
                 { type: "toggle", key: "interface:Close after selection", title: Translation.tr("Close after selection"), icon: "done" },
@@ -554,7 +559,7 @@ QtObject {
             ]
         },
         {
-            page: Translation.tr("General"), title: Translation.tr("System Appearance"), icon: "palette", cards: [
+            page: Translation.tr("Appearance"), title: Translation.tr("System Appearance"), icon: "palette", cards: [
                 { type: "combo", key: "general:Icon theme", title: Translation.tr("Icon theme"), icon: "category", kw: "icons" },
                 { type: "toggle", key: "general:Follow icon color scheme", title: Translation.tr("Follow color scheme"), icon: "brightness_6", kw: "icons light dark scheme" },
                 { type: "toggle", key: "general:Dynamic icon accent colors", title: Translation.tr("Dynamic accent colors"), icon: "palette", kw: "icons material you recolor" },
@@ -576,7 +581,7 @@ QtObject {
             ]
         },
         {
-            page: Translation.tr("General"), title: Translation.tr("Battery"), icon: "battery_android_full", cards: [
+            page: Translation.tr("General"), title: Translation.tr("Power"), icon: "battery_android_full", cards: [
                 { type: "spin", key: "general:Low warning", title: Translation.tr("Low warning"), icon: "warning" },
                 { type: "spin", key: "general:Critical warning", title: Translation.tr("Critical warning"), icon: "dangerous" },
                 { type: "spin", key: "general:Full warning", title: Translation.tr("Full warning"), icon: "charger" },
@@ -610,7 +615,7 @@ QtObject {
             ]
         },
         {
-            page: Translation.tr("General"), title: Translation.tr("Work safety"), icon: "work_alert", cards: [
+            page: Translation.tr("General"), title: Translation.tr("Policies"), icon: "work_alert", cards: [
                 { type: "toggle", key: "general:Hide clipboard images copied from sussy sources", title: Translation.tr("Hide clipboard images"), icon: "assignment" },
                 { type: "toggle", key: "general:Hide sussy/anime wallpapers", title: Translation.tr("Hide sussy wallpapers"), icon: "wallpaper" }
             ]

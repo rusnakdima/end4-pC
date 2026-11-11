@@ -24,138 +24,6 @@ ContentPage {
         Layout.fillHeight: true
         spacing: 20
 
-        ContentSection {
-            icon: "palette"
-            shape: MaterialShape.Shape.Pentagon
-            title: Translation.tr("System Appearance")
-
-            GroupedList {
-                ConfigComboBox {
-                    Layout.fillWidth: true
-                    buttonIcon: "category"
-                    text: Translation.tr("Icon theme")
-                    fieldWidth: 260
-                    fixedWidth: true
-                    searchable: true
-                    model: SystemAppearance.toOptions(SystemAppearance.iconThemes)
-                    currentValue: Config.options.appearance.icons.theme
-                    onSelected: newValue => {
-                        if (Config.options.appearance.icons.theme === newValue) return
-                        Config.options.appearance.icons.theme = newValue
-                        SystemAppearance.applyIconScheme()
-                    }
-                }
-                ConfigSwitch {
-                    buttonIcon: "brightness_6"
-                    text: Translation.tr("Follow color scheme")
-                    checked: Config.options.appearance.icons.followScheme
-                    onCheckedChanged: {
-                        if (Config.options.appearance.icons.followScheme === checked) return
-                        Config.options.appearance.icons.followScheme = checked
-                        SystemAppearance.applyIconScheme()
-                    }
-                }
-                ConfigSwitch {
-                    buttonIcon: "palette"
-                    text: Translation.tr("Dynamic accent colors")
-                    checked: Config.options.appearance.icons.dynamicColor
-                    enabled: SystemAppearance.iconCapability() !== "none"
-                    onCheckedChanged: {
-                        if (Config.options.appearance.icons.dynamicColor === checked) return
-                        Config.options.appearance.icons.dynamicColor = checked
-                        SystemAppearance.applyIconScheme()
-                    }
-                }
-                ConfigSwitch {
-                    buttonIcon: "shield"
-                    text: Translation.tr("Prevent Breeze override")
-                    checked: Config.options.appearance.icons.preventBreezeOverride
-                    onCheckedChanged: {
-                        if (Config.options.appearance.icons.preventBreezeOverride === checked) return
-                        Config.options.appearance.icons.preventBreezeOverride = checked
-                        SystemAppearance.applyIconScheme()
-                    }
-                }
-                RippleButtonWithIcon {
-                    Layout.fillWidth: true
-                    materialIcon: "restart_alt"
-                    mainText: Translation.tr("Restore KDE icon settings")
-                    onClicked: {
-                        // Stop re-syncing the wrapper before restoring its
-                        // original values, otherwise the next apply would
-                        // immediately overwrite them again.
-                        Config.options.appearance.icons.preventBreezeOverride = false
-                        SystemAppearance.restoreKdeIcons()
-                    }
-                }
-                ConfigComboBox {
-                    Layout.fillWidth: true
-                    buttonIcon: "mouse"
-                    text: Translation.tr("Cursor theme")
-                    fieldWidth: 260
-                    fixedWidth: true
-                    searchable: true
-                    model: SystemAppearance.toOptions(SystemAppearance.cursorThemes)
-                    currentValue: SystemAppearance.cursorTheme
-                    onSelected: newValue => SystemAppearance.setCursor(newValue, SystemAppearance.cursorSize)
-                }
-                ConfigSpinBox {
-                    icon: "ads_click"
-                    text: Translation.tr("Cursor size")
-                    value: SystemAppearance.cursorSize
-                    from: 16
-                    to: 64
-                    stepSize: 2
-                    onValueChanged: {
-                        if (value !== SystemAppearance.cursorSize) SystemAppearance.setCursor(SystemAppearance.cursorTheme, value)
-                    }
-                }
-                ConfigComboBox {
-                    Layout.fillWidth: true
-                    buttonIcon: "text_fields"
-                    text: Translation.tr("System font")
-                    fieldWidth: 260
-                    fixedWidth: true
-                    searchable: true
-                    model: SystemAppearance.toOptions(SystemAppearance.fonts)
-                    currentValue: SystemAppearance.fontFamily
-                    onSelected: newValue => SystemAppearance.setFont("ui", newValue, SystemAppearance.fontSize)
-                }
-                ConfigSpinBox {
-                    icon: "format_size"
-                    text: Translation.tr("System font size")
-                    value: SystemAppearance.fontSize
-                    from: 8
-                    to: 20
-                    stepSize: 1
-                    onValueChanged: {
-                        if (value !== SystemAppearance.fontSize) SystemAppearance.setFont("ui", SystemAppearance.fontFamily, value)
-                    }
-                }
-                ConfigComboBox {
-                    Layout.fillWidth: true
-                    buttonIcon: "terminal"
-                    text: Translation.tr("Monospace font")
-                    fieldWidth: 260
-                    fixedWidth: true
-                    searchable: true
-                    model: SystemAppearance.toOptions(SystemAppearance.fonts)
-                    currentValue: SystemAppearance.monoFamily
-                    onSelected: newValue => SystemAppearance.setFont("mono", newValue, SystemAppearance.monoSize)
-                }
-                ConfigSpinBox {
-                    icon: "format_size"
-                    text: Translation.tr("Monospace font size")
-                    value: SystemAppearance.monoSize
-                    from: 8
-                    to: 20
-                    stepSize: 1
-                    onValueChanged: {
-                        if (value !== SystemAppearance.monoSize) SystemAppearance.setFont("mono", SystemAppearance.monoFamily, value)
-                    }
-                }
-            }
-        }
 
         ContentSection {
             icon: "nest_clock_farsight_analog"
@@ -351,7 +219,7 @@ ContentPage {
         ContentSection {
             icon: "battery_android_full"
             shape: MaterialShape.Shape.SemiCircle
-            title: Translation.tr("Battery")
+            title: Translation.tr("Power")
             visible: Battery.available
 
             GroupedList {
@@ -623,7 +491,7 @@ ContentPage {
         ContentSection {
             icon: "work_alert"
             shape: MaterialShape.Shape.PuffyDiamond
-            title: Translation.tr("Work safety")
+            title: Translation.tr("Policies")
             GroupedList {
                 ConfigSwitch {
                     buttonIcon: "assignment"
