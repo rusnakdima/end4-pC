@@ -1,6 +1,7 @@
 import qs.modules.common
 import qs.modules.common.models
 import qs.modules.common.functions
+import qs.services
 import QtQuick
 import Qt.labs.folderlistmodel
 import Quickshell
@@ -66,6 +67,21 @@ Singleton {
     readonly property bool thumbnailGenerationRunning: thumbgenProc.running
     property real thumbnailGenerationProgress: 0
     property string previewPath: ""  // Set during arrow navigation; empty by default
+    // A previewed video is played by the wallpaper player itself, and its
+    // still frame is generated for the case where no player runs. Every
+    // writer of previewPath (click, keyboard, presets) passes this hook.
+    onPreviewPathChanged: {
+        if (root.previewPath.length > 0 && Images.isVideoPath(root.previewPath)) {
+            LiveWallpaper.startVideoPreview(root.previewPath);
+            // Generated for every previewed video regardless of the player
+            // state: the still is what the desktop shows whenever the
+            // preview's own query finds no player, and repeats are cached.
+            root.ensureVideoStill(root.previewPath);
+        } else {
+            LiveWallpaper.stopVideoPreview();
+            root.videoStillPath = "";
+        }
+    }
     property string confirmedPath: ""  // Holds confirmed path until config catches up
 
     signal changed()
@@ -83,6 +99,44 @@ Singleton {
         root.previewPath = "";
     }
 
+    // ── Still frame of a previewed video ────────────────────────────────
+    // Shown on the desktop while previewing a video when no wallpaper
+    // player is running (the current wallpaper is an image). Same recipe
+    // as switchwall's video poster: a frame a few seconds in, so the
+    // preview never starts on a black first frame.
+    property string videoStillPath: ""
+
+    function stillPathFor(path) {
+        const resolved = FileUtils.trimFileProtocol(`${Qt.resolvedUrl(path)}`);
+        const encoded = resolved.split("/").map(part => encodeURIComponent(part)).join("/");
+        return `${Directories.genericCache}/end4-pC/video-stills/${Qt.md5(`file://${encoded}`)}.jpg`;
+    }
+
+    function ensureVideoStill(path) {
+        const target = root.stillPathFor(path);
+        if (root.videoStillPath === target) return;
+        root.videoStillPath = "";
+        videoStillProc.running = false;
+        videoStillProc.command = ["bash", "-c",
+            `out="$1"; src="$2"; `
+            + `if [ ! -s "$out" ]; then mkdir -p "$(dirname "$out")"; `
+            + `for seek in 00:00:03 00:00:01 00:00:00; do `
+            + `ffmpeg -y -ss "$seek" -i "$src" -frames:v 1 -vf "scale=1280:1280:force_original_aspect_ratio=decrease" "$out" >/dev/null 2>&1 && break; `
+            + `done; fi; `
+            + `[ -s "$out" ] && printf '%s' "$out"`, "_", target, path];
+        videoStillProc.running = true;
+    }
+
+    Process {
+        id: videoStillProc
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const out = text.trim();
+                root.videoStillPath = out.length > 0 ? out : "";
+            }
+        }
+    }
+
     // Executions
     Process {
         id: applyProc
@@ -98,6 +152,9 @@ Singleton {
 
     function apply(path, darkMode = Appearance.m3colors.darkmode) {
         if (!path || path.length === 0) return;
+        // A preview must never outlive the apply it belongs to: the desktop
+        // reverts to the current wallpaper while switchwall runs.
+        if (root.previewPath.length > 0) root.previewPath = "";
         root.confirmedPath = path;
         Quickshell.execDetached([Directories.wallpaperSwitchScriptPath, "--mode", darkMode ? "dark" : "light", "--image", path]);
         root.changed()

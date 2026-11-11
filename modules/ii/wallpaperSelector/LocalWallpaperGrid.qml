@@ -502,6 +502,10 @@ Item {
                 property real startPressX: 0
                 property real startPressY: 0
                 property bool dragInitiated: false
+                // Set when a double-click lands on this cell, so the release
+                // that follows it is not mistaken for a fresh single click
+                // (Qt sends Release after DoubleClick).
+                property real lastDoubleAt: 0
 
                 onEntered: {
                     if (!root.isDragging) {
@@ -545,12 +549,16 @@ Item {
                         root.endDrag();
                     } else if (!dragInitiated) {
                         grid.currentIndex = delegateCell.index;
-                        if (GlobalStates.wallpaperSelectorTarget === "lockWall" || !Config.options.background.enableWallpaperPreview) {
+                        // Folders open on a single click, as they always have.
+                        // Files preview on a click and apply on a double click.
+                        if (GlobalStates.wallpaperSelectorTarget === "lockWall" || !Config.options.background.enableWallpaperPreview || delegateCell.modelData.fileIsDir) {
                             root.wallpaperSelected(delegateCell.modelData.filePath);
+                        } else if (Date.now() - cellMouseArea.lastDoubleAt < 400) {
+                            // The release that follows a double-click: the
+                            // apply already owns this gesture, and a preview
+                            // started here would stick after it.
                         } else {
-                            if (!delegateCell.modelData.fileIsDir && Config.options.background.enableWallpaperPreview) {
-                                Wallpapers.startPreview(delegateCell.modelData.filePath);
-                            }
+                            Wallpapers.startPreview(delegateCell.modelData.filePath);
                         }
                     }
                 }
@@ -559,6 +567,7 @@ Item {
 
                 onDoubleClicked: (mouse) => {
                     if (mouse.button === Qt.LeftButton) {
+                        cellMouseArea.lastDoubleAt = Date.now();
                         root.wallpaperSelected(delegateCell.modelData.filePath);
                     }
                 }

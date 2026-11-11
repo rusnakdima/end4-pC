@@ -481,7 +481,16 @@ switch() {
 
         check_and_prompt_upscale "$imgpath" &
 
-        if [[ -z "$colors_only_flag" ]]; then
+        # A colors-only run must not touch a healthy player: --noswitch
+        # callers only regenerate colours. A dead player (no IPC socket) is
+        # still brought back up, so a crashed wallpaper never stays black
+        # after a colour regeneration.
+        colors_only_restart=0
+        if [[ -n "$colors_only_flag" ]] && is_video "$imgpath" \
+            && ! compgen -G "${MPV_SOCKET_PREFIX}*.sock" > /dev/null; then
+            colors_only_restart=1
+        fi
+        if [[ -z "$colors_only_flag" || "$colors_only_restart" -eq 1 ]]; then
             kill_existing_mpvpaper
         fi
 
@@ -513,7 +522,7 @@ switch() {
                 exit 0
             fi
 
-            if [[ -z "$colors_only_flag" ]]; then
+            if [[ -z "$colors_only_flag" || "$colors_only_restart" -eq 1 ]]; then
                 set_wallpaper_path "$imgpath"
                 start_video_wallpaper "$imgpath"
             fi
@@ -786,7 +795,12 @@ main() {
         esac
     done
 
-    if [[ -n "$noswitch_flag" && -n "$explicit_image" ]]; then
+    # A run that is not switching the wallpaper must never touch a healthy
+    # player: every --noswitch caller (the settings opening, palette and
+    # mode changes) used to kill and restart the wallpaper here even though
+    # the file never changed — that is why opening settings reloaded the
+    # desktop video. A dead player is still brought back up inside switch().
+    if [[ -n "$noswitch_flag" ]]; then
         colors_only_flag="1"
     fi
 

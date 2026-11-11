@@ -416,7 +416,7 @@ ContentPage {
                         }
                     }
 
-                    LiveWallpaperPreview {
+                    WallpaperVideoSurface {
                         id: heroPreview
                         anchors.fill: parent
                         path: Config.options.background.wallpaperPath

@@ -51,12 +51,14 @@ DashboardCard {
             source: tile.path !== "" ? Wallpapers.displayPathFor(tile.path) : ""
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
-            cache: false
+            // Same size as every other small current-wallpaper tile and
+            // cached, so the whole shell shares one decode of the still.
+            cache: true
             sourceSize.width: 720
             sourceSize.height: 405
         }
 
-        LiveWallpaperPreview {
+        WallpaperVideoSurface {
             anchors.fill: parent
             path: tile.path
         }

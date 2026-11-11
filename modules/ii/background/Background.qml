@@ -58,9 +58,29 @@ Variants {
         }
 
         property bool wallpaperIsVideo: bgRoot.effectiveWallpaperPath.endsWith(".mp4") || bgRoot.effectiveWallpaperPath.endsWith(".webm") || bgRoot.effectiveWallpaperPath.endsWith(".mkv") || bgRoot.effectiveWallpaperPath.endsWith(".avi") || bgRoot.effectiveWallpaperPath.endsWith(".mov") || bgRoot.effectiveWallpaperPath.endsWith(".gif") || bgRoot.effectiveWallpaperPath.endsWith(".m4v") || bgRoot.effectiveWallpaperPath.endsWith(".wmv") || bgRoot.effectiveWallpaperPath.endsWith(".flv") || bgRoot.effectiveWallpaperPath.endsWith(".ogv") || bgRoot.effectiveWallpaperPath.endsWith(".3gp") || bgRoot.effectiveWallpaperPath.endsWith(".qt")
-        property string wallpaperPath: wallpaperIsVideo
-            ? (Config.options.background.thumbnailPath || Wallpapers.displayPathFor(bgRoot.effectiveWallpaperPath))
-            : bgRoot.effectiveWallpaperPath
+        // What the desktop shows when a video is involved:
+        //  - while previewing, the per-preview query result (previewPlayerActive)
+        //    decides — not the 4s poll, which is stale right after every apply
+        //    while the player restarts;
+        //  - at rest, the poll decides, so the restart window after an apply
+        //    shows the poster instead of a black desktop.
+        // While a preview's query is still in flight the previous surface
+        // stays up; the reply then either reveals the player or swaps to the
+        // generated still frame.
+        readonly property bool previewingVideo: Wallpapers.previewPath.length > 0
+            && Images.isVideoPath(Wallpapers.previewPath)
+        readonly property bool previewVideoWithoutPlayer: bgRoot.previewingVideo
+            && !LiveWallpaper.previewPlayerActive
+            && !LiveWallpaper.queryInFlight
+        readonly property bool showLiveVideo: bgRoot.wallpaperIsVideo
+            && !bgRoot.previewVideoWithoutPlayer
+            && (bgRoot.previewingVideo || LiveWallpaper.available)
+        property string wallpaperPath: {
+            if (!bgRoot.wallpaperIsVideo) return bgRoot.effectiveWallpaperPath;
+            if (bgRoot.previewVideoWithoutPlayer)
+                return Wallpapers.videoStillPath || Wallpapers.displayPathFor(bgRoot.effectiveWallpaperPath);
+            return Config.options.background.thumbnailPath || Wallpapers.displayPathFor(bgRoot.effectiveWallpaperPath);
+        }
         property bool wallpaperSafetyTriggered: {
             const enabled = Config.options.workSafety.enable.wallpaper;
             const sensitiveWallpaper = (CF.StringUtils.stringListContainsSubstring(wallpaperPath.toLowerCase(), Config.options.workSafety.triggerCondition.fileKeywords));
@@ -121,7 +141,7 @@ Variants {
                     ? bgRoot.shaderList[Math.floor(Math.random() * bgRoot.shaderList.length)]
                     : bgRoot.wallpaperAnimation
             }
-            bgRoot.videoRevealed = bgRoot.wallpaperIsVideo
+            bgRoot.videoRevealed = bgRoot.showLiveVideo
         }
 
         onWallpaperPathChanged: {
@@ -138,7 +158,7 @@ Variants {
                 wallpaper.source = wallpaperPath
                 previousWallpaper.source = wallpaperPath
                 bgRoot.currentWallpaperSource = wallpaperPath
-                if (!bgRoot.wallpaperIsVideo) return
+                if (!bgRoot.showLiveVideo) return
                 bgRoot.videoRevealed = true
                 return
             }
@@ -171,7 +191,7 @@ Variants {
                 previousWallpaper.source = bgRoot.currentWallpaperSource
                 bgRoot.previousWallpaperSource = ""
                 bgRoot.transitionProgress = 1.0
-                bgRoot.videoRevealed = bgRoot.wallpaperIsVideo
+                bgRoot.videoRevealed = bgRoot.showLiveVideo
             }
         }
 
@@ -200,9 +220,18 @@ Variants {
             target: GlobalStates
             function onScreenLockedChanged() {
                 if (!GlobalStates.screenLocked) {
-                    bgRoot.videoRevealed = bgRoot.wallpaperIsVideo
+                    bgRoot.videoRevealed = bgRoot.showLiveVideo
                 }
             }
+        }
+
+        // The reveal decision depends on live player state: re-make it when
+        // the poll flips (player back after an apply) or a preview query
+        // answers — otherwise the desktop could stay on the poster forever.
+        Connections {
+            target: LiveWallpaper
+            function onAvailableChanged() { bgRoot.videoRevealed = bgRoot.showLiveVideo }
+            function onPreviewPlayerActiveChanged() { bgRoot.videoRevealed = bgRoot.showLiveVideo }
         }
 
         Item {
@@ -243,6 +272,15 @@ Variants {
                     && !centeredWallpaper.centeredHidesFullWallpaper
                 opacity: centeredWallpaper.centeredFullWallpaperOpacity()
                 onStatusChanged: {
+                    if (status === Image.Error) {
+                        // A preview still that has not been generated yet:
+                        // show the applied wallpaper rather than a black
+                        // desktop. The still arrives shortly after and the
+                        // next wallpaperPath change swaps it in.
+                        if (bgRoot.previewVideoWithoutPlayer && source !== Config.options.background.wallpaperPath)
+                            source = Config.options.background.wallpaperPath;
+                        return;
+                    }
                     if (status === Image.Ready && bgRoot.transitionPending) {
                         bgRoot.transitionPending = false
                         bgRoot.transitionProgress = 0.0

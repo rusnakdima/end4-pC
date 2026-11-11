@@ -26,6 +26,7 @@ MouseArea {
     property var quickDirs: [
         { icon: "home",       name: "Home   ",       path: `${Directories.home}`,                alwaysVisible: Config.options.wallpaperSelector.showHomePath },
         { icon: "wallpaper",  name: "Wallpapers   ", path: `${Directories.pictures}/Wallpapers`, alwaysVisible: true },
+        { icon: "video_library", name: "Live walls   ", path: `${Directories.videos}/Walpapers`, alwaysVisible: true },
         { icon: "imagesmode", name: "Homework   ",   path: `${Directories.pictures}/homework`,   alwaysVisible: Config.options.policies.weeb },
         { icon: "casino",     name: "Random   ",     path: `${Directories.pictures}/Random`,     alwaysVisible: true },
         { 
@@ -202,7 +203,7 @@ MouseArea {
                 anchors.fill: parent
                 visible: Config.options.wallpaperSelector.showBlurBackground
                 fillMode: Image.PreserveAspectCrop
-                source: Config.options.wallpaperSelector.showBlurBackground ? Config.options.background.wallpaperPath : ""
+                source: Config.options.wallpaperSelector.showBlurBackground ? Wallpapers.displayPathFor(Config.options.background.wallpaperPath) : ""
                 // Only shown under a radius 48 blur, so a small decode looks the same
                 // and stays small enough for the pixmap cache to keep it between openings
                 sourceSize: Qt.size(480, 480)

@@ -126,17 +126,19 @@ Item {
                         }
                     }
 
-                    // Only the selected or hovered cell plays, so browsing the
-                    // grid costs one decode at most and only while the pointer
-                    // or the keyboard selection sits on this cell. The still
-                    // underneath stays as the fallback.
+                    // Only the selected or hovered cell plays, and it plays
+                    // through the shell's single shared decode (retarget:
+                    // true asks WallpaperStream for this cell's file while
+                    // the cell is active). The still underneath stays as the
+                    // fallback.
                     Loader {
                         anchors.fill: parent
                         active: root.playSelected && root.isVideoSource
 
-                        sourceComponent: LiveWallpaperPreview {
+                        sourceComponent: WallpaperVideoSurface {
                             anchors.fill: parent
                             path: (fileModelData && fileModelData.filePath) ? fileModelData.filePath : ""
+                            retarget: true
                         }
                     }
                 }

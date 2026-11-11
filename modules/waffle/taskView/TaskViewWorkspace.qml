@@ -85,7 +85,7 @@ WMouseAreaButton {
                 active: !root.newWorkspace
                 sourceComponent: StyledImage {
                     cache: true
-                    source: Config.options.background.wallpaperPath
+                    source: Wallpapers.displayPathFor(Config.options.background.wallpaperPath)
                     fillMode: Image.PreserveAspectCrop
 
                     Repeater {
