@@ -17,15 +17,21 @@ Singleton {
     readonly property string idleConfiguratorScriptPath: Quickshell.shellPath("scripts/hyprland/hypridleconfigurator.py")
     readonly property string hypridlePath: FileUtils.trimFileProtocol(`${Directories.config}/hypr/hypridle.conf`)
 
-    function setIdle(lock: int, screenOff: int, suspend: int) {
-        // One shell for both halves: the file has to be written before
-        // hypridle restarts. The two detached calls used to run in parallel,
-        // so the daemon came up on the old config and the new timeouts never
-        // took effect.
-        Quickshell.execDetached(["bash", "-c",
-            `python3 "${root.idleConfiguratorScriptPath}" --file "${root.hypridlePath}"` +
+    // The full apply pipeline as one string: write the file first, restart
+    // hypridle only after the write succeeded. Kept separate from setIdle so
+    // the tests can assert the sequence without killing the live daemon.
+    function idleApplyCommand(lock: int, screenOff: int, suspend: int, file: string): string {
+        return `python3 "${root.idleConfiguratorScriptPath}" --file "${file}"` +
             ` --lock ${lock} --screen-off ${screenOff} --suspend ${suspend} &&` +
-            ` { pkill -x hypridle; sleep 0.5; setsid -f hypridle >/dev/null 2>&1; }`])
+            ` { pkill -x hypridle; sleep 0.5; setsid -f hypridle >/dev/null 2>&1; }`
+    }
+
+    function setIdle(lock: int, screenOff: int, suspend: int) {
+        // One shell for both halves: the two detached calls used to run in
+        // parallel, so the daemon came up on the old config and the new
+        // timeouts never took effect.
+        Quickshell.execDetached(["bash", "-c",
+            root.idleApplyCommand(lock, screenOff, suspend, root.hypridlePath)])
     }
 
     function set(key: string, value: var) {
@@ -228,6 +234,13 @@ Singleton {
         id: idleFile
         path: root.hypridlePath
         preload: true
+        // setIdle writes this file, and so can a manual edit outside the
+        // shell. Watching means a change that never reached config.json (or
+        // never reached hypridle) is reconciled within a moment instead of
+        // only at the next shell start. setIdle's own write is a no-op here:
+        // once it lands, the file matches config.json and reconcile stops.
+        watchChanges: true
+        onFileChanged: reload()
         onLoaded: {
             root.idleText = text();
             root.idleFileLoaded = true;

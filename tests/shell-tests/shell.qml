@@ -43,13 +43,15 @@ ShellRoot {
         "tst_dates.qml", "tst_objects.qml", "tst_notifications.qml", "tst_shapes.qml",
         "tst_fuzzy.qml", "tst_levenshtein.qml", "tst_keycombos.qml", "tst_translation.qml",
         "tst_appearance.qml", "tst_images.qml", "tst_config.qml", "tst_hyprland_config.qml",
+        "tst_idle_persistence.qml",
         "tst_mpris.qml", "tst_presets.qml",
         "tst_settings_search.qml", "tst_online_wallpapers.qml", "tst_ai.qml",
         "tst_speech_to_text.qml", "tst_bar_content.qml",
         "tst_thumbnail_image.qml", "tst_persistent.qml",
         "tst_directories.qml", "tst_window_mode.qml",
         "tst_app_window_rules.qml", "tst_bind_overrides.qml",
-        "tst_keybinds.qml"
+        "tst_keybinds.qml", "tst_xkbrules.qml",
+        "tst_ConfigMultiSelect.qml"
     ]
 
     property int doneCount: 0

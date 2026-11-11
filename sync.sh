@@ -54,6 +54,9 @@ command -v rsync >/dev/null 2>&1 || { echo "sync.sh: rsync is required" >&2; exi
 # the checkout was touched, so copying them back would silently revert the
 # theme. shellOverrides carries local tuning (gaps, blur) that must not be
 # overwritten. custom/, monitors.lua and profiles/ exist only in the live tree.
+# hypridle.conf is generated: the shell writes it from config.json whenever an
+# idle timeout changes and reconciles the file back to config.json, so the
+# repo copy is a stale snapshot that would fight that reconciliation.
 hypr_keep=(
     --exclude='/custom/'
     --exclude='/monitors.lua'
@@ -61,6 +64,7 @@ hypr_keep=(
     --exclude='/hyprland/shellOverrides/'
     --exclude='/hyprland/colors.lua'
     --exclude='/hyprlock/colors.conf'
+    --exclude='/hypridle.conf'
 )
 
 # Development artifacts that have no business in the deployed tree. .git is
@@ -82,7 +86,8 @@ qs_keep=(
 qs_diff_keep=(--exclude=dots --exclude=.omp --exclude='file:'
               --exclude=.git --exclude=verification_complete.txt --exclude=__pycache__)
 hypr_diff_keep=(--exclude=custom --exclude=monitors.lua --exclude=profiles
-                --exclude=shellOverrides --exclude=colors.lua --exclude=colors.conf)
+                --exclude=shellOverrides --exclude=colors.lua --exclude=colors.conf
+                --exclude=hypridle.conf)
 
 # ---------------------------------------------------------------------------
 # install.sh writes into the deployed copy of a few scripts, so the checkout
@@ -311,6 +316,7 @@ verify_tree "hyprland" "$src/dots/.config/hypr" "$hypr_dest" "${hypr_diff_keep[@
 echo "kept on the live side (by design):"
 echo "  hyprland/colors.lua, hyprlock/colors.conf  -- regenerated from the wallpaper"
 echo "  hyprland/shellOverrides/                   -- local gaps/blur tuning"
+echo "  hypridle.conf                              -- generated from config.json by the shell"
 echo "  custom/, monitors.lua, profiles/           -- live-only, never in the repo"
 echo "  ${#qs_rsync_skip[@]} scripts unchanged since install.sh patched them"
 

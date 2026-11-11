@@ -252,4 +252,17 @@ TestCase {
         verify(HyprlandConfig.idleDiffers(empty, { "lock": 300, "screenOff": 600, "suspend": 0 }));
         verify(!HyprlandConfig.idleDiffers(empty, { "lock": 0, "screenOff": 0, "suspend": 0 }));
     }
+
+    function test_idle_apply_writes_the_file_before_hypridle_restarts() {
+        const cmd = HyprlandConfig.idleApplyCommand(321, 642, 963, "/tmp/shell-test-hypridle.conf");
+        verify(cmd.includes('hypridleconfigurator.py" --file "/tmp/shell-test-hypridle.conf"'));
+        verify(cmd.includes("--lock 321 --screen-off 642 --suspend 963"));
+        const write = cmd.indexOf("hypridleconfigurator.py");
+        const kill = cmd.indexOf("pkill -x hypridle");
+        const start = cmd.indexOf("setsid -f hypridle");
+        verify(write >= 0, "the configurator must be in the command");
+        verify(kill > write, "hypridle must only be killed after the write");
+        verify(start > kill, "hypridle must start after the old one is gone");
+        verify(cmd.indexOf("&&") < kill, "a failed write must not restart hypridle");
+    }
 }
