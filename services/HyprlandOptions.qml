@@ -28,6 +28,13 @@ Singleton {
     property var values: ({})
 
     function get(key, fallback) {
+        // The stored mirror is the truth the shell restarts with and the
+        // one an external edit changes, so it wins over the values this
+        // session has applied. An explicitly stored "" stays "".
+        const stored = (Config.options?.hyprland?.hyprOptions ?? [])
+            .find(entry => entry && entry.key === key);
+        if (stored !== undefined && stored.value !== null && stored.value !== undefined)
+            return stored.value;
         const value = root.values[key]
         return value === undefined ? fallback : value
     }
