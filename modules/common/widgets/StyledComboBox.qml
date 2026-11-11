@@ -158,6 +158,9 @@ ComboBox {
     }
 
     popup: Popup {
+        // In-tree rendering: a separate popup window cannot be positioned
+        // over a layer-shell surface, so the dropdown list never paints.
+        popupType: Popup.Item
         y: root.height + 4
         width: root.width
         height: Math.min(listView.contentHeight + topPadding + bottomPadding, 300)
