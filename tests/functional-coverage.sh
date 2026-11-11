@@ -54,6 +54,8 @@ declare -A EXPLICIT_MAP=(
     [Ai]="tst_ai.qml"
     [Persistent]="tst_persistent.qml"
     [Directories]="tst_directories.qml"
+    [WindowMode]="tst_window_mode.qml"
+    [AppWindowRules]="tst_app_window_rules.qml"
 )
 
 # The units that hold logic: a service, or a component that declares a

@@ -125,6 +125,15 @@ Singleton {
                 property bool inhibit: false
             }
 
+            // Addresses of the windows services/WindowMode.qml floated
+            // itself while the stacking mode was on. They are tiled again
+            // when the mode goes back to tiling, so windows that float
+            // because of their own rules (dialogs, pavucontrol, ...) are
+            // never stolen from a rule that asked for floating.
+            property JsonObject windowMode: JsonObject {
+                property list<string> ownedFloats: []
+            }
+
             property JsonObject record: JsonObject {
                 property bool enable: false
             }

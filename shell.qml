@@ -50,6 +50,10 @@ ShellRoot {
         Wallpapers.load()
         Football.load()
         Updates.load()
+        // The window mode has to be back in place before the first window
+        // is looked at: the rules file covers the windows that open from
+        // now on, and this brings the ones that are already open in line.
+        WindowMode.apply()
     }
     
     // Panel families

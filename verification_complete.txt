@@ -1,1 +1,12 @@
-Verification complete: Keyboard color control, movable settings window, scrollable nav menu, and live wallpaper all implemented. All tasks completed successfully.
+Verification complete: window mode (tiling <-> stacking) with per-app rules implemented and verified live.
+- Settings > Hyprland > Layout: "Window mode" selector (Tiling/Stacking) plus an "App window rules" list
+  (window class + pick from running windows + Always stacking/Always tiling).
+- services/WindowMode.qml: writes ~/.config/hypr/hyprland/shellOverrides/windowMode.lua (rules for windows
+  that open from now on), reloads Hyprland, and pushes the open windows onto the other side with
+  hl.dsp.window.float. Ownership of the floated windows persists in Persistent.states.windowMode.
+- Live checks on Hyprland 0.57: mode switch floats/retiles every window, new windows open on the right
+  side, per-app rules win over the global rule in both directions, ownership survives a shell restart,
+  and the desktop was restored to its original tiling layout with an empty rule list.
+- Tests: qml-compile-check PASS; shell tests 26/28 (the 2 failures and the 15 coverage gaps are the
+  pre-existing baseline); new tst_window_mode.qml (19) and tst_app_window_rules.qml (4) pass; the suite
+  provably does not write the live rules file or config (md5 guard).
