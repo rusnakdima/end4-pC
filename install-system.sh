@@ -49,6 +49,7 @@ install_packages() {
         oh-my-posh
         neovim
         libqalculate
+        papirus-icon-theme
     )
 
     # AUR packages. makepkg refuses to run as root, so they are only installed

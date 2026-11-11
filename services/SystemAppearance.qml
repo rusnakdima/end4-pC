@@ -24,21 +24,52 @@ Singleton {
 
     readonly property string iconResolverPath: FileUtils.trimFileProtocol(`${Directories.scriptPath}/icon-resolve.py`)
 
+    // Quickshell's own lookup returns its "missing texture" placeholder when
+    // an icon does not exist (the `check` argument makes it return an empty
+    // string instead), so every lookup here goes through `check=true` and a
+    // known-missing icon never reaches an Image.source.
     function defaultIconPath(name, fallback) {
-        return fallback === undefined ? Quickshell.iconPath(name) : Quickshell.iconPath(name, fallback)
+        const found = Quickshell.iconPath(name, true);
+        if (found.length > 0) return found;
+        if (typeof fallback === "string" && fallback.length > 0) {
+            const fb = Quickshell.iconPath(fallback, true);
+            if (fb.length > 0) return fb;
+        }
+        return "";
     }
 
+    // The shell's own resolver (icon-resolve.py) is the source of truth for
+    // the configured theme: Qt's icon lookup does not follow the theme this
+    // shell applies (no KDE platform theme on this desktop, and the GTK
+    // settings it reads can lag behind), which is how folder cells ended up
+    // showing the missing texture. The resolver answer wins; Qt is only the
+    // safety net while a name is still queued, and it can no longer produce
+    // the placeholder.
     function iconPath(name, fallback) {
         void root.iconRevision
-        const usesStartupTheme = root.startupIconTheme === "" || root.iconTheme === root.startupIconTheme
-        if (usesStartupTheme || !name || name.startsWith("/") || name.startsWith("file:")) {
-            return root.defaultIconPath(name, fallback)
+        if (!name || name.startsWith("/") || name.startsWith("file:")) {
+            return root.defaultIconPath(name, fallback);
+        }
+        // Before the configured theme name has loaded there is nothing to
+        // resolve against; queuing here would spin the resolver for nothing.
+        // onIconThemeChanged bumps iconRevision, which re-evaluates every
+        // icon binding once the name is known.
+        if (!root.iconTheme) {
+            return root.defaultIconPath(name, fallback);
         }
         const themeIcons = root.resolvedIcons[root.iconTheme]
         if (themeIcons && name in themeIcons) {
             const found = themeIcons[name]
             if (found !== "") return "file://" + found
-            return fallback === true ? "" : root.defaultIconPath(name, fallback)
+            // The configured theme really has no such icon.
+            if (fallback === true) return ""
+            if (typeof fallback === "string" && fallback.length > 0) {
+                if (!(fallback in themeIcons)) root.queueIcon(fallback)
+                const fb = themeIcons[fallback]
+                if (fb) return "file://" + fb
+                return root.defaultIconPath(fallback, true)
+            }
+            return root.defaultIconPath(name, true)
         }
         root.queueIcon(name)
         return root.defaultIconPath(name, fallback)
@@ -99,6 +130,10 @@ Singleton {
     property var fonts: []
 
     property string iconTheme: ""
+    // Icon bindings read iconRevision (see iconPath), so they re-resolve
+    // whenever the configured theme name changes — at startup, when the
+    // name arrives from kdeglobals, and on every setIcons().
+    onIconThemeChanged: root.iconRevision += 1
     property string cursorTheme: ""
     property int cursorSize: 24
     property string fontFamily: ""

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <!-- Last-resort folder glyph bundled with the shell, used when the
+       configured icon theme cannot resolve any folder icon. Self-drawn,
+       no third-party artwork. -->
+  <path fill="#4178be" d="M8 24a8 8 0 0 1 8-8h19.4a8 8 0 0 1 6.1 2.8L48 30h32a8 8 0 0 1 8 8v34a8 8 0 0 1-8 8H16a8 8 0 0 1-8-8V24z"/>
+  <path fill="#5294e2" d="M8 40h80v34a8 8 0 0 1-8 8H16a8 8 0 0 1-8-8V40z"/>
+  <path fill="#ffffff" fill-opacity="0.18" d="M8 40h80v5H8z"/>
+</svg>

@@ -73,6 +73,25 @@ set_gtk_font_name() {
     done
 }
 
+# GTK icon-theme-name in settings.ini. GTK3 apps and Qt's gtk3 platform
+# theme read this file, so without it the icon theme the shell applies in
+# kdeglobals and the one toolkits use silently diverge.
+set_gtk_icon_theme() {
+    local theme="$1" f
+    for f in "$HOME/.config/gtk-3.0/settings.ini" "$HOME/.config/gtk-4.0/settings.ini"; do
+        if [ ! -f "$f" ]; then
+            mkdir -p "$(dirname "$f")"
+            printf '[Settings]\ngtk-icon-theme-name=%s\n' "$theme" > "$f"
+        elif grep -q "^gtk-icon-theme-name=" "$f"; then
+            sed -i "s|^gtk-icon-theme-name=.*|gtk-icon-theme-name=${theme}|" "$f"
+        elif grep -q "^\[Settings\]" "$f"; then
+            sed -i "/^\[Settings\]/a gtk-icon-theme-name=${theme}" "$f"
+        else
+            printf '\n[Settings]\ngtk-icon-theme-name=%s\n' "$theme" >> "$f"
+        fi
+    done
+}
+
 # Terminal mono font sync (kitty)
 sync_terminal_mono_font() {
     local family="$1" size="$2"
@@ -159,6 +178,7 @@ case "$action" in
     --set-icons)
         kwriteconfig6 --notify --file kdeglobals --group Icons --key Theme "$1"
         gsettings set org.gnome.desktop.interface icon-theme "$1" 2>/dev/null
+        set_gtk_icon_theme "$1"
         notify_qt 4 0
         ;;
     --set-cursor)
