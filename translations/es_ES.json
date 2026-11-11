@@ -711,7 +711,6 @@
   "Move to end": "Mover al final",
   "API key saved!": "¡Clave de API guardada!",
   "Bottom left": "Abajo a la izquierda",
-  "e.g., us, es, latam": "p. ej., us, es, latam",
   "Fullscreen only": "Solo a pantalla completa",
   "Export ZIP": "Exportar ZIP",
   "Copy lines": "Copiar líneas",
@@ -928,7 +927,6 @@
   "Name (Z to A)": "Nombre (de Z a A)",
   "Delete wallpaper": "Eliminar fondo",
   "Automatic colors": "Colores automáticos",
-  "e.g., intl, dvorak": "p. ej., intl, dvorak",
   "Cursor size": "Tamaño del cursor",
   "Tokens (estimate)": "Tokens (estimación)",
   "HDR peak (nits)": "Pico HDR (nits)",
@@ -1006,7 +1004,6 @@
   "Description text": "Texto descriptivo",
   "Border Color Management": "Gestión del color del borde",
   "All colors": "Todos los colores",
-  "e.g., caps:escape, grp:alt_shift_toggle": "p. ej., caps:escape, grp:alt_shift_toggle",
   "Color scheme": "Esquema de color",
   "Space width (px)": "Ancho del espacio (px)",
   "Wi-Fi": "Wi-Fi",
@@ -1768,5 +1765,10 @@
   "Check interval (min)": "Check interval (min)",
   "Could not type the transcript": "Could not type the transcript",
   "Also used by %1": "Also used by %1",
-  "The compositor's own binds. Click a bind to give it another key combination.": "The compositor's own binds. Click a bind to give it another key combination."
+  "The compositor's own binds. Click a bind to give it another key combination.": "The compositor's own binds. Click a bind to give it another key combination.",
+  "Default (no variant)": "Default (no variant)",
+  "Each chip is one layout; the first one is the active layout": "Each chip is one layout; the first one is the active layout",
+  "Add…": "Add…",
+  "%1 (custom)": "%1 (custom)",
+  "One chip per layout, in order — the nth variant belongs to the nth layout": "One chip per layout, in order — the nth variant belongs to the nth layout"
 }

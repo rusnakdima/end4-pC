@@ -742,7 +742,6 @@
   "Playing": "Playing",
   "XWayland sharp apps": "XWayland sharp apps",
   "Grayscale": "Grayscale",
-  "e.g., us, es, latam": "e.g., us, es, latam",
   "Border color": "Border color",
   "None": "None",
   "Set your Google Cloud service account key": "Set your Google Cloud service account key",
@@ -1137,7 +1136,6 @@
   "Bottom group": "Bottom group",
   "OSD timeout (ms)": "OSD timeout (ms)",
   "No widgets available": "No widgets available",
-  "e.g., intl, dvorak": "e.g., intl, dvorak",
   "Fix": "Fix",
   "Unread count": "Unread count",
   "Enable features in Settings to see them here": "Enable features in Settings to see them here",
@@ -1720,7 +1718,6 @@
   "No usage data yet": "No usage data yet",
   "Desktop widgets": "Desktop widgets",
   "Levenshtein search": "Levenshtein search",
-  "e.g., caps:escape, grp:alt_shift_toggle": "e.g., caps:escape, grp:alt_shift_toggle",
   "Panel": "Panel",
   "Keyboard slider": "Keyboard slider",
   "Could not copy the preset files": "Could not copy the preset files",
@@ -1768,5 +1765,10 @@
   "Blur Noise (%)": "Blur Noise (%)",
   "Could not type the transcript": "Could not type the transcript",
   "Also used by %1": "Also used by %1",
-  "The compositor's own binds. Click a bind to give it another key combination.": "The compositor's own binds. Click a bind to give it another key combination."
+  "The compositor's own binds. Click a bind to give it another key combination.": "The compositor's own binds. Click a bind to give it another key combination.",
+  "Default (no variant)": "Default (no variant)",
+  "Each chip is one layout; the first one is the active layout": "Each chip is one layout; the first one is the active layout",
+  "Add…": "Add…",
+  "%1 (custom)": "%1 (custom)",
+  "One chip per layout, in order — the nth variant belongs to the nth layout": "One chip per layout, in order — the nth variant belongs to the nth layout"
 }

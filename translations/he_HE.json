@@ -1220,7 +1220,6 @@
   "Bottom group": "Bottom group",
   "Locale code, e.g. fr_FR, de_DE, zh_CN...": "Locale code, e.g. fr_FR, de_DE, zh_CN...",
   "No widgets available": "No widgets available",
-  "e.g., intl, dvorak": "e.g., intl, dvorak",
   "Font weight": "Font weight",
   "Open the launcher and run:\n/pexels YOUR_API_KEY": "Open the launcher and run:\n/pexels YOUR_API_KEY",
   "e.g. spotify, firefox": "e.g. spotify, firefox",
@@ -1397,7 +1396,6 @@
   "No VPN profiles yet": "No VPN profiles yet",
   "Bottom-up": "Bottom-up",
   "Over 3.5 goals": "Over 3.5 goals",
-  "e.g., caps:escape, grp:alt_shift_toggle": "e.g., caps:escape, grp:alt_shift_toggle",
   "Keyboard slider": "Keyboard slider",
   "Type and copy": "Type and copy",
   "Animations": "Animations",
@@ -1458,7 +1456,6 @@
   "Keyboard layout": "Keyboard layout",
   "Corners won / game": "Corners won / game",
   "Confirm": "Confirm",
-  "e.g., us, es, latam": "e.g., us, es, latam",
   "Border color": "Border color",
   "No clients yet": "No clients yet",
   "Webapps": "Webapps",
@@ -1775,5 +1772,10 @@
   "Check interval (min)": "Check interval (min)",
   "Could not type the transcript": "Could not type the transcript",
   "Also used by %1": "Also used by %1",
-  "The compositor's own binds. Click a bind to give it another key combination.": "The compositor's own binds. Click a bind to give it another key combination."
+  "The compositor's own binds. Click a bind to give it another key combination.": "The compositor's own binds. Click a bind to give it another key combination.",
+  "Default (no variant)": "Default (no variant)",
+  "Each chip is one layout; the first one is the active layout": "Each chip is one layout; the first one is the active layout",
+  "Add…": "Add…",
+  "%1 (custom)": "%1 (custom)",
+  "One chip per layout, in order — the nth variant belongs to the nth layout": "One chip per layout, in order — the nth variant belongs to the nth layout"
 }
