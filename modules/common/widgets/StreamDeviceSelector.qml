@@ -16,6 +16,15 @@ import qs.modules.common.widgets
  * the system default device (it is just a move to that device, so the stream
  * keeps following default-device changes afterwards).
  *
+ * The chip shows the device the audio really ends on: filter chains
+ * (easyeffects_sink -> ...) are resolved to their hardware output, so a
+ * stream playing through EasyEffects reads "Default" when EasyEffects
+ * outputs to the default device instead of naming the filter.
+ *
+ * If a pick does not stick within `bounceTimeout` ms -- EasyEffects
+ * re-pins every stream it claims back to itself -- the user gets a desktop
+ * notice instead of a chip that silently keeps showing another device.
+ *
  * The popup is clamped to `clampItem` (the mixer card/widget hosting this
  * chip) so it is never clipped by list clipping, small overlay widgets or
  * input masks.
@@ -30,10 +39,14 @@ RippleButton {
 
     readonly property bool isSink: node?.isSink ?? true
     readonly property PwNode defaultDevice: Audio.defaultDevice(root.isSink)
+    // Chain-resolved: filter nodes (EasyEffects) are followed to their output.
     readonly property PwNode currentDevice: Audio.streamDevice(root.node)
-    readonly property bool followingDefault: root.currentDevice === null || root.currentDevice === root.defaultDevice
+    readonly property bool followingDefault: root.currentDevice === null
+        || (root.defaultDevice !== null && root.currentDevice.id === root.defaultDevice.id)
     readonly property PwNode shownDevice: root.currentDevice ?? root.defaultDevice
     readonly property string label: root.followingDefault ? Translation.tr("Default") : Audio.friendlyDeviceName(root.shownDevice)
+    // Set while a pick is in flight; checked after `bounceTimeout` ms.
+    property int pendingTargetId: -1
 
     // Devices of this direction. Keep the stream's live device in the list even
     // when it is not part of the regular device list (e.g. a filter node).
@@ -91,10 +104,49 @@ RippleButton {
     colRippleToggled: Appearance.colors.colSecondaryContainerActive
 
     onClicked: {
-        console.log("[SDS] chip clicked; opening device popup");
         // Defer past the release event: opening from inside the release handler
         // lets CloseOnPressOutside see the still-active press and close at once.
         Qt.callLater(() => popup.open());
+    }
+
+    // Apply a pick (device = null resets to the system default). A pick that
+    // already matches the chain-resolved device is a no-op -- e.g. choosing
+    // the device EasyEffects already outputs to must not bounce.
+    function chooseDevice(device) {
+        const target = device ?? Audio.defaultDevice(root.isSink);
+        if (!target) {
+            popup.close();
+            return;
+        }
+        const direct = Audio.directStreamDevice(root.node);
+        const chain = Audio.streamDevice(root.node);
+        const already = (direct && direct.id === target.id) || (chain && chain.id === target.id);
+        if (already) {
+            popup.close();
+            return;
+        }
+        Audio.moveStreamToDevice(root.node, device);
+        root.pendingTargetId = target.id;
+        bounceCheck.restart();
+        popup.close();
+    }
+
+    Timer {
+        id: bounceCheck
+        interval: 800
+        onTriggered: {
+            const wanted = root.pendingTargetId;
+            root.pendingTargetId = -1;
+            if (wanted < 0) return;
+            const direct = Audio.directStreamDevice(root.node);
+            const chain = Audio.streamDevice(root.node);
+            const landed = (direct && direct.id === wanted) || (chain && chain.id === wanted);
+            if (!landed) {
+                Quickshell.execDetached(["notify-send", "-a", "Shell",
+                    Translation.tr("Volume Mixer"),
+                    Translation.tr("EasyEffects holds this stream — turn it off for per-app device routing")]);
+            }
+        }
     }
 
     contentItem: RowLayout {
@@ -190,6 +242,10 @@ RippleButton {
 
     Popup {
         id: popup
+        // Render in-tree: the Qt default (a separate popup window) cannot be
+        // positioned over a layer-shell surface, so the list opens but never
+        // paints. As an item it draws inside the overlay window like any widget.
+        popupType: Popup.Item
         property real popupAvailableHeight: 400
 
         width: root.placeWidth
@@ -208,12 +264,9 @@ RippleButton {
         closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
 
         onAboutToShow: {
-            console.log("[SDS] aboutToShow; placeBelow=", root.placeBelow, "spaceBelow=", root.placeSpaceBelow, "spaceAbove=", root.placeSpaceAbove);
             root.capturePlacement();
             popup.popupAvailableHeight = Math.max(root.placeBelow ? root.placeSpaceBelow : root.placeSpaceAbove, 160);
         }
-        onOpened: console.log("[SDS] popup OPENED at", popup.x, popup.y, popup.width + "x" + popup.height)
-        onClosed: console.log("[SDS] popup closed")
 
         enter: Transition {
             PropertyAnimation {
@@ -267,7 +320,8 @@ RippleButton {
                 readonly property bool selectable: kind === "default" || kind === "device"
                 readonly property bool selected: kind === "default"
                     ? root.followingDefault
-                    : (kind === "device" && root.currentDevice === modelData.device)
+                    : (kind === "device" && root.currentDevice !== null
+                        && root.currentDevice.id === modelData.device.id)
 
                 width: ListView.view ? ListView.view.width : popup.width - popup.padding * 2
                 height: isHeader ? 24 : isSep ? 9 : 36
@@ -299,14 +353,7 @@ RippleButton {
                     enabled: row.selectable
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        if (row.kind === "default") {
-                            Audio.moveStreamToDevice(root.node, null); // Reset to the system default
-                        } else {
-                            Audio.moveStreamToDevice(root.node, row.modelData.device);
-                        }
-                        popup.close();
-                    }
+                    onClicked: root.chooseDevice(row.kind === "default" ? null : row.modelData.device)
                 }
 
                 StyledText {

@@ -98,9 +98,10 @@ Singleton {
         return isSink ? Pipewire.defaultAudioSink : Pipewire.defaultAudioSource;
     }
 
-    // Device a stream is currently routed to, read live from the link groups
-    // (playback: stream -> device, capture: device -> stream).
-    function streamDevice(node) {
+    // Device a stream links into directly, read live from the link groups
+    // (playback: stream -> device, capture: device -> stream). This is often
+    // a filter node (e.g. easyeffects_sink), not the device you hear.
+    function directStreamDevice(node) {
         if (!node) return null;
         for (const group of Pipewire.linkGroups.values) {
             if (node.isSink) {
@@ -110,6 +111,46 @@ Singleton {
             }
         }
         return null;
+    }
+
+    // Hardware devices carry a device.api (alsa, bluez5, ...); filter and
+    // virtual nodes (easyeffects_sink and its internal chain) do not.
+    function isHardwareDevice(node) {
+        return !!node?.properties?.["device.api"];
+    }
+
+    // Next link along the audio path after a filter node: playback follows
+    // the node's outgoing link, capture the incoming one.
+    function chainNextDevice(node, playback) {
+        for (const group of Pipewire.linkGroups.values) {
+            if (playback) {
+                if (group.source === node && group.target && !group.target.isStream) return group.target;
+            } else if (group.target === node && group.source && !group.source.isStream) {
+                return group.source;
+            }
+        }
+        return null;
+    }
+
+    // Device a stream's audio really ends on: follows filter chains
+    // (stream -> easyeffects_sink -> ... -> SN6140 Analog) until a hardware
+    // device is reached, so the UI shows what you hear instead of the
+    // filter an effects processor puts in front of it.
+    // A chain that stalls inside a filter (EasyEffects tears its internal
+    // links down while idle) returns null: the caller then reports the
+    // stream as following the default instead of flapping between the
+    // filter's name and the real device as audio starts and stops.
+    function streamDevice(node) {
+        let dev = root.directStreamDevice(node);
+        if (!dev) return null;
+        const playback = node?.isSink ?? true;
+        let depth = 0;
+        while (depth++ < 6 && !root.isHardwareDevice(dev)) {
+            const next = root.chainNextDevice(dev, playback);
+            if (!next || next === dev) return null;
+            dev = next;
+        }
+        return dev;
     }
 
     function deviceIcon(node) {
@@ -122,6 +163,16 @@ Singleton {
     }
 
     // device = null resets the stream to the system default device.
+    //
+    // Two steps, because WirePlumber re-resolves targets from the
+    // `default` metadata on every rescan (new stream, device change):
+    //   1. pactl moves the live link right now;
+    //   2. the metadata pin records the choice, so later rescans keep it
+    //      instead of falling back to a stale stored target. A reset drops
+    //      the pin and writes the "-1" follow-default marker (the same
+    //      value linking-utils writes when a stream sits on the default).
+    // EasyEffects re-pins its own streams within ~400ms; the caller detects
+    // that bounce and tells the user instead of silently pretending.
     function moveStreamToDevice(node, device) {
         const serial = root.streamSerial(node);
         if (!serial) {
@@ -135,6 +186,21 @@ Singleton {
         }
         const verb = node.isSink ? "move-sink-input" : "move-source-output";
         Quickshell.execDetached(["pactl", verb, serial, String(target.name)]);
+
+        const subject = String(node.id ?? "");
+        if (subject) {
+            if (device) {
+                const targetSerial = String(target.properties?.["object.serial"] ?? "");
+                if (targetSerial) {
+                    Quickshell.execDetached(["pw-metadata", "-n", "default", subject,
+                        "target.object", targetSerial, "Spa:Id"]);
+                }
+            } else {
+                Quickshell.execDetached(["pw-metadata", "-d", "-n", "default", subject, "target.object"]);
+                Quickshell.execDetached(["pw-metadata", "-n", "default", subject,
+                    "target.node", "-1", "Spa:Id"]);
+            }
+        }
         return true;
     }
 
