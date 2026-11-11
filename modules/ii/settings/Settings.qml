@@ -76,6 +76,15 @@ Scope {
                 focus: true
 
                 Keys.onPressed: (event) => {
+                    // A keybind capture takes the keyboard while it is armed,
+                    // whether or not the page itself holds the focus.
+                    const capturingPage = GlobalStates.currentPageInstance;
+                    if (capturingPage && typeof capturingPage.handleCapturedKey === "function"
+                            && capturingPage.handleCapturedKey(event)) {
+                        event.accepted = true;
+                        return;
+                    }
+
                     if (event.key === Qt.Key_Escape) {
                         GlobalStates.settingsOpen = false;
                         event.accepted = true;

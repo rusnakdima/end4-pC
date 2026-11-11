@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 
 import qs.modules.common
 import qs.modules.common.functions
+import qs.services
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -81,6 +82,31 @@ Singleton {
         const mods = bind?.mods ?? [];
         const key = bind?.key ?? "";
         return [...mods, key].filter(part => part !== "").join(" + ");
+    }
+
+    // The other shell actions that bind a combination right now, so a row
+    // can say which shortcut shares its key. Only shell shortcuts count:
+    // the theme deliberately repeats a shortcut's key as a fallback bind
+    // (it runs only when the shell is dead), and warning about those would
+    // point at the feature the row already describes. Actions are counted
+    // through their override, so a rebind shows up here immediately, and
+    // the action of the row itself is left out.
+    function comboUsers(combo, excludeAction) {
+        const wanted = String(combo ?? "").trim();
+        if (wanted === "") return [];
+        const out = [];
+        const seen = new Set();
+        for (const entry of root.shellActions) {
+            if (entry.action === excludeAction) continue;
+            const effective = HyprlandBindOverrides.comboFor(entry.action, entry.combos[0] ?? "");
+            if (effective !== wanted) continue;
+            const label = (entry.description ?? "") !== "" ? entry.description : entry.action;
+            const id = label + "\u0000" + entry.action;
+            if (seen.has(id)) continue;
+            seen.add(id);
+            out.push({ "label": label, "action": entry.action });
+        }
+        return out;
     }
 
     // Flat list of the binds of one category. "" is the uncategorized group
