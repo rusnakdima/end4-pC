@@ -17,14 +17,14 @@ Singleton {
     readonly property string hypridlePath: FileUtils.trimFileProtocol(`${Directories.config}/hypr/hypridle.conf`)
 
     function setIdle(lock: int, screenOff: int, suspend: int) {
-        Quickshell.execDetached([
-            "python3", root.idleConfiguratorScriptPath,
-            "--file", root.hypridlePath,
-            "--lock", String(lock),
-            "--screen-off", String(screenOff),
-            "--suspend", String(suspend)
-        ])
-        Quickshell.execDetached(["bash", "-c", "pkill -x hypridle; sleep 0.3; setsid -f hypridle >/dev/null 2>&1"])
+        // One shell for both halves: the file has to be written before
+        // hypridle restarts. The two detached calls used to run in parallel,
+        // so the daemon came up on the old config and the new timeouts never
+        // took effect.
+        Quickshell.execDetached(["bash", "-c",
+            `python3 "${root.idleConfiguratorScriptPath}" --file "${root.hypridlePath}"` +
+            ` --lock ${lock} --screen-off ${screenOff} --suspend ${suspend} &&` +
+            ` { pkill -x hypridle; sleep 0.5; setsid -f hypridle >/dev/null 2>&1; }`])
     }
 
     function set(key: string, value: var) {
