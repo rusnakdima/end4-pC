@@ -10,7 +10,11 @@ Rectangle {
 
     property bool show: false
     default property alias data: contentColumn.data
-    property real backgroundHeight: dialogBackground.implicitHeight
+    // Live content height: dialogBackground.implicitHeight is bound to this while
+    // shown, so cards grow/shrink with their content (expandable sections).
+    // Dialogs may still override backgroundHeight with a fixed height (WifiDialog: 600).
+    property real contentHeight: contentColumn.implicitHeight + dialogBackground.radius * 2
+    property real backgroundHeight: contentHeight
     property real backgroundWidth: 350
     property real backgroundAnimationMovementDistance: 60
     
@@ -29,8 +33,11 @@ Rectangle {
     visible: dialogBackground.implicitHeight > 0
 
     onShowChanged: {
+        // Only pick the animation curve here. Assigning dialogBackground.implicitHeight
+        // (as this used to do) would be an imperative write to a bound property and
+        // would permanently destroy its binding — freezing the card at its open-time
+        // height so expanded content overflowed the background.
         dialogBackgroundHeightAnimation.easing.bezierCurve = (show ? Appearance.animationCurves.emphasizedDecel : Appearance.animationCurves.emphasizedAccel)
-        dialogBackground.implicitHeight = show ? backgroundHeight : 0
     }
 
     radius: Appearance.rounding.screenRounding - Appearance.sizes.hyprlandGapsOut + 1
@@ -51,7 +58,10 @@ Rectangle {
         property real targetY: root.height / 2 - root.backgroundHeight / 2
         y: root.show ? targetY : (targetY - root.backgroundAnimationMovementDistance)
         implicitWidth: root.backgroundWidth
-        implicitHeight: contentColumn.implicitHeight + dialogBackground.radius * 2
+        // Binding stays alive for the whole lifetime: while shown it tracks
+        // backgroundHeight (auto content height or a dialog's fixed override),
+        // while hidden it collapses to 0 — the Behavior animates both directions.
+        implicitHeight: root.show ? root.backgroundHeight : 0
         Behavior on implicitHeight {
             NumberAnimation {
                 id: dialogBackgroundHeightAnimation
