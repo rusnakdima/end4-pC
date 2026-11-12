@@ -195,7 +195,7 @@ MouseArea {
                 anchors.fill: parent
                 radius: wallpaperGridBackground.radius - 4
                 color: ColorSchemes.current !== "" ? wallpaperGridBackground.color : Appearance.colors.colLayer2
-                visible: !Config.options.wallpaperSelector.showBlurBackground
+                visible: !Config.options.wallpaperSelector.showBlurBackground && !Config.options.background.widgets.glass.enable
             }
 
             StyledImage {
@@ -280,6 +280,7 @@ MouseArea {
                         visible: root.source !== "blapples" && root.source !== "naive" && root.source !== "wallhaven"
                         colBackground: Appearance.colors.colLayer1
                         outerShadow: true
+                        glass: true
 
                         Loader {
                             active: root.source === "local"
@@ -390,6 +391,7 @@ MouseArea {
 
                         StyledComboBox {
                             id: sourceCombo
+                            glass: true
                             implicitWidth: 120
                             model: [
                                 { value: "local",     displayName: Translation.tr("Local") },
@@ -411,6 +413,7 @@ MouseArea {
                             implicitHeight: 36
                             buttonRadius: height / 2
                             toggled: root.toolbarVisible
+                            glass: true
                             colBackground: Appearance.colors.colSecondaryContainer
                             onClicked: {
                                 if (Config.options.wallpaperSelector.showSearchbar) {
@@ -611,6 +614,7 @@ MouseArea {
                             active: root.source === "local"
                             visible: active
                             sourceComponent: Toolbar {
+                                glass: true
                                 IconToolbarButton {
                                     implicitWidth: height
                                     onClicked: {
@@ -700,6 +704,7 @@ MouseArea {
                             active: root.source !== "local" && root.source !== "wallhaven"
                             visible: active
                             sourceComponent: Toolbar {
+                                glass: true
                                 ToolbarTextField {
                                     id: onlineSearchField
                                     Component.onCompleted: {
@@ -739,6 +744,7 @@ MouseArea {
                             active: root.source === "wallhaven"
                             visible: active
                             sourceComponent: Toolbar {
+                                glass: true
                                 id: wallhavenToolbar
 
                                 property bool _searchFieldReady: false
@@ -858,6 +864,7 @@ MouseArea {
 
                         ToolbarPairedFab {
                             iconText: "close"
+                            glass: true
                             onClicked: {
                                 Wallpapers.stopPreview();
                                 GlobalStates.wallpaperSelectorOpen = false;

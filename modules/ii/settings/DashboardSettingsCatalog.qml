@@ -31,6 +31,34 @@ QtObject {
         return Appearance.colors["col" + name.charAt(0).toUpperCase() + name.slice(1)] ?? Appearance.getColorFromName(name);
     }
 
+    readonly property var glassDefaults: ({
+        tintStrength: 0.3,
+        rimWidth: 16,
+        pull: 26,
+        split: 0.06,
+        haze: 3,
+        vividness: 1.3,
+        sheen: 0.55
+    })
+
+    function glassSlider(prop, scale, from, to) {
+        const glass = () => Config.options.background.widgets.glass;
+        const def = glassDefaults[prop];
+        return {
+            type: "slider",
+            get: () => glass()[prop] * scale,
+            set: v => { glass()[prop] = Math.round(v) / scale; },
+            from: from, to: to, stopIndicatorValues: [], usePercentTooltip: false,
+            defaultValue: def * scale,
+            reset: () => { glass()[prop] = def; }
+        };
+    }
+
+    function resetGlass() {
+        const glass = Config.options.background.widgets.glass;
+        for (const prop of Object.keys(glassDefaults)) glass[prop] = glassDefaults[prop];
+    }
+
     function controlFor(key) {
         return custom[key] ?? hyprControls[key] ?? null;
     }
@@ -178,6 +206,14 @@ QtObject {
         "desktop:Visualizer height": { type: "slider", get: () => Config.options.background.widgets.visualizer.height, set: v => { Config.options.background.widgets.visualizer.height = Math.round(v); }, from: 120, to: 600, stopIndicatorValues: [], usePercentTooltip: false },
         "desktop:Visualizer size": { type: "slider", get: () => Config.options.background.widgets.visualizer.ringSize, set: v => { Config.options.background.widgets.visualizer.ringSize = Math.round(v); }, from: 200, to: 900, stopIndicatorValues: [], usePercentTooltip: false },
         "interface:Glass tint": { type: "select", get: () => Config.options.background.widgets.glass.tint, set: v => { Config.options.background.widgets.glass.tint = v; }, options: [{ displayName: Translation.tr("Transparent"), icon: "opacity", value: "transparent" }, { displayName: Translation.tr("Primary"), icon: "palette", value: "primary" }, { displayName: Translation.tr("Black"), icon: "contrast", value: "black" }] },
+        "interface:Glass tint strength": glassSlider("tintStrength", 100, 0, 100),
+        "interface:Glass bezel": glassSlider("rimWidth", 1, 4, 40),
+        "interface:Glass refraction": glassSlider("pull", 1, 0, 80),
+        "interface:Glass dispersion": glassSlider("split", 100, 0, 30),
+        "interface:Glass blur": glassSlider("haze", 1, 1, 16),
+        "interface:Glass vividness": glassSlider("vividness", 100, 50, 200),
+        "interface:Glass shine": glassSlider("sheen", 100, 0, 150),
+        "interface:Glass reset": { type: "action", run: () => resetGlass() },
         "interface:Glassy UI": { type: "switch", get: () => Config.options.background.widgets.glass.enable, set: v => { Config.options.background.widgets.glass.enable = v; } },
         "desktop:Text enable": { type: "switch", get: () => Config.options.background.widgets.customText.enable, set: v => { Config.options.background.widgets.customText.enable = v; } },
         "desktop:Text shadow": { type: "switch", get: () => Config.options.background.widgets.customText.shadow, set: v => { Config.options.background.widgets.customText.shadow = v; } },
@@ -226,7 +262,7 @@ QtObject {
 
     readonly property var sections: [
         {
-            page: Translation.tr("Bar"), title: Translation.tr("AI Usage"), icon: "neurology", cards: [
+            page: Translation.tr("Bar"), title: Translation.tr("AI Usage"), icon: "neurology", requires: "aiUsage", cards: [
                 { type: "toggle", key: "bar:Claude Code", title: Translation.tr("Claude Code"), icon: "terminal", kw: "ai usage provider anthropic enable disable" },
                 { type: "toggle", key: "bar:Codex", title: Translation.tr("Codex"), icon: "code", kw: "ai usage provider openai enable disable" }
             ]
@@ -338,6 +374,19 @@ QtObject {
         {
             page: Translation.tr("Interface"), title: Translation.tr("Settings Panel"), icon: "settings", cards: [
                 { type: "select", key: "interface:Settings Panel/Sidebar", title: Translation.tr("Sidebar"), icon: "left_panel_open", kw: "navigation rail density compact size tabs" }
+            ]
+        },
+        {
+            page: Translation.tr("Interface"), title: Translation.tr("Glass"), icon: "water_drop", when: "glass", cards: [
+                { type: "select", w: 4, key: "interface:Glass tint", title: Translation.tr("Glass tint"), icon: "colorize", kw: "glass glassy tint color transparent primary black" },
+                { type: "slider", key: "interface:Glass tint strength", title: Translation.tr("Tint strength (%)"), icon: "colorize", percent: false },
+                { type: "slider", key: "interface:Glass bezel", title: Translation.tr("Edge width (px)"), icon: "crop_free", percent: false },
+                { type: "slider", key: "interface:Glass refraction", title: Translation.tr("Refraction"), icon: "lens_blur", percent: false },
+                { type: "slider", key: "interface:Glass dispersion", title: Translation.tr("Color split (%)"), icon: "gradient", percent: false },
+                { type: "slider", key: "interface:Glass blur", title: Translation.tr("Blur"), icon: "blur_on", percent: false },
+                { type: "slider", key: "interface:Glass vividness", title: Translation.tr("Vividness (%)"), icon: "palette", percent: false },
+                { type: "slider", key: "interface:Glass shine", title: Translation.tr("Edge shine (%)"), icon: "flare", percent: false },
+                { type: "reset", key: "interface:Glass reset", title: Translation.tr("Reset glass"), icon: "restart_alt" }
             ]
         },
         {
