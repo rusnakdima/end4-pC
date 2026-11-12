@@ -140,8 +140,8 @@ modules/ii/sidebarLeft/aiChat/AiMessage.qml|it edits and regenerates the live AI
 modules/ii/sidebarLeft/aiChat/AttachedFileIndicator.qml|it probes the attached file with file and identify, so its type and size come from live processes
 modules/ii/sidebarLeft/SidebarLeftContent.qml|it builds the visible tabs and pages from the live feature flags in the user's config
 modules/ii/sidebarLeft/Translator.qml|it runs the trans CLI over the text the user typed and shows what that command returned
-modules/ii/sidebarRight/quickToggles/AndroidQuickPanel.qml|it lays the user's configured quick toggles into rows and drops the ones the live compositor does not support
-modules/ii/sidebarRight/quickToggles/androidStyle/AndroidQuickToggleButton.qml|it drags and resizes the toggles the user configured, and the sibling search runs over the live scene graph
+modules/ii/sidebarRight/quickToggles/AndroidQuickPanel.qml|it lays the user's configured quick toggles into rows and drops the ones the live compositor does not support; the drag bookkeeping is pointer glue around QuickToggles.js, whose geometry is covered by tst_quick_toggles
+modules/ii/sidebarRight/quickToggles/androidStyle/AndroidQuickToggleButton.qml|it drags and resizes the toggles the user configured; all ordering and gap math moved to QuickToggles.js (covered by tst_quick_toggles), only the pointer-to-panel calls and the settle animation remain here
 modules/ii/sidebarRight/todo/TodoWidget.qml|it adds tasks to the live Todo service
 modules/ii/verticalBar/VerticalBarContent.qml|it repeats the horizontal bar's widget resolution for its own orientation, but with its own path prefix and its own pill blacklist, so it is a separate unit from the BarContent that tst_bar_content.qml asserts
 modules/ii/wallpaperSelector/WallpaperDirectoryItem.qml|it shows one entry of the wallpaper folder of the user and the thumbnail it displays is generated from the live filesystem, so the name and the icon it draws are the ones of that folder

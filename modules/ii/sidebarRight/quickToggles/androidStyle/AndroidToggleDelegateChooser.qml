@@ -14,9 +14,9 @@ DelegateChooser {
     required property real baseCellHeight
     required property real spacing
     required property int startingIndex
-    property var dropIndicatorRef: null 
+
     property bool isUnused: false
-    property var gridRef: null 
+    property var panelRef: null
     signal openAudioOutputDialog()
     signal openAudioInputDialog()
     signal openBluetoothDialog()
@@ -33,13 +33,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
         onOpenMenu: root.openNightLightDialog()
     } }
@@ -50,13 +49,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
         onOpenMenu: root.openAudioOutputDialog()
     } }
@@ -67,13 +65,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
         onOpenMenu: root.openBluetoothDialog()
     } }
@@ -84,13 +81,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
     } }
 
@@ -100,13 +96,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
     } }
 
@@ -116,13 +111,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
     } }
 
@@ -132,13 +126,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
     } }
 
@@ -148,13 +141,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
     } }
 
@@ -164,14 +156,13 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
         isUnused: root.isUnused
-        dropIndicatorRef: root.dropIndicatorRef
         onOpenMenu: root.openHotspotDialog()
     } }
 
@@ -181,13 +172,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
     } }
 
@@ -197,13 +187,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
     } }
 
@@ -213,14 +202,13 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
         isUnused: root.isUnused
-        dropIndicatorRef: root.dropIndicatorRef
         onOpenMenu: root.openAudioInputDialog()
     } }
 
@@ -230,13 +218,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
     } }
 
@@ -246,14 +233,13 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
         isUnused: root.isUnused
-        dropIndicatorRef: root.dropIndicatorRef
         onOpenMenu: root.openWifiDialog()
     } }
 
@@ -263,14 +249,13 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
         isUnused: root.isUnused
-        dropIndicatorRef: root.dropIndicatorRef
         onOpenMenu: root.openNightLightDialog()
     } }
 
@@ -280,13 +265,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
     } }
 
@@ -296,13 +280,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
     } }
 
@@ -312,13 +295,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
     } }
 
@@ -328,13 +310,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
         onOpenMenu: root.openVpnDialog()
     } }
@@ -345,13 +326,12 @@ DelegateChooser {
         buttonIndex: root.startingIndex + index
         buttonData: modelData
         editMode: root.editMode
-        gridRef: root.gridRef
+        panelRef: root.panelRef
         expandedSize: modelData.size > 1
         baseCellWidth: root.baseCellWidth
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
-        dropIndicatorRef: root.dropIndicatorRef
         isUnused: root.isUnused
     } }
 }

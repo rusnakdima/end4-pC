@@ -18,6 +18,9 @@ AbstractQuickPanel {
 
     implicitHeight: (editMode ? contentItem.implicitHeight : usedRows.implicitHeight) + root.padding * 2
     Behavior on implicitHeight {
+        // During a drag the row spacer animates the content directly; a
+        // second animation here would drag the background behind it.
+        enabled: !root.dragging
         animation: Appearance.animation.elementMove.numberAnimation.createObject(this)
     }
     property real spacing: 6
@@ -46,6 +49,84 @@ AbstractQuickPanel {
     readonly property list<var> unusedToggleRows: toggleRowsForList(unusedToggles)
 
     property alias dropIndicator: dropIndicator
+
+    // --- drag state ---------------------------------------------------
+    // The panel owns the drag: buttons report pointer positions here,
+    // the panel computes where the dragged tile would land and the
+    // offsets the other tiles glide by. Nothing walks the scene graph.
+    property string dragType: ""
+    property var previewOrder: null
+    property bool dragging: false
+
+    readonly property var previewShifts: {
+        if (!previewOrder) return {};
+        return QuickToggles.shiftsFor(toggles, previewOrder, dragType,
+                                      baseCellWidth, baseCellHeight, spacing, columns);
+    }
+    readonly property int dragExtraRows: {
+        if (!dragging || !previewOrder) return 0;
+        return Math.max(0, QuickToggles.rowCount(previewOrder, columns) - toggleRows.length);
+    }
+
+    function beginDrag(type) {
+        dragType = type;
+        previewOrder = toggles.slice();
+        dragging = true;
+        moveDropIndicator();
+    }
+
+    function updateDrag(sceneX, sceneY) {
+        if (!dragging) return;
+        const point = usedRows.mapFromItem(null, sceneX, sceneY);
+        const index = QuickToggles.insertionIndex(toggles, dragType, point,
+                                                  baseCellWidth, baseCellHeight, spacing, columns);
+        if (index < 0) return;
+        const next = QuickToggles.previewOrderOf(toggles, dragType, index);
+        // Only touch previewOrder when the insertion point actually moved,
+        // so the glide animations are not restarted on every mousemove.
+        if (previewOrder && next.length === previewOrder.length
+            && next.every((t, i) => t === previewOrder[i])) return;
+        previewOrder = next;
+        moveDropIndicator();
+    }
+
+    function moveDropIndicator() {
+        const rects = QuickToggles.slotRects(previewOrder, columns, baseCellWidth, baseCellHeight, spacing);
+        const rect = rects[dragType];
+        if (!rect) return;
+        const topLeft = usedRows.mapToItem(root, rect.x, rect.y);
+        dropIndicator.x = topLeft.x;
+        dropIndicator.y = topLeft.y;
+        dropIndicator.width = rect.w;
+        dropIndicator.height = rect.h;
+        dropIndicator.visible = true;
+    }
+
+    function endDrag() {
+        if (!dragging) return;
+        const previous = previewOrder;
+        dragging = false;
+        commitOrder(previous);
+        dragType = "";
+        previewOrder = null;
+        dropIndicator.visible = false;
+    }
+
+    // Write the new order in one shot (the JsonAdapter notifies and
+    // persists on whole-array assignment). Called from endDrag, which
+    // itself runs via Qt.callLater so we never reorder delegates from
+    // inside the DragHandler's own signal handler. Entries the panel
+    // does not show (gameMode on non-hyprland) are kept in place.
+    function commitOrder(order) {
+        if (!order) return;
+        const raw = Config.options.sidebar.quickToggles.android.toggles;
+        // The config list can hold null entries; they are kept as-is.
+        const shownTypes = new Set(order.filter(t => t && t.type).map(t => t.type));
+        let next = 0;
+        const merged = raw.map(t => (t && shownTypes.has(t.type)) ? order[next++] : t);
+        if (merged.length === raw.length && merged.every((t, i) => t === raw[i])) return;
+        Config.options.sidebar.quickToggles.android.toggles = merged;
+    }
 
     function rowKeys(rows) {
         return rows.map(row => row.map(toggle => `${toggle.type}:${toggle.size}`).join("|"));
@@ -97,6 +178,11 @@ AbstractQuickPanel {
                         return sum;
                     }
                     spacing: root.spacing
+                    // ButtonGroup.contentWidth counts a spacing for the
+                    // zero-width Repeater child too, which stretches the
+                    // first tile by one gap. Size the row from the tiles
+                    // themselves so every slot matches QuickToggles.js.
+                    width: QuickToggles.rowWidth(rowData, root.baseCellWidth, root.spacing)
 
                     Repeater {
                         model: ScriptModel {
@@ -106,8 +192,7 @@ AbstractQuickPanel {
                         delegate: AndroidToggleDelegateChooser {
                             startingIndex: toggleRow.startingIndex
                             editMode: root.editMode
-                            gridRef: usedRows
-                            dropIndicatorRef: dropIndicator
+                            panelRef: root
                             isUnused: false
                             baseCellWidth: root.baseCellWidth
                             baseCellHeight: root.baseCellHeight
@@ -121,6 +206,21 @@ AbstractQuickPanel {
                             onOpenHotspotDialog: root.openHotspotDialog()
                         }
                     }
+                }
+            }
+
+            // Holds the extra rows a preview packing needs while a tile is
+            // dragged, so gliding tiles never overlap the divider. Column
+            // ignores it at height 0.
+            Item {
+                id: dragRowSpacer
+                width: 1
+                // A non-zero child costs one Column gap on top of its
+                // height, so subtract it to make the growth exact.
+                height: Math.max(0, root.dragExtraRows * (root.baseCellHeight + root.spacing) - root.spacing)
+                Behavior on height {
+                    enabled: root.dragging
+                    animation: Appearance.animation.elementMove.numberAnimation.createObject(this)
                 }
             }
         }
@@ -154,6 +254,8 @@ AbstractQuickPanel {
                         required property int index
                         property var rowData: root.unusedToggleRows[index]
                         spacing: root.spacing
+                        // Same phantom-Repeater-gap fix as the used rows.
+                        width: QuickToggles.rowWidth(rowData, root.baseCellWidth, root.spacing)
 
                         Repeater {
                             model: ScriptModel {

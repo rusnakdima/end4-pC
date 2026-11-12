@@ -17,9 +17,8 @@ GroupButton {
     required property real baseCellHeight
     required property real cellSpacing
     required property int cellSize
-    property var dropIndicatorRef: null
+    property var panelRef: null
     property bool isUnused: false 
-    property var gridRef: null
 
     signal openMenu()
 
@@ -40,7 +39,21 @@ GroupButton {
     property bool settlePending: false
     property point settleScenePos: Qt.point(0, 0)
 
-    transform: Translate { x: root.dragOffsetX; y: root.dragOffsetY }
+    // Glide offset assigned by the panel while another tile is dragged.
+    // The dragged tile itself never gets one — it follows the pointer.
+    property real shiftX: panelRef?.previewShifts?.[buttonData.type]?.dx ?? 0
+    property real shiftY: panelRef?.previewShifts?.[buttonData.type]?.dy ?? 0
+
+    transform: Translate { x: root.dragOffsetX + root.shiftX; y: root.dragOffsetY + root.shiftY }
+
+    Behavior on shiftX {
+        enabled: panelRef?.dragging ?? false
+        animation: Appearance.animation.elementMove.numberAnimation.createObject(this)
+    }
+    Behavior on shiftY {
+        enabled: panelRef?.dragging ?? false
+        animation: Appearance.animation.elementMove.numberAnimation.createObject(this)
+    }
 
     ParallelAnimation {
         id: settleAnim
@@ -197,42 +210,6 @@ GroupButton {
             id: dragHandler
             target: null
 
-            function getAllSiblings() {
-                const siblings = [];
-                if (!root.gridRef) return siblings;
-                for (let r = 0; r < root.gridRef.children.length; r++) {
-                    const row = root.gridRef.children[r];
-                    if (!row || !row.visible) continue;
-                    const rowLayout = row.children[0];
-                    if (!rowLayout) continue;
-                    for (let c = 0; c < rowLayout.children.length; c++) {
-                        const sib = rowLayout.children[c];
-                        if (!sib || !sib.visible || !sib.buttonData) continue;
-                        siblings.push(sib);
-                    }
-                }
-                return siblings;
-            }
-
-            function findNearest(sceneX, sceneY) {
-                const siblings = getAllSiblings();
-                let nearest = null;
-                let minDist = Infinity;
-                for (let i = 0; i < siblings.length; i++) {
-                    const sib = siblings[i];
-                    if (sib.buttonData.type === root.buttonData.type) continue;
-                    const sibScene = sib.mapToItem(null, sib.width / 2, sib.height / 2);
-                    const dx = sceneX - sibScene.x;
-                    const dy = sceneY - sibScene.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < minDist) {
-                        minDist = dist;
-                        nearest = sib;
-                    }
-                }
-                return nearest;
-            }
-
             onActiveChanged: {
                 editModeInteraction.isDragging = active;
 
@@ -240,47 +217,23 @@ GroupButton {
                     settleAnim.stop();
                     root.settlePending = false;
                     root.setRowRaised(true);
+                    panelRef?.beginDrag(root.buttonData.type);
                     return;
                 }
 
-                if (root.dropIndicatorRef) root.dropIndicatorRef.visible = false;
-                const sceneX = centroid.scenePosition.x;
-                const sceneY = centroid.scenePosition.y;
-                const nearest = findNearest(sceneX, sceneY);
                 root.settleScenePos = root.mapToItem(null, 0, 0);
                 root.settlePending = true;
-                if (nearest) {
-                    const toggleList = Config.options.sidebar.quickToggles.android.toggles;
-                    const myType = root.buttonData.type;
-                    const sibType = nearest.buttonData.type;
-                    const myIdx = toggleList.findIndex(t => t.type === myType);
-                    const sibIdx = toggleList.findIndex(t => t.type === sibType);
-                    if (myIdx !== -1 && sibIdx !== -1 && myIdx !== sibIdx) {
-                        const temp = toggleList[myIdx];
-                        toggleList[myIdx] = toggleList[sibIdx];
-                        toggleList[sibIdx] = temp;
-                    }
-                }
                 settleSettleTimer.restart();
+                // Commit outside this handler: writing the config rebuilds
+                // the row delegates, and this handler still runs in one.
+                Qt.callLater(() => panelRef?.endDrag());
             }
 
             onCentroidChanged: {
                 if (!active) return;
                 root.dragOffsetX = centroid.scenePosition.x - centroid.scenePressPosition.x;
                 root.dragOffsetY = centroid.scenePosition.y - centroid.scenePressPosition.y;
-                if (!root.dropIndicatorRef) return;
-                const nearest = findNearest(centroid.scenePosition.x, centroid.scenePosition.y);
-                if (nearest) {
-                    const pos = nearest.mapToItem(root.dropIndicatorRef.parent, 0, 0);
-                    root.dropIndicatorRef.x = pos.x;
-                    root.dropIndicatorRef.y = pos.y;
-                    root.dropIndicatorRef.width = nearest.width;
-                    root.dropIndicatorRef.height = nearest.height;
-                    root.dropIndicatorRef.radius = nearest.buttonRadius;
-                    root.dropIndicatorRef.visible = true;
-                } else {
-                    root.dropIndicatorRef.visible = false;
-                }
+                panelRef?.updateDrag(centroid.scenePosition.x, centroid.scenePosition.y);
             }
         }
 
