@@ -112,6 +112,13 @@ Scope {
         function focus(): void {
             lockContext.shouldReFocus();
         }
+        // Read-only lock state for tooling: sync.sh refuses to touch the
+        // live config while locked, because a config hot-reload tears down
+        // the session-lock surface and Hyprland shows its "lockscreen app
+        // died" screen with no way back but a relogin.
+        function status(): string {
+            return GlobalStates.screenLocked ? "locked" : "unlocked";
+        }
     }
 
     CompositorGlobalShortcut {

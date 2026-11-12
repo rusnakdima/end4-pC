@@ -14,6 +14,7 @@
 #   ./sync.sh --dry-run    show what would change, change nothing
 #   ./sync.sh --no-reload  skip `hyprctl reload`
 #   ./sync.sh --check      run tests/qml-compile-check.sh first, abort on failure
+#   ./sync.sh --force      sync even while the session is locked (dangerous)
 #
 set -uo pipefail
 
@@ -31,15 +32,45 @@ rsync_flags=(-a -c --no-times --delete --itemize-changes)
 dry_run=0
 do_reload=1
 do_check=0
+force=0
 for arg in "$@"; do
     case "$arg" in
         --dry-run|-n) dry_run=1 ;;
         --no-reload)  do_reload=0 ;;
         --check)      do_check=1 ;;
-        -h|--help)    sed -n '2,16p' "${BASH_SOURCE[0]}"; exit 0 ;;
+        --force)      force=1 ;;
+        -h|--help)    sed -n '2,18p' "${BASH_SOURCE[0]}"; exit 0 ;;
         *) echo "sync.sh: unknown option: $arg" >&2; exit 2 ;;
     esac
 done
+
+# Never write to a locked session. quickshell hot-reloads on every config
+# file change, and reloading while the session-lock surface is up destroys
+# that surface: Hyprland then shows its "lockscreen app died" screen and the
+# session cannot be recovered without a relogin (incident: 2026-11-12, when
+# a mid-lock sync bricked the DE). Read-only --dry-run is still allowed.
+session_locked() {
+    local st=""
+    if command -v qs >/dev/null 2>&1; then
+        # qs needs the compositor env to discover the running instance;
+        # sync.sh is often run from bare/ssh shells, so fill the gaps
+        # (the mid-lock incident happened exactly that way).
+        st=$(env HYPRLAND_INSTANCE_SIGNATURE="${HYPRLAND_INSTANCE_SIGNATURE:-$(ls -t /run/user/"$(id -u)"/hypr/ 2>/dev/null | head -1)}" \
+                 WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}" \
+                 XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" \
+                 qs -c end4-pC ipc call lock status 2>/dev/null) || st=""
+    fi
+    [[ "$st" == "locked" ]] && return 0
+    pgrep -x hyprlock >/dev/null 2>&1 && return 0
+    return 1
+}
+if [[ $force -eq 0 && $dry_run -eq 0 ]] && session_locked; then
+    echo "sync.sh: the session is LOCKED -- nothing was copied, nothing reloaded."
+    echo "         Touching the live config would hot-reload quickshell and kill"
+    echo "         the lock screen (Hyprland 'lockscreen app died' screen)."
+    echo "         Unlock the screen and run again, or pass --force to override."
+    exit 0
+fi
 
 command -v rsync >/dev/null 2>&1 || { echo "sync.sh: rsync is required" >&2; exit 2; }
 [[ -d "$qs_dest" ]]   || { echo "sync.sh: $qs_dest does not exist -- run install.sh first" >&2; exit 2; }
