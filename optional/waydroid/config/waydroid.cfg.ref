@@ -1,0 +1,68 @@
+# waydroid.cfg reference (annotated)
+#
+# Live file: /var/lib/waydroid/waydroid.cfg (root-owned; install-waydroid.sh
+# edits only the keys marked below, via `sudo tee`).
+#
+# archpc (reference device): stock waydroid 1.6.3 + GAPPS, intel/mesa.
+# NVIDIA laptops: waydroid-a17-nvidia-bin fork (Android 17 via WayDroid-ATV),
+# vendor keys come from the fork's waydroid-nvidia-setup — never hand-edit them.
+
+[waydroid]
+arch = x86_64
+vendor_type = MAINLINE
+
+# GAPPS switch gotcha: waydroid upgrade only re-downloads when
+#   response.datetime > cfg system_datetime
+# After pointing system_ota at a *different* channel whose latest build is
+# OLDER than the installed one, reset system_datetime = 0 or the swap is a no-op.
+# (This bit once: official GAPPS datetime was smaller than the VANILLA build
+# it replaced and upgrade silently kept VANILLA.)
+system_datetime = 0
+vendor_datetime = 0
+
+# archpc parity: freeze the container instead of tearing it down when idle.
+suspend_action = freeze          # install-waydroid.sh enforces this (fork resets it to "none")
+
+mount_overlays = True
+auto_adb = False
+images_path = /var/lib/waydroid/images   # fork with staged images: /etc/waydroid-extra/images
+
+# binder names differ per fork — stock uses binder/vndbinder/hwbinder,
+# the nvidia fork uses anbox-*. Do not normalize these.
+binder = anbox-binder
+vndbinder = anbox-vndbinder
+hwbinder = anbox-hwbinder
+binder_protocol = aidl3
+service_manager_protocol = aidl3
+
+# --- system/vendor OTA ------------------------------------------------------
+# Stock + GAPPS (archpc):
+system_ota = https://ota.waydro.id/system/lineage/waydroid_x86_64/GAPPS.json
+# NVIDIA fork: system comes from staged ATV images (system_ota may be "None");
+# vendor_ota is set by waydroid-nvidia-setup. If its GitHub release URL starts
+# 404ing (release pruned), fall back to the JSON shipped with the package:
+#   vendor_ota = file:///usr/lib/waydroid-nvidia/vendor/waydroid-nvidia-vendor-ota-<ver>.json
+# (the fork's http helper accepts file:// URLs).
+vendor_ota = file:///usr/lib/waydroid-nvidia/vendor/waydroid-nvidia-vendor-ota-v0.2.0-rc10-a17.json
+
+# --- nvidia fork only (written by waydroid-nvidia-setup; do not hand-edit) ---
+nvidia_driver_mode = nvidia-prolapse
+nvidia_native_gl = on
+nvidia_prolapse_install = vendor-image
+drm_device = /dev/dri/renderD129
+
+# archpc parity: start the Android session in the background.
+background_start = true          # install-waydroid.sh enforces this
+
+[properties]
+debug.hwui.renderer = skiavk
+debug.renderengine.backend = skiaglthreaded
+debug.sf.nobootanimation = 1
+persist.waydroid.use_subsurface = true
+ro.surface_flinger.vsync_event_phase_offset_ns = 0
+ro.surface_flinger.vsync_sf_event_phase_offset_ns = 0
+ro.surface_flinger.max_frame_buffer_acquired_buffers = 3
+
+# Per-app windows (one desktop window per Android app) — set via
+#   waydroid prop set persist.waydroid.multi_windows true   (needs a running session)
+# persist.waydroid.multi_windows = true

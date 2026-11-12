@@ -592,9 +592,11 @@ verify() {
 # already deployed does not, so known work in progress does not block an
 # install.
 SKIP_CHECKS=0
+WITH_WAYDROID=0
 for arg in "$@"; do
     case "$arg" in
         --skip-checks) SKIP_CHECKS=1 ;;
+        --with-waydroid) WITH_WAYDROID=1 ;;
     esac
 done
 
@@ -676,6 +678,17 @@ main() {
     install_sddm_theme
     install_wallpaper_sync
     install_fonts
+
+    # Optional Waydroid setup — only with an explicit --with-waydroid flag.
+    # Standalone script; never runs on a plain install. A failure is loud but
+    # does not abort the desktop install (it is an add-on, not a dependency).
+    if [[ ${WITH_WAYDROID:-0} -eq 1 ]]; then
+        echo "[install] Optional component: Waydroid (--with-waydroid)"
+        if ! "$SOURCE_DIR/optional/waydroid/install-waydroid.sh"; then
+            echo "[install] WARN: Waydroid setup failed — see [waydroid] messages above." >&2
+            echo "[install]       Rerun: ./optional/waydroid/install-waydroid.sh" >&2
+        fi
+    fi
 
     echo ""
     echo "[install] ============================================================"
