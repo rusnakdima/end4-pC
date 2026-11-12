@@ -8,7 +8,8 @@ import qs.modules.common.functions
 
 /**
  * The per-app half of the window mode: a list of window classes that
- * always stack or always tile, no matter which mode the session is in.
+ * always stack, always tile, or always stretch over every monitor, no
+ * matter which mode the session is in.
  *
  * The list is edited through a ListModel so a half typed class name does
  * not write itself into the config on every keystroke - the model is
@@ -29,7 +30,15 @@ ColumnLayout {
     property int expandOnCreate: -1
 
     function modeLabel(mode) {
+        if (mode === "span") return Translation.tr("All monitors");
         return mode === "tiling" ? Translation.tr("Tiling") : Translation.tr("Stacking");
+    }
+
+    // The config can hold a rule that a newer version wrote. Keep the
+    // known modes exactly as they are: rewriting a span rule to stacking
+    // would silently drop the stretch on the next edit.
+    function normalizeMode(mode) {
+        return (mode === "tiling" || mode === "span") ? mode : "stacking";
     }
 
     ListModel {
@@ -64,7 +73,7 @@ ColumnLayout {
     function configSnapshot() {
         return (WindowMode.appRules ?? []).map(rule => ({
             "class": String(rule?.class ?? ""),
-            "mode": rule?.mode === "tiling" ? "tiling" : "stacking"
+            "mode": root.normalizeMode(rule?.mode)
         }));
     }
 
@@ -115,7 +124,7 @@ ColumnLayout {
     NoticeBox {
         Layout.fillWidth: true
         materialIcon: "info"
-        text: Translation.tr("Stacking floats every window so they overlap, tiling keeps the layout. A rule below keeps one app on the other side of that choice.")
+        text: Translation.tr("Stacking floats every window so they overlap, tiling keeps the layout. A rule below keeps one app on the other side of that choice; All monitors also floats it, stretches it over every screen and ignores fullscreen requests.")
     }
 
     StyledText {
@@ -279,6 +288,7 @@ ColumnLayout {
                     options: [
                         { displayName: Translation.tr("Stacking"), icon: "layers", value: "stacking" },
                         { displayName: Translation.tr("Tiling"), icon: "grid_view", value: "tiling" },
+                        { displayName: Translation.tr("All monitors"), icon: "desktop_windows", value: "span" },
                     ]
                 }
             }

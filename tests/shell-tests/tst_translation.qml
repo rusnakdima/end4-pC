@@ -68,24 +68,24 @@ TestCase {
     }
 
     function test_the_english_translations_are_loaded() {
-        verify(waitForTranslations(1774));
-        compare(Object.keys(Translation.translations).length, 1774);
+        verify(waitForTranslations(1775));
+        compare(Object.keys(Translation.translations).length, 1775);
     }
 
     function test_tr_returns_the_translation_of_an_existing_key() {
-        verify(waitForTranslations(1774));
+        verify(waitForTranslations(1775));
         verify("Unknown device" in Translation.translations);
         compare(Translation.tr("Unknown device"), Translation.translations["Unknown device"]);
         compare(Translation.tr("Unknown device"), "Unknown device");
     }
 
     function test_tr_returns_the_key_when_the_translation_is_missing() {
-        verify(waitForTranslations(1774));
+        verify(waitForTranslations(1775));
         compare(Translation.tr("No Such Key At All"), "No Such Key At All");
     }
 
     function test_tr_of_an_empty_string_is_empty() {
-        verify(waitForTranslations(1774));
+        verify(waitForTranslations(1775));
         compare(Translation.tr(""), "");
     }
 }

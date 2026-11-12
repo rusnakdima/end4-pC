@@ -84,6 +84,96 @@ TestCase {
     }
 
     // ------------------------------------------------------------------
+    // span: a rule that stretches one app over every monitor
+    // ------------------------------------------------------------------
+
+    function monitor(x, y, width, height) {
+        return { "x": x, "y": y, "width": width, "height": height };
+    }
+
+    function test_a_span_rule_floats_in_both_modes() {
+        const rules = [{ "class": "^org\\.remmina\\.", "mode": "span" }];
+        compare(WindowMode.desiredFloat("org.remmina.Remmina", "tiling", rules), true);
+        compare(WindowMode.desiredFloat("org.remmina.Remmina", "stacking", rules), true);
+        compare(WindowMode.desiredSpan("org.remmina.Remmina", rules), true);
+        compare(WindowMode.desiredSpan("kitty", rules), false);
+        compare(WindowMode.desiredSpan("org.remmina.Remmina", []), false);
+    }
+
+    function test_the_span_rect_is_the_box_around_every_screen() {
+        const rect = WindowMode.spanRectFor([monitor(0, 0, 1920, 1200), monitor(1920, 0, 1920, 1080)]);
+        compare(rect.x, 0);
+        compare(rect.y, 0);
+        compare(rect.width, 3840);
+        compare(rect.height, 1200);
+    }
+
+    function test_the_span_rect_handles_a_screen_left_of_the_primary_one() {
+        const rect = WindowMode.spanRectFor([monitor(-1920, 0, 1920, 1080), monitor(0, 0, 1920, 1080)]);
+        compare(rect.x, -1920);
+        compare(rect.y, 0);
+        compare(rect.width, 3840);
+        compare(rect.height, 1080);
+    }
+
+    function test_the_span_rect_handles_stacked_screens_and_gaps() {
+        const stacked = WindowMode.spanRectFor([monitor(0, 0, 1920, 1080), monitor(0, 1080, 1920, 1080)]);
+        compare(stacked.x, 0);
+        compare(stacked.y, 0);
+        compare(stacked.width, 1920);
+        compare(stacked.height, 2160);
+
+        // A gap in the layout is part of the box: one window cannot skip it.
+        const gapped = WindowMode.spanRectFor([monitor(0, 0, 1920, 1080), monitor(2000, 0, 1920, 1080)]);
+        compare(gapped.width, 3920);
+    }
+
+    function test_the_span_rect_is_rounded_to_whole_layout_pixels() {
+        const rect = WindowMode.spanRectFor([monitor(0, 0, 1920.4, 1080.6)]);
+        compare(rect.width, 1920);
+        compare(rect.height, 1081);
+    }
+
+    function test_the_span_rect_survives_empty_or_invalid_screens() {
+        compare(WindowMode.spanRectFor([]), null);
+        compare(WindowMode.spanRectFor(null), null);
+        compare(WindowMode.spanRectFor([null, monitor(0, 0, 0, 1080)]), null);
+        const rect = WindowMode.spanRectFor([null, monitor(0, 0, 1920, 1080)]);
+        compare(rect.width, 1920);
+    }
+
+    function test_rect_matches_allows_a_pixel_of_rounding() {
+        const rect = { "x": 0, "y": 0, "width": 3840, "height": 1200 };
+        verify(WindowMode.rectMatches({ "at": [0, 0], "size": [3840, 1200] }, rect));
+        verify(WindowMode.rectMatches({ "at": [1, 1], "size": [3838, 1198] }, rect));
+        verify(!WindowMode.rectMatches({ "at": [100, 0], "size": [3840, 1200] }, rect));
+        verify(!WindowMode.rectMatches({ "at": [0, 0], "size": [1920, 1080] }, rect));
+    }
+
+    function test_the_default_float_rect_is_a_sane_size_on_the_window_screen() {
+        const screens = [monitor(0, 0, 1920, 1200), monitor(1920, 0, 1920, 1080)];
+        // The centre of the window is on the right screen.
+        const rect = WindowMode.defaultFloatRect({ "at": [2500, 100], "size": [1000, 600] }, screens);
+        compare(rect.width, 1152);
+        compare(rect.height, 702);
+        verify(rect.x >= 1920);
+        verify(rect.x + rect.width <= 3840);
+        compare(WindowMode.defaultFloatRect({ "at": [0, 0], "size": [100, 100] }, []), null);
+    }
+
+    function test_the_default_float_rect_prefers_the_window_monitor() {
+        const screens = [monitor(0, 0, 1920, 1200), monitor(1920, 0, 1920, 1080)];
+        // A span window covers the whole layout, so its centre is no help;
+        // the compositor's monitor id says where it belongs.
+        const rect = WindowMode.defaultFloatRect({
+            "monitor": 0, "at": [0, 0], "size": [3840, 1200]
+        }, screens);
+        compare(rect.width, 1152);
+        compare(rect.height, 780);
+        verify(rect.x < 1920);
+    }
+
+    // ------------------------------------------------------------------
     // rulesSource
     // ------------------------------------------------------------------
 
@@ -138,6 +228,45 @@ TestCase {
         compare(WindowMode.luaQuote("a\\b"), "a\\\\b");
         compare(WindowMode.luaQuote("a\nb"), "ab");
         compare(WindowMode.luaQuote(""), "");
+    }
+
+    function test_a_span_rule_floats_sizes_and_suppresses_fullscreen() {
+        const rect = { "x": 0, "y": 0, "width": 3840, "height": 1200 };
+        const source = WindowMode.rulesSource("tiling", [{ "class": "remmina", "mode": "span" }], rect);
+        verify(source.indexOf("float = true") !== -1);
+        verify(source.indexOf("size = { 3840, 1200 }") !== -1);
+        verify(source.indexOf("border_size = 0") !== -1);
+        verify(source.indexOf("rounding = 0") !== -1);
+        verify(source.indexOf('opacity = "1 1"') !== -1);
+        verify(source.indexOf('suppress_event = "fullscreen"') !== -1);
+        // The position comes from the dispatcher; the rule's "move" is not
+        // reliable for a window larger than one monitor.
+        verify(source.indexOf("move =") === -1);
+    }
+
+    function test_a_span_rule_without_a_known_layout_only_floats() {
+        const source = WindowMode.rulesSource("tiling", [{ "class": "remmina", "mode": "span" }], null);
+        verify(source.indexOf("float = true") !== -1);
+        verify(source.indexOf("size = {") === -1);
+        verify(source.indexOf("remmina") !== -1);
+    }
+
+    function test_the_span_rule_comes_after_the_global_float_rule() {
+        const rect = { "x": 0, "y": 0, "width": 3840, "height": 1200 };
+        const source = WindowMode.rulesSource("stacking", [{ "class": "remmina", "mode": "span" }], rect);
+        const globalFloat = source.indexOf('class = ".*"');
+        const spanRule = source.indexOf("remmina");
+        verify(globalFloat !== -1);
+        verify(spanRule > globalFloat);
+        // The global rule plus the span rule; the span entry is not also
+        // written as a plain stacking rule.
+        compare(source.match(/float = true/g).length, 2);
+        verify(source.indexOf("tile = true") === -1);
+    }
+
+    function test_the_span_class_pattern_is_escaped_like_any_other() {
+        const source = WindowMode.rulesSource("tiling", [{ "class": 'a"b', "mode": "span" }], null);
+        verify(source.indexOf('class = "a\\"b"') !== -1);
     }
 
     // ------------------------------------------------------------------
@@ -207,5 +336,110 @@ TestCase {
 
         compare(plan.actions.length, 0);
         compare(plan.owned.length, 0);
+    }
+
+    // ------------------------------------------------------------------
+    // reconcilePlan: span
+    // ------------------------------------------------------------------
+
+    function spanClient(address, winClass, floating, at, size) {
+        return {
+            "address": address,
+            "class": winClass,
+            "floating": floating,
+            "at": at ?? [0, 0],
+            "size": size ?? [1920, 1080]
+        };
+    }
+
+    function test_a_tiled_span_window_is_floated_and_stretched() {
+        const screens = [monitor(0, 0, 1920, 1200), monitor(1920, 0, 1920, 1080)];
+        const plan = WindowMode.reconcilePlan(
+            [spanClient("0x1", "remmina", false)],
+            "tiling", [{ "class": "remmina", "mode": "span" }], [], screens, []);
+
+        // Float first, then the geometry: a tiled window does not take a
+        // floating rect.
+        compare(plan.actions.length, 2);
+        compare(plan.actions[0].floating, true);
+        compare(plan.actions[1].rect.width, 3840);
+        compare(plan.actions[1].rect.height, 1200);
+        compare(plan.owned.join(","), "0x1");
+        compare(plan.spans.join(","), "0x1");
+    }
+
+    function test_a_span_window_that_already_covers_the_layout_gets_no_action() {
+        const screens = [monitor(0, 0, 1920, 1200), monitor(1920, 0, 1920, 1080)];
+        const plan = WindowMode.reconcilePlan(
+            [spanClient("0x1", "remmina", true, [0, 0], [3840, 1200])],
+            "tiling", [{ "class": "remmina", "mode": "span" }], [], screens, []);
+
+        compare(plan.actions.length, 0);
+        compare(plan.spans.join(","), "0x1");
+    }
+
+    function test_a_span_window_that_the_app_resized_is_stretched_back() {
+        const screens = [monitor(0, 0, 1920, 1200), monitor(1920, 0, 1920, 1080)];
+        const plan = WindowMode.reconcilePlan(
+            [spanClient("0x1", "remmina", true, [100, 100], [800, 600])],
+            "tiling", [{ "class": "remmina", "mode": "span" }], [], screens, []);
+
+        compare(plan.actions.length, 1);
+        compare(plan.actions[0].rect.x, 0);
+        compare(plan.actions[0].rect.y, 0);
+        compare(plan.actions[0].rect.width, 3840);
+    }
+
+    function test_a_fullscreen_span_window_is_left_alone() {
+        // The span rule suppresses the app's own fullscreen request, but a
+        // keybind can still fullscreen it; the service must not fight that
+        // by resizing it back on every tick.
+        const screens = [monitor(0, 0, 1920, 1200), monitor(1920, 0, 1920, 1080)];
+        const win = spanClient("0x1", "remmina", true, [0, 0], [1920, 1080]);
+        win.fullscreen = 1;
+        const plan = WindowMode.reconcilePlan(
+            [win], "tiling", [{ "class": "remmina", "mode": "span" }], [], screens, []);
+
+        compare(plan.actions.length, 0);
+        compare(plan.spans.join(","), "0x1");
+    }
+
+    function test_a_window_that_leaves_span_gets_a_sane_size_back() {
+        // It floats because of its own rule, so it is not tiled back; only
+        // the whole-layout geometry is undone.
+        const screens = [monitor(0, 0, 1920, 1200), monitor(1920, 0, 1920, 1080)];
+        const plan = WindowMode.reconcilePlan(
+            [spanClient("0x1", "remmina", true, [0, 0], [3840, 1200])],
+            "tiling", [], [], screens, ["0x1"]);
+
+        compare(plan.actions.length, 1);
+        compare(plan.actions[0].floating, undefined);
+        compare(plan.actions[0].rect.width, 1152);
+        compare(plan.actions[0].rect.height, 702);
+        compare(plan.spans.length, 0);
+    }
+
+    function test_a_window_the_service_floated_for_span_is_tiled_back() {
+        const screens = [monitor(0, 0, 1920, 1200), monitor(1920, 0, 1920, 1080)];
+        const plan = WindowMode.reconcilePlan(
+            [spanClient("0x1", "remmina", true, [0, 0], [3840, 1200])],
+            "tiling", [], ["0x1"], screens, ["0x1"]);
+
+        // Unfloating tiles it, so a restore rect would be pointless.
+        compare(plan.actions.length, 1);
+        compare(plan.actions[0].floating, false);
+        compare(plan.owned.length, 0);
+        compare(plan.spans.length, 0);
+    }
+
+    function test_the_closed_span_windows_are_dropped_from_the_span_list() {
+        const screens = [monitor(0, 0, 1920, 1200)];
+        const plan = WindowMode.reconcilePlan(
+            [spanClient("0x1", "remmina", true, [0, 0], [1920, 1200])],
+            "tiling", [{ "class": "remmina", "mode": "span" }], [], screens,
+            ["0x1", "0xdead"]);
+
+        // 0xdead is gone; 0x1 is still a span window and stays.
+        compare(plan.spans.join(","), "0x1");
     }
 }

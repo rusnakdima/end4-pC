@@ -249,7 +249,9 @@ Singleton {
                 // window so they overlap like a classic stacking WM; "tiling"
                 // is the normal dwindle/master/scrolling behaviour.
                 // appRules overrides the mode per app: { class, mode } where
-                // mode is "stacking" (always float) or "tiling" (always tile).
+                // mode is "stacking" (always float), "tiling" (always tile)
+                // or "span" (always float, stretched over the bounding box
+                // of every enabled monitor; fullscreen requests are ignored).
                 property JsonObject windowMode: JsonObject {
                     property string mode: "tiling"
                     property list<var> appRules: []

@@ -130,8 +130,13 @@ Singleton {
             // when the mode goes back to tiling, so windows that float
             // because of their own rules (dialogs, pavucontrol, ...) are
             // never stolen from a rule that asked for floating.
+            //
+            // ownedSpans holds the windows the service stretched over every
+            // monitor. They get a normal floating size back when the span
+            // rule is removed.
             property JsonObject windowMode: JsonObject {
                 property list<string> ownedFloats: []
+                property list<string> ownedSpans: []
             }
 
             property JsonObject record: JsonObject {

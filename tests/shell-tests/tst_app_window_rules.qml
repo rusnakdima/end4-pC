@@ -62,8 +62,19 @@ TestCase {
         const shown = testCase.rulesInstance.configSnapshot();
         for (const rule of shown) {
             compare(typeof rule.class, "string");
-            verify(rule.mode === "stacking" || rule.mode === "tiling");
+            verify(["stacking", "tiling", "span"].includes(rule.mode));
         }
+    }
+
+    function test_every_known_mode_survives_the_snapshot() {
+        // A span rule must not be rewritten to stacking by the next edit,
+        // and an unknown value still falls back to the safe mode.
+        compare(testCase.rulesInstance.normalizeMode("stacking"), "stacking");
+        compare(testCase.rulesInstance.normalizeMode("tiling"), "tiling");
+        compare(testCase.rulesInstance.normalizeMode("span"), "span");
+        compare(testCase.rulesInstance.normalizeMode("nonsense"), "stacking");
+        compare(testCase.rulesInstance.normalizeMode(undefined), "stacking");
+        verify(testCase.rulesInstance.modeLabel("span") !== testCase.rulesInstance.modeLabel("stacking"));
     }
 
     function test_the_running_window_list_offers_a_name_and_a_class() {
