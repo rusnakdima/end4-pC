@@ -100,4 +100,29 @@ TestCase {
             leaveSandbox();
         }
     }
+
+    // "Never" in the settings page is a stored 0, not a separate flag: the
+    // configurator removes the listener for a timeout of 0.
+    function test_idle_never_reaches_the_config_file_as_zero() {
+        enterSandbox();
+        const original = Config.options.hyprland.idle.lock;
+
+        try {
+            Config.options.hyprland.idle.lock = 301;
+            tryVerify(() => {
+                try { return diskIdle().lock === 301; } catch (e) { return false; }
+            }, 3000, "the seeded idle lock never reached the file");
+
+            Config.options.hyprland.idle.lock = 0;
+            tryVerify(() => {
+                try { return diskIdle().lock === 0; } catch (e) { return false; }
+            }, 3000, "lock=0 (Never) never reached the config file");
+        } finally {
+            Config.options.hyprland.idle.lock = original;
+            tryVerify(() => {
+                try { return diskIdle().lock === original; } catch (e) { return false; }
+            }, 3000, "the original idle lock value was not written back");
+            leaveSandbox();
+        }
+    }
 }

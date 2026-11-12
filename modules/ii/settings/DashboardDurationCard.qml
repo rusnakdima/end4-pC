@@ -10,6 +10,7 @@ DashboardCard {
     property string controlKey: ""
     property string title: ""
     property string icon: "timer"
+    property string zeroLabel: Translation.tr("Off")
     property var tileShape: MaterialShape.Shape.Clover4Leaf
     property var override: null
 
@@ -22,25 +23,21 @@ DashboardCard {
     ]
 
     property int displayValue: 0
+    // The unit is only the step used by the + and - buttons. 0 is Never, and
+    // keeping the last non-Never unit lets the buttons bring the value back
+    // instead of committing 0 forever.
     property int unit: 60
 
     tint: Appearance.colors.colTertiaryContainer
 
-    function toDisplay(total) {
-        if (total <= 0) return [0, 60];
-        if (total % 3600 === 0) return [total / 3600, 3600];
-        if (total % 60 === 0) return [total / 60, 60];
-        return [total, 1];
-    }
-
     function sync() {
-        const display = toDisplay(seconds);
+        const display = HyprlandConfig.idleDisplay(seconds);
         displayValue = display[0];
-        unit = display[1];
+        if (display[1] > 0) unit = display[1];
     }
 
     function commit(value, newUnit) {
-        const total = Math.max(0, Math.round(value)) * newUnit;
+        const total = HyprlandConfig.idleSeconds(value, newUnit);
         Qt.callLater(() => control.set(total));
     }
 
@@ -76,7 +73,7 @@ DashboardCard {
             }
 
             StyledText {
-                text: root.displayValue === 0 ? Translation.tr("Off") : root.displayValue
+                text: root.displayValue === 0 ? root.zeroLabel : root.displayValue
                 font.pixelSize: 28
                 font.weight: Font.Light
                 color: Appearance.colors.colOnTertiaryContainer

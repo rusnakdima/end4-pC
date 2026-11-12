@@ -712,9 +712,9 @@ QtObject {
         },
         {
             page: Translation.tr("Hyprland"), title: Translation.tr("Idle"), icon: "bedtime", when: "hyprland", cards: [
-                { type: "duration", key: "hyprland:Idle lock", title: Translation.tr("Lock screen"), icon: "lock_clock" },
-                { type: "duration", key: "hyprland:Idle screen off", title: Translation.tr("Screen off"), icon: "monitor" },
-                { type: "duration", key: "hyprland:Idle standby", title: Translation.tr("Standby"), icon: "bedtime" }
+                { type: "duration", key: "hyprland:Idle lock", title: Translation.tr("Lock screen"), icon: "lock_clock", zeroLabel: Translation.tr("Never") },
+                { type: "duration", key: "hyprland:Idle screen off", title: Translation.tr("Screen off"), icon: "monitor", zeroLabel: Translation.tr("Never") },
+                { type: "duration", key: "hyprland:Idle standby", title: Translation.tr("Standby"), icon: "bedtime", zeroLabel: Translation.tr("Never") }
             ]
         },
         {

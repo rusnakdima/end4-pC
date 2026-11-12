@@ -265,4 +265,30 @@ TestCase {
         verify(start > kill, "hypridle must start after the old one is gone");
         verify(cmd.indexOf("&&") < kill, "a failed write must not restart hypridle");
     }
+
+    // --- the Never option ---
+
+    function test_idle_display_reports_zero_as_never() {
+        const never = HyprlandConfig.idleDisplay(0);
+        compare(never[0], 0);
+        // Unit 0 is the combo box entry that means Never.
+        compare(never[1], 0);
+        // Negative values are off too: the configurator removes them.
+        compare(HyprlandConfig.idleDisplay(-1)[1], 0);
+    }
+
+    function test_idle_seconds_keeps_never_at_zero() {
+        compare(HyprlandConfig.idleSeconds(5, 0), 0);
+        compare(HyprlandConfig.idleSeconds(0, 60), 0);
+        compare(HyprlandConfig.idleSeconds(5, 60), 300);
+        compare(HyprlandConfig.idleSeconds(3, 3600), 10800);
+    }
+
+    function test_idle_display_keeps_the_units_the_editor_shows() {
+        compare(HyprlandConfig.idleDisplay(300)[1], 60);
+        compare(HyprlandConfig.idleDisplay(10800)[1], 3600);
+        // A value the units cannot express stays in seconds.
+        compare(HyprlandConfig.idleDisplay(90)[1], 1);
+        compare(HyprlandConfig.idleDisplay(90)[0], 90);
+    }
 }

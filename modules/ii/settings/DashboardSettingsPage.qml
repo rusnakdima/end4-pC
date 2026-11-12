@@ -976,6 +976,7 @@ Item {
                                 override: catalog.controlFor(slot.modelData.key)
                                 title: slot.modelData.title
                                 icon: slot.modelData.icon
+                                zeroLabel: slot.modelData.zeroLabel ?? Translation.tr("Off")
                                 tileShape: slot.modelData.shape
                                 pager: root.pager
                                 staggerMs: root.staggerMs

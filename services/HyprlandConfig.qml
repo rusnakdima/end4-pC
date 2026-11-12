@@ -223,6 +223,26 @@ Singleton {
             || fileTimeouts.suspend !== config.suspend;
     }
 
+    // The idle timeouts are edited in seconds, minutes or hours. Unit 0 is
+    // "Never": the configurator turns it into "no listener". Both the
+    // settings page and the dashboard card use these, so the two cannot
+    // disagree about what a stored value means.
+    function idleDisplay(seconds) {
+        if (seconds <= 0)
+            return [0, 0];
+        if (seconds % 3600 === 0)
+            return [seconds / 3600, 3600];
+        if (seconds % 60 === 0)
+            return [seconds / 60, 60];
+        return [seconds, 1];
+    }
+
+    function idleSeconds(value, unit) {
+        if (unit <= 0)
+            return 0;
+        return Math.max(0, Math.round(value)) * unit;
+    }
+
     function reconcileIdle() {
         if (WM.compositor !== "hyprland" || !Config.ready || !root.idleFileLoaded) return;
         if (!root.idleDiffers(root.idleTimeoutsFrom(root.idleText), Config.options.hyprland.idle)) return;

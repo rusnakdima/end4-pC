@@ -29,6 +29,7 @@ ContentPage {
                 { displayName: Translation.tr("Seconds"), icon: "timer",    value: 1    },
                 { displayName: Translation.tr("Minutes"), icon: "av_timer", value: 60   },
                 { displayName: Translation.tr("Hours"),   icon: "schedule", value: 3600 },
+                { displayName: Translation.tr("Never"),   icon: "block",    value: 0    },
             ]
 
             component IdleTimerRow: ConfigRow {
@@ -37,14 +38,14 @@ ContentPage {
                 property string icon
                 property string label
                 property int seconds: 0
-                property int displayValue: 60
-                property int displayUnit: 60
+                property int displayValue: 0
+                property int displayUnit: 0
                 property bool loaded: false
 
                 signal edited(int newSeconds)
 
                 onSecondsChanged: {
-                    const display = idleSection.toDisplay(timerRow.seconds)
+                    const display = HyprlandConfig.idleDisplay(timerRow.seconds)
                     timerRow.displayValue = display[0]
                     timerRow.displayUnit = display[1]
                 }
@@ -66,6 +67,7 @@ ContentPage {
                     Item { Layout.fillWidth: true }
                     StyledSpinBox {
                         Layout.preferredWidth: 130
+                        enabled: timerRow.displayUnit !== 0
                         value: timerRow.displayValue
                         from: 0
                         to: 9999
@@ -73,7 +75,7 @@ ContentPage {
                         onValueChanged: {
                             if (!timerRow.loaded) return
                             timerRow.displayValue = value
-                            timerRow.edited(value * timerRow.displayUnit)
+                            timerRow.edited(HyprlandConfig.idleSeconds(value, timerRow.displayUnit))
                         }
                     }
                 }
@@ -85,19 +87,9 @@ ContentPage {
                     currentIndex: idleSection.unitOptions.findIndex(o => o.value === timerRow.displayUnit)
                     onActivated: index => {
                         timerRow.displayUnit = idleSection.unitOptions[index].value
-                        timerRow.edited(timerRow.displayValue * timerRow.displayUnit)
+                        timerRow.edited(HyprlandConfig.idleSeconds(timerRow.displayValue, timerRow.displayUnit))
                     }
                 }
-            }
-
-            function toDisplay(seconds) {
-                if (seconds <= 0)
-                    return [0, 60]
-                if (seconds % 3600 === 0)
-                    return [seconds / 3600, 3600]
-                if (seconds % 60 === 0)
-                    return [seconds / 60, 60]
-                return [seconds, 1]
             }
 
             function applyIdle() {
