@@ -109,7 +109,10 @@ Singleton {
                 if (body.startsWith("Mute: ")) { cur.mute = body.slice(6) === "yes"; continue; }
                 if (body.startsWith("Flags: ")) { cur.flags = body.slice(7); continue; }
                 if (body.startsWith("Volume: ")) {
-                    const v = body.match(/\/ (\d+)%/);
+                    // pactl right-pads the percentage to width 4: "/ 100%"
+                    // but "/  24%" — any whitespace after the slash, else
+                    // sub-100% volumes silently keep the default.
+                    const v = body.match(/\/\s*(\d+)%/);
                     if (v) cur.volume = Number(v[1]);
                     continue;
                 }
