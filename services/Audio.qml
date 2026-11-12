@@ -36,10 +36,16 @@ Singleton {
             return root.correctType(node, isSink) && node.isStream
         })
     }
+    // Devices are matched by media class, not by `node.audio`: audio params
+    // are null while a device is suspended or has not been used yet, which
+    // hid idle devices (HDMI, a quiet BT sink, the mic when nothing records)
+    // from every dropdown.
     function devices(isSink) {
         return Pipewire.nodes.values.filter(node => {
-            return root.correctType(node, isSink) && !node.isStream
-        })
+            if (node.isStream || node.isSink !== isSink) return false;
+            const mediaClass = node.properties["media.class"] ?? "";
+            return mediaClass.startsWith("Audio/");
+        });
     }
     readonly property list<var> outputAppNodes: root.appNodes(true)
     readonly property list<var> inputAppNodes: root.appNodes(false)

@@ -21,9 +21,12 @@ import qs.modules.common.widgets
  * stream playing through EasyEffects reads "Default" when EasyEffects
  * outputs to the default device instead of naming the filter.
  *
- * If a pick does not stick within `bounceTimeout` ms -- EasyEffects
- * re-pins every stream it claims back to itself -- the user gets a desktop
- * notice instead of a chip that silently keeps showing another device.
+ * EasyEffects re-pins every stream it claims back to itself within ~400 ms,
+ * so a pick arbitrates it: routing into EasyEffects turns it on first,
+ * routing anywhere else turns it off, and the move waits for the filter
+ * node to appear/disappear. If the stream still is not where it was picked
+ * after `bounceTimeout` ms, the user gets a desktop notice instead of a
+ * chip that silently keeps showing another device.
  *
  * The popup is clamped to `clampItem` (the mixer card/widget hosting this
  * chip) so it is never clipped by list clipping, small overlay widgets or
@@ -47,6 +50,13 @@ RippleButton {
     readonly property string label: root.followingDefault ? Translation.tr("Default") : Audio.friendlyDeviceName(root.shownDevice)
     // Set while a pick is in flight; checked after `bounceTimeout` ms.
     property int pendingTargetId: -1
+    // Routing state machine: a pick that must pass through an EasyEffects
+    // on/off transition defers its move until the filter node settles.
+    property string routeStage: ""          // "", "wait-off", "wait-on"
+    property var routeTarget: null          // PwNode to move to once settled
+    property bool routeFollowDefault: false // "Default" pick: move, never pin
+    property bool routeWasActive: false     // filter node present when pick started
+    property int routeTicks: 0
 
     // Devices of this direction. Keep the stream's live device in the list even
     // when it is not part of the regular device list (e.g. a filter node).
@@ -59,25 +69,47 @@ RippleButton {
         return devices;
     }
 
+    // Menu: Default first, then hardware devices, then virtual filters
+    // (EasyEffects) under their own header. Every row carries its height so
+    // the popup can size itself without waiting for list layout (a
+    // contentHeight-driven popup deadlocks at its padding size).
     readonly property var menuItems: {
         const items = [{
             kind: "header",
+            h: 26,
             name: Translation.tr(root.isSink ? "Output device" : "Input device")
         }, {
             kind: "default",
+            h: 42,
             name: Translation.tr("Default"),
             icon: Audio.deviceIcon(root.defaultDevice),
             subtitle: Audio.friendlyDeviceName(root.defaultDevice)
-        }, {
-            kind: "sep"
         }];
+        const hardware = [];
+        const virtuals = [];
         for (const device of root.deviceList) {
-            items.push({
+            const name = Audio.friendlyDeviceName(device);
+            const desc = device.description ?? "";
+            const subtitle = (desc && desc !== name) ? desc : "";
+            const entry = {
                 kind: "device",
                 device: device,
-                name: Audio.friendlyDeviceName(device),
-                icon: Audio.deviceIcon(device)
-            });
+                name: name,
+                icon: Audio.deviceIcon(device),
+                subtitle: subtitle,
+                defaultBadge: root.defaultDevice !== null && device.id === root.defaultDevice.id,
+                h: subtitle ? 44 : 34
+            };
+            (Audio.isHardwareDevice(device) ? hardware : virtuals).push(entry);
+        }
+        if (hardware.length > 0) {
+            items.push({ kind: "sep", h: 9 });
+            for (const entry of hardware) items.push(entry);
+        }
+        if (virtuals.length > 0) {
+            items.push({ kind: "sep", h: 9 });
+            items.push({ kind: "header", h: 24, name: Translation.tr("Effects") });
+            for (const entry of virtuals) items.push(entry);
         }
         return items;
     }
@@ -104,14 +136,46 @@ RippleButton {
     colRippleToggled: Appearance.colors.colSecondaryContainerActive
 
     onClicked: {
+        console.log("[SDS] chip clicked");
         // Defer past the release event: opening from inside the release handler
         // lets CloseOnPressOutside see the still-active press and close at once.
         Qt.callLater(() => popup.open());
     }
 
-    // Apply a pick (device = null resets to the system default). A pick that
-    // already matches the chain-resolved device is a no-op -- e.g. choosing
-    // the device EasyEffects already outputs to must not bounce.
+    // The EasyEffects filter node for this direction right now, if any.
+    // Node presence is the ground truth: it is direction-correct (capture
+    // filters may be off while playback filters run) and immune to a stale
+    // `EasyEffects.active` flag.
+    function easyEffectsNode() {
+        const want = root.isSink ? "easyeffects_sink" : "easyeffects_source";
+        for (const n of Pipewire.nodes.values) {
+            if (n.name === want && !n.isStream) return n;
+        }
+        return null;
+    }
+
+    // PwNodes are recreated when their producer restarts (EasyEffects):
+    // keep the pick while the id still exists, else re-resolve by name.
+    function resolveTarget(target) {
+        if (!target) return null;
+        for (const n of Pipewire.nodes.values) {
+            if (n.id === target.id && !n.isStream) return target;
+        }
+        for (const n of Pipewire.nodes.values) {
+            if (n.name === target.name && !n.isStream) return n;
+        }
+        return null;
+    }
+
+    // Apply a pick (device = null resets to the system default: a plain move
+    // with no pin, so the stream keeps following default-device changes).
+    // A pick that already matches the chain-resolved device is a no-op --
+    // e.g. choosing the device EasyEffects already outputs to must not bounce.
+    //
+    // EasyEffects re-pins every stream it claims back to itself within
+    // ~400 ms, so a pick arbitrates it: routing into EasyEffects turns it on
+    // first, routing anywhere else turns it off, and the actual move waits
+    // for the filter node to settle (eeWait: 100 ms ticks, ~2 s cap).
     function chooseDevice(device) {
         const target = device ?? Audio.defaultDevice(root.isSink);
         if (!target) {
@@ -125,10 +189,77 @@ RippleButton {
             popup.close();
             return;
         }
-        Audio.moveStreamToDevice(root.node, device);
-        root.pendingTargetId = target.id;
-        bounceCheck.restart();
         popup.close();
+        root.routeTarget = target;
+        root.routeFollowDefault = device === null;
+        const eeNode = root.easyEffectsNode();
+        root.routeWasActive = eeNode !== null;
+        const targetIsEE = String(target.name ?? "").startsWith("easyeffects_");
+        if (targetIsEE) {
+            if (eeNode === null) EasyEffects.enable();
+            root.routeStage = "wait-on";
+            root.routeTicks = 0;
+            eeWait.restart();
+        } else if (eeNode !== null) {
+            EasyEffects.disable();
+            root.routeStage = "wait-off";
+            root.routeTicks = 0;
+            eeWait.restart();
+        } else {
+            root.applyRoute();
+        }
+    }
+
+    // The filter node settled (or the wait timed out: still move, the
+    // bounce check below reports a move that does not stick). Perform the
+    // deferred move and pin.
+    function applyRoute() {
+        eeWait.stop();
+        root.routeStage = "";
+        const followDefault = root.routeFollowDefault;
+        const label = root.routeTarget ? Audio.friendlyDeviceName(root.routeTarget) : "";
+        const wanted = root.resolveTarget(root.routeTarget);
+        root.routeTarget = null;
+        if (!wanted) {
+            root.pendingTargetId = -1;
+            if (label) root.notify(`${Translation.tr("Device not available")}: ${label}`);
+            return;
+        }
+        Audio.moveStreamToDevice(root.node, followDefault ? null : wanted);
+        root.pendingTargetId = wanted.id;
+        bounceCheck.restart();
+    }
+
+    function notify(message) {
+        Quickshell.execDetached(["notify-send", "-a", "Shell",
+            Translation.tr("Volume Mixer"), message]);
+    }
+
+    Timer {
+        id: eeWait
+        interval: 100
+        repeat: true
+        onTriggered: {
+            const stage = root.routeStage;
+            if (stage === "") {
+                eeWait.stop();
+                return;
+            }
+            const eeGone = root.easyEffectsNode() === null;
+            const settled = stage === "wait-off" ? eeGone : !eeGone;
+            if (settled || ++root.routeTicks >= 20) {
+                const timedOut = !settled;
+                const label = root.routeTarget ? Audio.friendlyDeviceName(root.routeTarget) : "";
+                const wasActive = root.routeWasActive;
+                root.applyRoute();
+                if (timedOut) return;
+                if (stage === "wait-off") {
+                    root.notify(`${Translation.tr("EasyEffects turned off to route this stream to")} ${label}`);
+                } else if (stage === "wait-on" && !wasActive) {
+                    root.notify(Translation.tr("EasyEffects turned on — this stream now plays through it"));
+                }
+            }
+        }
     }
 
     Timer {
@@ -142,9 +273,7 @@ RippleButton {
             const chain = Audio.streamDevice(root.node);
             const landed = (direct && direct.id === wanted) || (chain && chain.id === wanted);
             if (!landed) {
-                Quickshell.execDetached(["notify-send", "-a", "Shell",
-                    Translation.tr("Volume Mixer"),
-                    Translation.tr("EasyEffects holds this stream — turn it off for per-app device routing")]);
+                root.notify(Translation.tr("EasyEffects holds this stream — turn it off for per-app device routing"));
             }
         }
     }
@@ -196,7 +325,7 @@ RippleButton {
     property real placeBoundsY: 0
     property real placeBoundsW: 0
     property real placeBoundsH: 0
-    property real placeWidth: 260
+    property real placeWidth: 300
     property real placeSpaceBelow: 400
     property real placeSpaceAbove: 400
     property bool placeBelow: true
@@ -205,7 +334,7 @@ RippleButton {
     readonly property real estimatedPopupHeight: {
         let height = popup.padding * 2;
         for (const item of root.menuItems) {
-            height += (item.kind === "header" ? 24 : item.kind === "sep" ? 9 : 36) + 1;
+            height += (item.h ?? 36) + 1;
         }
         return height;
     }
@@ -229,7 +358,7 @@ RippleButton {
         root.placeBoundsY = bounds.y;
         root.placeBoundsW = bounds.w;
         root.placeBoundsH = bounds.h;
-        root.placeWidth = Math.max(200, Math.min(260, bounds.w - root.placeMargin * 2));
+        root.placeWidth = Math.max(200, Math.min(300, bounds.w - root.placeMargin * 2));
 
         const spaceBelow = (bounds.y + bounds.h) - (chip.y + root.height) - root.placeGap - root.placeMargin;
         const spaceAbove = chip.y - bounds.y - root.placeGap - root.placeMargin;
@@ -267,24 +396,50 @@ RippleButton {
             root.capturePlacement();
             popup.popupAvailableHeight = Math.max(root.placeBelow ? root.placeSpaceBelow : root.placeSpaceAbove, 160);
         }
+        onOpened: console.log("[SDS] popup opened at", popup.x, popup.y, popup.width + "x" + popup.height, "opacity=" + popup.opacity, "scale=" + popup.scale, "below=" + root.placeBelow)
+        onClosed: console.log("[SDS] popup closed")
+
+        // Pop out from the edge the chip sits on; a scale + fade entrance
+        // without touching the popup's bound x/y.
+        transformOrigin: root.placeBelow ? Item.Top : Item.Bottom
 
         enter: Transition {
-            PropertyAnimation {
-                properties: "opacity"
-                to: 1
-                duration: Appearance.animation.elementMoveFast.duration
-                easing.type: Easing.BezierSpline
-                easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+            ParallelAnimation {
+                PropertyAnimation {
+                    properties: "opacity"
+                    from: 0
+                    to: 1
+                    duration: Appearance.animation.elementMoveFast.duration
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+                }
+                PropertyAnimation {
+                    properties: "scale"
+                    from: 0.96
+                    to: 1
+                    duration: Appearance.animation.elementMoveFast.duration
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+                }
             }
         }
 
         exit: Transition {
-            PropertyAnimation {
-                properties: "opacity"
-                to: 0
-                duration: Appearance.animation.elementMoveFast.duration
-                easing.type: Easing.BezierSpline
-                easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+            ParallelAnimation {
+                PropertyAnimation {
+                    properties: "opacity"
+                    to: 0
+                    duration: Appearance.animation.elementMoveFast.duration
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+                }
+                PropertyAnimation {
+                    properties: "scale"
+                    to: 0.96
+                    duration: Appearance.animation.elementMoveFast.duration
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+                }
             }
         }
 
@@ -324,7 +479,7 @@ RippleButton {
                         && root.currentDevice.id === modelData.device.id)
 
                 width: ListView.view ? ListView.view.width : popup.width - popup.padding * 2
-                height: isHeader ? 24 : isSep ? 9 : 36
+                height: row.modelData.h ?? 36
 
                 Rectangle {
                     visible: row.selectable
@@ -413,20 +568,33 @@ RippleButton {
                         Layout.alignment: Qt.AlignVCenter
                     }
 
-                    StyledText {
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        text: row.modelData.name ?? ""
-                        elide: Text.ElideRight
-                        font.pixelSize: Appearance.font.pixelSize.small
-                        color: row.selected ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
+                        Layout.alignment: Qt.AlignVCenter
+                        spacing: 0
+
+                        StyledText {
+                            Layout.fillWidth: true
+                            text: row.modelData.name ?? ""
+                            elide: Text.ElideRight
+                            font.pixelSize: Appearance.font.pixelSize.small
+                            color: row.selected ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
+                        }
+
+                        StyledText {
+                            Layout.fillWidth: true
+                            visible: (row.modelData.subtitle ?? "") !== ""
+                            text: row.modelData.subtitle ?? ""
+                            elide: Text.ElideRight
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            color: Appearance.colors.colSubtext
+                        }
                     }
 
                     StyledText {
-                        visible: row.kind === "default" && (row.modelData.subtitle ?? "") !== ""
-                        Layout.maximumWidth: 96
+                        visible: row.modelData.defaultBadge === true
                         Layout.alignment: Qt.AlignVCenter
-                        text: row.modelData.subtitle ?? ""
-                        elide: Text.ElideLeft
+                        text: Translation.tr("Default")
                         font.pixelSize: Appearance.font.pixelSize.smaller
                         color: Appearance.colors.colSubtext
                     }
