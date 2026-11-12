@@ -311,4 +311,9 @@ Singleton {
         ];
         Quickshell.execDetached(command);
     }
+
+    // Touch the pactl device layer during shell startup (this singleton is
+    // loaded by the bar/mixer early) so the first time the Devices panel
+    // opens its data is already parsed — no open-time pactl stall.
+    Component.onCompleted: AudioDevices.ready
 }

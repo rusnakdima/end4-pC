@@ -41,6 +41,10 @@ StyledOverlayWidget {
                     buttonIcon: "mic"
                     buttonText: Translation.tr("Input")
                 }
+                SecondaryTabButton {
+                    buttonIcon: "speaker_group"
+                    buttonText: Translation.tr("Devices")
+                }
             }
             SwipeView {
                 id: swipeView
@@ -57,6 +61,41 @@ StyledOverlayWidget {
                 }
                 PaddedVolumeDialogContent { 
                     isSink: false 
+                }
+                DevicesContent { }
+            }
+        }
+    }
+
+    /**
+     * The pavucontrol device + configuration content (shared component),
+     * wrapped in a flickable so the 300 px overlay widget scrolls.
+     *
+     * Built through a Loader: opening the overlay only pays for the two
+     * volume pages, and the Devices page materializes on the first visit
+     * (a direct jump to tab 3, or one step of preloading when the user
+     * opens Input) — by then the pactl data layer is long warm.
+     */
+    component DevicesContent: Item {
+        id: devicesPage
+        readonly property bool wantPanel: tabBar.currentIndex >= 2 || swipeView.currentIndex >= 1
+
+        Loader {
+            id: devicesLoader
+            anchors.fill: parent
+            active: devicesPage.wantPanel
+            sourceComponent: Flickable {
+                id: devicesFlick
+                clip: true
+                property real padding: 12
+                contentHeight: devicesPanel.implicitHeight + padding * 2
+                contentWidth: width
+
+                AudioDevicesPanel {
+                    id: devicesPanel
+                    x: devicesFlick.padding
+                    y: devicesFlick.padding
+                    width: devicesFlick.width - devicesFlick.padding * 2
                 }
             }
         }

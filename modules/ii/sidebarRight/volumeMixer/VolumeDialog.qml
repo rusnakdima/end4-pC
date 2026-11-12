@@ -11,10 +11,14 @@ import Quickshell.Services.Pipewire
 WindowDialog {
     id: root
     property bool isSink: true
+    // "Details" now flips this dialog to the built-in pavucontrol-style
+    // device panel instead of launching an external app.
+    property bool showingDevices: false
     backgroundHeight: 600
 
     WindowDialogTitle {
-        text: root.isSink ? Translation.tr("Audio output") : Translation.tr("Audio input")
+        text: root.showingDevices ? Translation.tr("Audio devices")
+            : root.isSink ? Translation.tr("Audio output") : Translation.tr("Audio input")
     }
 
     WindowDialogSeparator {
@@ -25,15 +29,18 @@ WindowDialog {
 
     VolumeDialogContent {
         isSink: root.isSink
+        visible: !root.showingDevices
+    }
+
+    AudioDevicesPanel {
+        visible: root.showingDevices
+        Layout.fillWidth: true
     }
 
     WindowDialogButtonRow {
         DialogButton {
-            buttonText: Translation.tr("Details")
-            onClicked: {
-                Quickshell.execDetached(["bash", "-c", `${Config.options.apps.volumeMixer}`]);
-                GlobalStates.sidebarRightOpen = false;
-            }
+            buttonText: root.showingDevices ? Translation.tr("Back") : Translation.tr("Details")
+            onClicked: root.showingDevices = !root.showingDevices
         }
 
         Item {

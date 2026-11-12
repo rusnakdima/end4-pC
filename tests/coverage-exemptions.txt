@@ -147,3 +147,5 @@ modules/ii/verticalBar/VerticalBarContent.qml|it repeats the horizontal bar's wi
 modules/ii/wallpaperSelector/WallpaperDirectoryItem.qml|it shows one entry of the wallpaper folder of the user and the thumbnail it displays is generated from the live filesystem, so the name and the icon it draws are the ones of that folder
 services/Hotspot.qml|every helper shells out to the root helper /usr/local/bin/aic-hotspot over sudo and parses its live JSON, so the state it publishes only exists against the running machine's radio and NetworkManager
 modules/common/widgets/StreamDeviceSelector.qml|it positions a popup against its host item and asks pactl to move a live stream, so its behaviour exists only against a running PipeWire session and the widget tree hosting the chip
+services/AudioDevices.qml|every helper shells out to pactl or maps its subscribe events, so the lists it publishes exist only against a running PulseAudio/PipeWire stack
+modules/common/widgets/DeviceRow.qml|it re-asserts its slider and mute state from a live AudioDevices parse after each pactl refresh, so its behaviour is the audio stack answering back

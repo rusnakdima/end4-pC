@@ -63,7 +63,9 @@ Item {
 
                 onClicked: {
                     Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "waffleSidebarLeft", "toggle"]);
-                    Quickshell.execDetached(["bash", "-c", Config.options.apps.volumeMixer]);
+                    // Built-in Devices view in the overlay instead of the
+                    // external pavucontrol app.
+                    Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "overlay", "toggle"]);
                 }
 
                 contentItem: Item {
@@ -91,15 +93,10 @@ Item {
             model: ScriptModel {
                 values: root.output ? Audio.outputDevices : Audio.inputDevices
             }
-            delegate: WChoiceButton {
+            delegate: DeviceRow {
                 required property var modelData
-                icon.name: WIcons.audioDeviceIcon(modelData)
-                text: Audio.friendlyDeviceName(modelData)
-                checked: (root.output ? Audio.sink : Audio.source) === modelData
-                onClicked: {
-                    if (root.output) Audio.setDefaultSink(modelData);
-                    else Audio.setDefaultSource(modelData);
-                }
+                deviceName: modelData.name
+                isOutput: root.output
             }
         }
 
