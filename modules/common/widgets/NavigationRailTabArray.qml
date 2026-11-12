@@ -23,8 +23,11 @@ Item {
         id: railScroll
         anchors.fill: parent
         clip: true
-        flickableDirection: Flickable.FlickVerticalDirection
+        flickableDirection: Flickable.VerticalFlick
+        boundsBehavior: Flickable.StopAtBounds
         contentHeight: tabBarColumn.implicitHeight
+        contentWidth: width
+        alwaysShowVerticalScrollBar: true
 
         Rectangle {
             property real itemHeight: tabBarColumn.children[0]?.baseSize ?? 56

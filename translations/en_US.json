@@ -1770,5 +1770,7 @@
   "Each chip is one layout; the first one is the active layout": "Each chip is one layout; the first one is the active layout",
   "Add…": "Add…",
   "%1 (custom)": "%1 (custom)",
-  "One chip per layout, in order — the nth variant belongs to the nth layout": "One chip per layout, in order — the nth variant belongs to the nth layout"
+  "One chip per layout, in order — the nth variant belongs to the nth layout": "One chip per layout, in order — the nth variant belongs to the nth layout",
+  "Collapse sidebar": "Collapse sidebar",
+  "Expand sidebar": "Expand sidebar"
 }

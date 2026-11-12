@@ -98,6 +98,19 @@ Item {
                 anchors.right: parent.right
                 spacing: 8
 
+                // Collapses the rail to icons only. The same value is exposed
+                // in Settings > Interface > Sidebar, so both stay in sync.
+                IconToolbarButton {
+                    text: root.compactSidebar ? "left_panel_open" : "left_panel_close"
+                    onClicked: Config.options.settings.sidebarDensity =
+                        root.compactSidebar ? "default" : "compact"
+                    StyledToolTip {
+                        text: root.compactSidebar
+                            ? Translation.tr("Expand sidebar")
+                            : Translation.tr("Collapse sidebar")
+                    }
+                }
+
                 MaterialSymbol {
                     text: "search"
                     iconSize: Appearance.font.pixelSize.large
@@ -152,7 +165,7 @@ Item {
                 id: navRailWrapper
                 Layout.fillHeight: true
                 Layout.margins: 0
-                implicitWidth: navRail.expanded ? (root.compactSidebar ? 150 : 195) : fab.baseSize
+                implicitWidth: navRail.expanded ? 195 : fab.baseSize
                 color: isMinimal ? "transparent" : Appearance.colors.colLayer1
                 radius: Appearance.rounding.normal
 
@@ -162,14 +175,18 @@ Item {
 
                 NavigationRail {
                     id: navRail
-                    anchors { left: parent.left; top: parent.top; bottom: parent.bottom; leftMargin: root.compactSidebar ? 12 : 20 }
+                    anchors { left: parent.left; right: parent.right; top: parent.top; bottom: parent.bottom; leftMargin: root.compactSidebar ? 0 : 20 }
                     spacing: root.compactSidebar ? 4 : 10
-                    expanded: root.width > 900
+                    // Compact is an explicit mode: only the icons are shown,
+                    // whatever the window width. Without it the rail still
+                    // expands on wide settings windows.
+                    expanded: !root.compactSidebar && root.width > 900
 
                     Item {
                         id: profileRowContainer
                         visible: true
                         Layout.fillWidth: false
+                        Layout.alignment: root.compactSidebar ? Qt.AlignHCenter : Qt.AlignLeft
                         Layout.margins: isMinimal ? 0 : 5
                         Layout.topMargin: root.compactSidebar ? 8 : 15
                         Layout.bottomMargin: isMinimal ? -30 : 0
@@ -189,7 +206,8 @@ Item {
                             ColumnLayout {
                                 spacing: 2
                                 Layout.fillWidth: true
-                                visible: !isMinimal
+                                // Compact shows the avatar alone.
+                                visible: !isMinimal && navRail.expanded
 
                                 StyledText {
                                     text: Config.options.profile.displayName === "" ? SystemInfo.username : Config.options.profile.displayName
@@ -224,7 +242,8 @@ Item {
                     }
 
                     Rectangle {
-                        Layout.preferredWidth: isMinimal ? 50 : (root.compactSidebar ? 120 : 160)
+                        Layout.preferredWidth: root.compactSidebar ? 32 : (isMinimal ? 50 : 160)
+                        Layout.alignment: root.compactSidebar ? Qt.AlignHCenter : Qt.AlignLeft
                         Layout.topMargin: isMinimal ? 30 : -5
                         Layout.bottomMargin: isMinimal ? -30 : 0
                         height: 2
@@ -271,6 +290,10 @@ Item {
                         // overflowing tab list scrolls instead of being pushed
                         // past the bottom of the card.
                         Layout.fillHeight: true
+                        // Without this the Flickable is only as wide as the
+                        // icon/label column; the wheel over the rest of the
+                        // rail then does nothing.
+                        Layout.fillWidth: true
                         colToggled: root.showingProfile ? "transparent" : Appearance.colors.colSecondaryContainer
                         Repeater {
                             model: root.pages

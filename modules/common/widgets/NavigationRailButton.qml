@@ -44,7 +44,9 @@ TabButton {
         }
         
         implicitWidth: root.visualWidth
-        implicitHeight: root.expanded ? itemIconBackground.implicitHeight : itemIconBackground.implicitHeight + itemText.implicitHeight 
+        implicitHeight: root.compact
+            ? root.baseSize
+            : (root.expanded ? itemIconBackground.implicitHeight : itemIconBackground.implicitHeight + itemText.implicitHeight)
 
         Rectangle {
             id: itemBackground
@@ -98,7 +100,8 @@ TabButton {
             implicitWidth: root.baseSize
             implicitHeight: root.baseHighlightHeight
             anchors {
-                left: parent.left
+                horizontalCenter: root.compact ? parent.horizontalCenter : undefined
+                left: root.compact ? undefined : parent.left
                 verticalCenter: parent.verticalCenter
             }
             MaterialSymbol {
@@ -119,7 +122,7 @@ TabButton {
 
         StyledText {
             id: itemText
-            visible: Config.options.settings.style !== "minimal"
+            visible: !root.compact && Config.options.settings.style !== "minimal"
             anchors {
                 top: itemIconBackground.bottom
                 topMargin: 2
@@ -151,4 +154,9 @@ TabButton {
         }
     }
 
+    // Compact mode shows the icon alone, so the page name needs a tooltip.
+    StyledToolTip {
+        text: root.buttonText
+        extraVisibleCondition: root.compact
+    }
 }
