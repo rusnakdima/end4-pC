@@ -21,7 +21,9 @@ Singleton {
     property real value: sink?.audio?.volume ?? 0
     
     function friendlyDeviceName(node) {
-        return (node.nickname || node.description || Translation.tr("Unknown"));
+        // node.name as last resort: quickshell's property dict is partial
+        // for nodes it has not negotiated, so description may be absent.
+        return (node?.nickname || node?.description || (node ? String(node.name) : "") || Translation.tr("Unknown"));
     }
     function appNodeDisplayName(node) {
         return (node.properties["application.name"] || node.description || node.name)
@@ -36,16 +38,38 @@ Singleton {
             return root.correctType(node, isSink) && node.isStream
         })
     }
-    // Devices are matched by media class, not by `node.audio`: audio params
-    // are null while a device is suspended or has not been used yet, which
-    // hid idle devices (HDMI, a quiet BT sink, the mic when nothing records)
-    // from every dropdown.
+    // Devices are matched by direction plus a media-class/name test, never
+    // by `node.audio` (null while a device is suspended) and not by
+    // media.class alone: quickshell's property dict is only partially
+    // populated for nodes it has not negotiated, and media.class is missing
+    // on exactly the idle devices the dropdown must offer (HDMI, analog, a
+    // quiet BT sink). Filter nodes (EasyEffects) are absent from
+    // Pipewire.nodes entirely but appear as link-group endpoints, so they
+    // are collected from there as well.
     function devices(isSink) {
-        return Pipewire.nodes.values.filter(node => {
-            if (node.isStream || node.isSink !== isSink) return false;
-            const mediaClass = node.properties["media.class"] ?? "";
-            return mediaClass.startsWith("Audio/");
-        });
+        const seen = {};
+        const out = [];
+        const want = (node) => {
+            if (!node || node.isStream || node.isSink !== isSink) return false;
+            const name = String(node.name ?? "");
+            if (name.startsWith("ee_")) return false; // EasyEffects internal stages
+            const mediaClass = node.properties?.["media.class"] ?? "";
+            if (mediaClass) return mediaClass.startsWith("Audio/");
+            // media.class not arrived yet: accept real device name shapes,
+            // reject drivers (Dummy/Freewheel), midi and camera nodes.
+            return /^(alsa|bluez)_(input|output)\./.test(name) || name.startsWith("easyeffects_");
+        };
+        const add = (node) => {
+            if (!want(node) || seen[node.id]) return;
+            seen[node.id] = true;
+            out.push(node);
+        };
+        for (const node of Pipewire.nodes.values) add(node);
+        for (const group of Pipewire.linkGroups.values) {
+            add(group.source);
+            add(group.target);
+        }
+        return out;
     }
     readonly property list<var> outputAppNodes: root.appNodes(true)
     readonly property list<var> inputAppNodes: root.appNodes(false)
@@ -121,8 +145,12 @@ Singleton {
 
     // Hardware devices carry a device.api (alsa, bluez5, ...); filter and
     // virtual nodes (easyeffects_sink and its internal chain) do not.
+    // device.api can be missing from quickshell's partial property dict on
+    // idle devices, so fall back to the well-known device name shapes.
     function isHardwareDevice(node) {
-        return !!node?.properties?.["device.api"];
+        if (!node) return false;
+        if (node.properties?.["device.api"]) return true;
+        return /^(alsa|bluez)_(input|output)\./.test(String(node.name ?? ""));
     }
 
     // Next link along the audio path after a filter node: playback follows

@@ -24,9 +24,8 @@ import qs.modules.common.widgets
  * EasyEffects re-pins every stream it claims back to itself within ~400 ms,
  * so a pick arbitrates it: routing into EasyEffects turns it on first,
  * routing anywhere else turns it off, and the move waits for the filter
- * node to appear/disappear. If the stream still is not where it was picked
- * after `bounceTimeout` ms, the user gets a desktop notice instead of a
- * chip that silently keeps showing another device.
+ * node to appear/disappear. There is deliberately no post-pick bounce check
+ * or desktop notice: the chip follows wherever the stream actually ends up.
  *
  * The popup is clamped to `clampItem` (the mixer card/widget hosting this
  * chip) so it is never clipped by list clipping, small overlay widgets or
@@ -47,9 +46,12 @@ RippleButton {
     readonly property bool followingDefault: root.currentDevice === null
         || (root.defaultDevice !== null && root.currentDevice.id === root.defaultDevice.id)
     readonly property PwNode shownDevice: root.currentDevice ?? root.defaultDevice
-    readonly property string label: root.followingDefault ? Translation.tr("Default") : Audio.friendlyDeviceName(root.shownDevice)
-    // Set while a pick is in flight; checked after `bounceTimeout` ms.
-    property int pendingTargetId: -1
+    // The chip shows the value of the selected option: the concrete device
+    // the stream really ends on. Following-default vs pinned is expressed
+    // by the pill/border state, not by swapping the text to "Default".
+    readonly property string label: root.shownDevice !== null
+        ? Audio.friendlyDeviceName(root.shownDevice)
+        : Translation.tr("Default")
     // Routing state machine: a pick that must pass through an EasyEffects
     // on/off transition defers its move until the filter node settles.
     property string routeStage: ""          // "", "wait-off", "wait-on"
@@ -137,19 +139,26 @@ RippleButton {
 
     onClicked: {
         console.log("[SDS] chip clicked");
-        // Defer past the release event: opening from inside the release handler
-        // lets CloseOnPressOutside see the still-active press and close at once.
-        Qt.callLater(() => popup.open());
+        // Defer past the release event so the outside-click catcher (which
+        // appears with the menu) never sees this same click.
+        Qt.callLater(() => root.openMenu());
     }
 
     // The EasyEffects filter node for this direction right now, if any.
     // Node presence is the ground truth: it is direction-correct (capture
     // filters may be off while playback filters run) and immune to a stale
-    // `EasyEffects.active` flag.
+    // `EasyEffects.active` flag. quickshell omits filter nodes from
+    // `Pipewire.nodes`, so they are also collected from link-group
+    // endpoints while audio actually flows through them.
     function easyEffectsNode() {
         const want = root.isSink ? "easyeffects_sink" : "easyeffects_source";
         for (const n of Pipewire.nodes.values) {
             if (n.name === want && !n.isStream) return n;
+        }
+        for (const g of Pipewire.linkGroups.values) {
+            for (const n of [g.source, g.target]) {
+                if (n && n.name === want && !n.isStream) return n;
+            }
         }
         return null;
     }
@@ -179,17 +188,17 @@ RippleButton {
     function chooseDevice(device) {
         const target = device ?? Audio.defaultDevice(root.isSink);
         if (!target) {
-            popup.close();
+            root.closeMenu();
             return;
         }
         const direct = Audio.directStreamDevice(root.node);
         const chain = Audio.streamDevice(root.node);
         const already = (direct && direct.id === target.id) || (chain && chain.id === target.id);
         if (already) {
-            popup.close();
+            root.closeMenu();
             return;
         }
-        popup.close();
+        root.closeMenu();
         root.routeTarget = target;
         root.routeFollowDefault = device === null;
         const eeNode = root.easyEffectsNode();
@@ -221,13 +230,10 @@ RippleButton {
         const wanted = root.resolveTarget(root.routeTarget);
         root.routeTarget = null;
         if (!wanted) {
-            root.pendingTargetId = -1;
             if (label) root.notify(`${Translation.tr("Device not available")}: ${label}`);
             return;
         }
         Audio.moveStreamToDevice(root.node, followDefault ? null : wanted);
-        root.pendingTargetId = wanted.id;
-        bounceCheck.restart();
     }
 
     function notify(message) {
@@ -262,22 +268,6 @@ RippleButton {
         }
     }
 
-    Timer {
-        id: bounceCheck
-        interval: 800
-        onTriggered: {
-            const wanted = root.pendingTargetId;
-            root.pendingTargetId = -1;
-            if (wanted < 0) return;
-            const direct = Audio.directStreamDevice(root.node);
-            const chain = Audio.streamDevice(root.node);
-            const landed = (direct && direct.id === wanted) || (chain && chain.id === wanted);
-            if (!landed) {
-                root.notify(Translation.tr("EasyEffects holds this stream — turn it off for per-app device routing"));
-            }
-        }
-    }
-
     contentItem: RowLayout {
         id: contentRow
         spacing: 5
@@ -304,7 +294,7 @@ RippleButton {
             color: root.followingDefault ? Appearance.colors.colSubtext : Appearance.colors.colOnSecondaryContainer
             opacity: 0.8
             Layout.alignment: Qt.AlignVCenter
-            rotation: popup.opened ? 180 : 0
+            rotation: root.menuOpen ? 180 : 0
             Behavior on rotation {
                 animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
             }
@@ -332,7 +322,7 @@ RippleButton {
     readonly property real placeMargin: 8
     readonly property real placeGap: 6
     readonly property real estimatedPopupHeight: {
-        let height = popup.padding * 2;
+        let height = 12; // menu padding, top + bottom (6 each)
         for (const item of root.menuItems) {
             height += (item.h ?? 36) + 1;
         }
@@ -340,6 +330,10 @@ RippleButton {
     }
 
     function popupBounds() {
+        // Menu coordinates are local to menuHost, so its bounds start at
+        // the host's origin.
+        const host = root.menuHost;
+        if (host) return { x: 0, y: 0, w: host.width, h: host.height };
         const target = root.clampItem;
         if (target) {
             const p = target.mapToItem(null, 0, 0);
@@ -351,7 +345,7 @@ RippleButton {
 
     function capturePlacement() {
         const bounds = root.popupBounds();
-        const chip = root.mapToItem(null, 0, 0);
+        const chip = root.mapToItem(root.menuHost, 0, 0);
         root.placeChipX = chip.x;
         root.placeChipY = chip.y;
         root.placeBoundsX = bounds.x;
@@ -369,98 +363,90 @@ RippleButton {
         root.placeBelow = spaceBelow >= Math.min(estimate, 160) || spaceBelow >= spaceAbove;
     }
 
-    Popup {
-        id: popup
-        // Render in-tree: the Qt default (a separate popup window) cannot be
-        // positioned over a layer-shell surface, so the list opens but never
-        // paints. As an item it draws inside the overlay window like any widget.
-        popupType: Popup.Item
-        property real popupAvailableHeight: 400
+    // --- Device menu ---------------------------------------------------------
+    // Deliberately NOT a Qt Popup: a Popup opens but never paints over this
+    // layer-shell window (it needs the Qt Quick Controls Overlay, which a
+    // plain quickshell window does not provide). The menu is an ordinary
+    // Item parented to the window's content item -- plain scene content,
+    // so it renders exactly like every other widget here.
+    property bool menuOpen: false
+    // The menu is plain scene content hosted inside the list that shows
+    // this row: Qt Popups cannot paint over this shell's layer-shell
+    // windows (open() succeeds, nothing renders), so the menu lives above
+    // the delegates, clipped to the list viewport -- the area it was
+    // clamped to anyway. Falls back to clampItem if no list is found.
+    readonly property Item menuHost: {
+        let p = root.parent;
+        while (p) {
+            if (p.flickableDirection !== undefined) return p;
+            p = p.parent;
+        }
+        return root.clampItem;
+    }
+    property real popupAvailableHeight: 400
+
+    function openMenu() {
+        root.capturePlacement();
+        root.popupAvailableHeight = Math.max(root.placeBelow ? root.placeSpaceBelow : root.placeSpaceAbove, 160);
+        root.menuOpen = true;
+        console.log("[SDS] menu open at", menuRoot.x, menuRoot.y, menuRoot.width + "x" + menuRoot.height, "below=" + root.placeBelow);
+    }
+
+    function closeMenu() {
+        root.menuOpen = false;
+        console.log("[SDS] menu closed");
+    }
+
+    // Clicking anywhere else in the window closes the menu (the job
+    // Popup.CloseOnPressOutside used to do). It exists only while the menu
+    // is open, and the menu opens one event-loop tick after the chip's own
+    // click, so that click never lands here.
+    MouseArea {
+        parent: root.menuHost
+        visible: root.menuOpen && root.menuHost !== null
+        z: 900
+        anchors.fill: parent
+        onClicked: root.closeMenu()
+    }
+
+    Item {
+        id: menuRoot
+        parent: root.menuHost
+        visible: root.menuOpen && root.menuHost !== null
+        z: 901
+        opacity: root.menuOpen ? 1 : 0
+        Behavior on opacity {
+            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+        }
 
         width: root.placeWidth
         // Sized from the known item heights, not from listView.contentHeight:
-        // a contentHeight-driven popup deadlocks at its padding size when the
+        // a contentHeight-driven size deadlocks at the padding size when the
         // list has not laid out yet (contentItem height 0 -> no delegates).
-        height: Math.min(root.estimatedPopupHeight, popup.popupAvailableHeight)
+        height: Math.min(root.estimatedPopupHeight, root.popupAvailableHeight)
         x: Math.max(root.placeBoundsX + root.placeMargin,
             Math.min(root.placeChipX, root.placeBoundsX + root.placeBoundsW - width - root.placeMargin))
         y: root.placeBelow
             ? root.placeChipY + root.height + root.placeGap
             : root.placeChipY - root.placeGap - height
 
-        padding: 6
-        focus: true
-        closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
-
-        onAboutToShow: {
-            root.capturePlacement();
-            popup.popupAvailableHeight = Math.max(root.placeBelow ? root.placeSpaceBelow : root.placeSpaceAbove, 160);
-        }
-        onOpened: console.log("[SDS] popup opened at", popup.x, popup.y, popup.width + "x" + popup.height, "opacity=" + popup.opacity, "scale=" + popup.scale, "below=" + root.placeBelow)
-        onClosed: console.log("[SDS] popup closed")
-
-        // Pop out from the edge the chip sits on; a scale + fade entrance
-        // without touching the popup's bound x/y.
-        transformOrigin: root.placeBelow ? Item.Top : Item.Bottom
-
-        enter: Transition {
-            ParallelAnimation {
-                PropertyAnimation {
-                    properties: "opacity"
-                    from: 0
-                    to: 1
-                    duration: Appearance.animation.elementMoveFast.duration
-                    easing.type: Easing.BezierSpline
-                    easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
-                }
-                PropertyAnimation {
-                    properties: "scale"
-                    from: 0.96
-                    to: 1
-                    duration: Appearance.animation.elementMoveFast.duration
-                    easing.type: Easing.BezierSpline
-                    easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
-                }
-            }
+        StyledRectangularShadow {
+            target: popupBackground
         }
 
-        exit: Transition {
-            ParallelAnimation {
-                PropertyAnimation {
-                    properties: "opacity"
-                    to: 0
-                    duration: Appearance.animation.elementMoveFast.duration
-                    easing.type: Easing.BezierSpline
-                    easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
-                }
-                PropertyAnimation {
-                    properties: "scale"
-                    to: 0.96
-                    duration: Appearance.animation.elementMoveFast.duration
-                    easing.type: Easing.BezierSpline
-                    easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
-                }
-            }
+        Rectangle {
+            id: popupBackground
+            anchors.fill: parent
+            radius: Appearance.rounding.normal
+            color: Appearance.m3colors.m3surfaceContainerHigh
         }
 
-        background: Item {
-            StyledRectangularShadow {
-                target: popupBackground
-            }
-
-            Rectangle {
-                id: popupBackground
-                anchors.fill: parent
-                radius: Appearance.rounding.normal
-                color: Appearance.m3colors.m3surfaceContainerHigh
-            }
-        }
-
-        contentItem: StyledListView {
+        StyledListView {
             id: listView
+            anchors.fill: parent
+            anchors.margins: 6
             clip: true
             spacing: 1
-            implicitHeight: contentHeight
             animateAppearance: false
             model: root.menuItems
 
@@ -473,12 +459,16 @@ RippleButton {
                 readonly property bool isHeader: kind === "header"
                 readonly property bool isSep: kind === "sep"
                 readonly property bool selectable: kind === "default" || kind === "device"
+                // Exactly one row is ever active: the Default row while the
+                // stream follows the default, a device row only while the
+                // stream is pinned to that device -- never both at once.
                 readonly property bool selected: kind === "default"
                     ? root.followingDefault
-                    : (kind === "device" && root.currentDevice !== null
+                    : (kind === "device" && !root.followingDefault
+                        && root.currentDevice !== null
                         && root.currentDevice.id === modelData.device.id)
 
-                width: ListView.view ? ListView.view.width : popup.width - popup.padding * 2
+                width: ListView.view ? ListView.view.width : menuRoot.width - 12
                 height: row.modelData.h ?? 36
 
                 Rectangle {
