@@ -239,7 +239,11 @@ Singleton {
             property string main: Config.options.appearance.fonts.main
             property string numbers: Config.options.appearance.fonts.numbers
             property string title: Config.options.appearance.fonts.title
-            property string iconMaterial: "Material Symbols Rounded"
+            // The shell ships its own copy under this unique family name:
+            // the system also has "Material Symbols Rounded" installed, in
+            // older versions that lack newer icons, so sharing the name made
+            // Qt pick the stale face and render those icons as text.
+            property string iconMaterial: "Material Symbols Rounded End4"
             property string iconNerd: Config.options.appearance.fonts.iconNerd
             property string monospace: Config.options.appearance.fonts.monospace
             property string reading: Config.options.appearance.fonts.reading

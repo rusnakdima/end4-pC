@@ -1773,5 +1773,7 @@
   "%1 (custom)": "%1 (custom)",
   "One chip per layout, in order — the nth variant belongs to the nth layout": "One chip per layout, in order — the nth variant belongs to the nth layout",
   "Collapse sidebar": "Collapse sidebar",
-  "Expand sidebar": "Expand sidebar"
+  "Expand sidebar": "Expand sidebar",
+  "Collapse all": "Collapse all",
+  "Expand all": "Expand all"
 }

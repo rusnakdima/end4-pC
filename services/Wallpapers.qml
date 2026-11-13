@@ -227,22 +227,31 @@ Singleton {
         id: validateDirProc
         property string nicePath: ""
         function setDirectoryIfValid(path) {
-            validateDirProc.nicePath = FileUtils.trimFileProtocol(path).replace(/\/+$/, "")
+            let p = String(path ?? "").trim()
+            if (p.length === 0) return
+            if (p.startsWith("~")) p = `${Quickshell.env("HOME")}${p.slice(1)}`
+            validateDirProc.nicePath = FileUtils.trimFileProtocol(p).replace(/\/+$/, "")
             if (/^\/*$/.test(validateDirProc.nicePath)) validateDirProc.nicePath = "/";
+            // Pass the path as an argument instead of interpolating it into
+            // the shell script: folders with spaces, quotes or $() are valid.
             validateDirProc.exec([
                 "bash", "-c",
-                `if [ -d "${validateDirProc.nicePath}" ]; then echo dir; elif [ -f "${validateDirProc.nicePath}" ]; then echo file; else echo invalid; fi`
+                'p="$1"; if [ -d "$p" ]; then echo dir; elif [ -f "$p" ]; then echo file; else echo invalid; fi',
+                "_", validateDirProc.nicePath
             ])
         }
         stdout: StdioCollector {
             onStreamFinished: {
-                    root.directory = Qt.resolvedUrl(validateDirProc.nicePath)
                 const result = text.trim()
                 if (result === "dir") {
+                    root.directory = Qt.resolvedUrl(validateDirProc.nicePath)
                 } else if (result === "file") {
                     root.directory = Qt.resolvedUrl(FileUtils.parentDirectory(validateDirProc.nicePath))
                 } else {
-                    // Ignore
+                    // Never switch to a path that does not exist: doing so
+                    // emptied the grid and made a broken shortcut look like an
+                    // empty folder. Leave the current folder in place.
+                    console.warn("[Wallpapers] ignoring non-existent folder:", validateDirProc.nicePath)
                 }
             }
         }
@@ -623,6 +632,10 @@ Singleton {
 
         function apply(path: string): void {
             root.apply(path);
+        }
+
+        function setDirectory(path: string): void {
+            root.setDirectory(path);
         }
 
         function setSortMode(mode: string): void {

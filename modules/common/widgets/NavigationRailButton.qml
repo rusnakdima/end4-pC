@@ -40,7 +40,10 @@ TabButton {
             top: parent.top
             bottom: parent.bottom
             left: parent.left
-            right: undefined
+            // Fill the button: with only a left anchor the content is as wide
+            // as the label, so centering the icon in compact mode pushed it
+            // left of the rail's centre.
+            right: parent.right
         }
         
         implicitWidth: root.visualWidth
@@ -100,10 +103,34 @@ TabButton {
             implicitWidth: root.baseSize
             implicitHeight: root.baseHighlightHeight
             anchors {
-                horizontalCenter: root.compact ? parent.horizontalCenter : undefined
-                left: root.compact ? undefined : parent.left
+                left: parent.left
                 verticalCenter: parent.verticalCenter
             }
+
+            // Swapping left for horizontalCenter through a ternary can leave
+            // both anchors set for a frame, which the engine then rejects:
+            // the icon kept its centered anchor and the label lost the anchor
+            // it hangs off, so the page name never came back after the rail
+            // was collapsed and expanded again.
+            states: State {
+                name: "centered"
+                when: root.compact
+                AnchorChanges {
+                    target: itemIconBackground
+                    anchors {
+                        left: undefined
+                        horizontalCenter: buttonContent.horizontalCenter
+                    }
+                }
+            }
+            transitions: Transition {
+                AnchorAnimation {
+                    duration: Appearance.animation.elementMoveFast.duration
+                    easing.type: Appearance.animation.elementMoveFast.type
+                    easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+                }
+            }
+
             MaterialSymbol {
                 id: navRailButtonIcon
                 rotation: root.buttonIconRotation

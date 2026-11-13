@@ -278,6 +278,9 @@ Item {
                                 sourceSize.width: wallpaperRect.width * 2
                                 sourceSize.height: wallpaperRect.height * 2
                             }
+
+                            // Banner shows the still. Live video stays on the
+                            // desktop and in the picker hover preview.
                         }
 
                         Rectangle {

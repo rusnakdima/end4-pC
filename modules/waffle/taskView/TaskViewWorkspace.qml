@@ -83,11 +83,17 @@ WMouseAreaButton {
             Loader {
                 anchors.fill: parent
                 active: !root.newWorkspace
-                sourceComponent: StyledImage {
-                    cache: true
-                    source: Wallpapers.displayPathFor(Config.options.background.wallpaperPath)
-                    fillMode: Image.PreserveAspectCrop
+                sourceComponent: Item {
+                    anchors.fill: parent
 
+                    StyledImage {
+                        anchors.fill: parent
+                        cache: true
+                        source: Wallpapers.displayPathFor(Config.options.background.wallpaperPath)
+                        fillMode: Image.PreserveAspectCrop
+                    }
+
+                    // Stills only here; the desktop itself stays live.
                     Repeater {
                         model: ScriptModel {
                             values: HyprlandData.toplevelsForWorkspace(root.workspace)

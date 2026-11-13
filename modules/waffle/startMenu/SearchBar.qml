@@ -67,7 +67,7 @@ FooterRectangle {
 
             WAppIcon {
                 Layout.leftMargin: 14
-                iconName: "system-search-checked"
+                iconName: "system-search"
                 separateLightDark: true
                 implicitSize: 18
             }

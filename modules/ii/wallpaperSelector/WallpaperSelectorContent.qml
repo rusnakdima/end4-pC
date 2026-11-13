@@ -23,10 +23,22 @@ MouseArea {
     property bool filterFieldFocused: false
     property Item activeFilterField: null
 
+    // The "Live walls" shortcut follows the folder configured in
+    // Settings > Background > Live Wallpaper Folder. The old hardcoded path
+    // had a typo ("Walpapers") and ignored that setting, which left the grid
+    // pointing at a folder that does not exist.
+    readonly property string liveWallsPath: {
+        let configured = String(Config.options.wallpaperSelector.liveWallpapersPath ?? "").trim();
+        if (configured.startsWith("~"))
+            configured = `${Quickshell.env("HOME")}${configured.slice(1)}`;
+        if (configured.length === 0) configured = `${Directories.videos}/Wallpapers`;
+        return configured.replace(/\/+$/, "");
+    }
+
     property var quickDirs: [
         { icon: "home",       name: "Home   ",       path: `${Directories.home}`,                alwaysVisible: Config.options.wallpaperSelector.showHomePath },
         { icon: "wallpaper",  name: "Wallpapers   ", path: `${Directories.pictures}/Wallpapers`, alwaysVisible: true },
-        { icon: "video_library", name: "Live walls   ", path: `${Directories.videos}/Walpapers`, alwaysVisible: true },
+        { icon: "video_library", name: "Live walls   ", path: root.liveWallsPath, alwaysVisible: true },
         { icon: "imagesmode", name: "Homework   ",   path: `${Directories.pictures}/homework`,   alwaysVisible: Config.options.policies.weeb },
         { icon: "casino",     name: "Random   ",     path: `${Directories.pictures}/Random`,     alwaysVisible: true },
         { 
@@ -58,7 +70,9 @@ MouseArea {
         const cellW = item?.cellWidth ?? (wallpaperGridBackground.width / root.columns);
         const cellH = item?.cellHeight ?? (cellW / root.previewCellAspectRatio);
         const thumbnailSizeName = Images.thumbnailSizeNameForDimensions(cellW - totalImageMargin, cellH - totalImageMargin);
-        Wallpapers.setDirectory(`${Directories.pictures}/Wallpapers`);
+        // Regenerate for the folder that is open. This used to jump back to
+        // Pictures/Wallpapers, so updating thumbnails in Live walls left the
+        // view on the wrong folder.
         Qt.callLater(() => Wallpapers.generateThumbnail(thumbnailSizeName));
     }
 

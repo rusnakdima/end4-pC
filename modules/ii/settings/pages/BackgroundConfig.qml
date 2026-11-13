@@ -42,8 +42,8 @@ ContentPage {
                 sourceSize.height: card.fixedHeight * 1.5
             }
 
-            // Card stills only: the desktop player is the single live
-            // instance (picker hover is the sole in-shell exception).
+            // Stills only in settings. Live video stays on the desktop and in
+            // the picker's transient hover preview.
         }
     }
 

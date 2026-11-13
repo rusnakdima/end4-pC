@@ -400,12 +400,8 @@ ContentPage {
                     }
                 }
 
-                // Single-instance wallpaper policy: like every other shell
-                // surface the hero shows the wallpaper's still — the desktop
-                // mpvpaper is the ONE live decode (the picker's hover preview
-                // is the only exception). wallpaperImg stays a sibling of the
-                // GlassCards because it is their backdrop via
-                // ShaderEffectSource, so it must never move under the blurs.
+                // Stills only in settings. Live video stays on the desktop and
+                // in the picker's transient hover preview.
                 GlassCard {
                     id: bottomBar
                     backdrop: wallpaperImg

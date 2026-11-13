@@ -176,7 +176,6 @@ ColumnLayout {
         Layout.fillWidth: true
         clip: true
         implicitHeight: root.collapsed ? 0 : sectionContent.implicitHeight
-        visible: implicitHeight > 0
 
         Behavior on implicitHeight {
             NumberAnimation { duration: 200; easing.type: Easing.OutCubic }

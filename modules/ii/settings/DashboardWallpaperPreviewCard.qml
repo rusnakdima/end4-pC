@@ -58,8 +58,8 @@ DashboardCard {
             sourceSize.height: 405
         }
 
-        // Still only: the desktop player is the single live instance
-        // (the picker's hover preview is the sole in-shell exception).
+        // Stills only in settings; the desktop and the picker hover are the
+        // live surfaces.
         MouseArea {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor

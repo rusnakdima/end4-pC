@@ -37,9 +37,33 @@ Variants {
         }
         color: "transparent"
 
+        // Same live-wallpaper handoff as the ii background: mpvpaper draws the
+        // video below this layer, so the still has to step aside while it is
+        // playing. Without this the waffle desktop pane covered the single
+        // wallpaper player with a frozen frame.
+        property string effectiveWallpaperPath:
+            Wallpapers.previewPath || Wallpapers.confirmedPath
+                || Config.options.background.wallpaperPath
+        readonly property bool wallpaperIsVideo:
+            Images.isVideoPath(effectiveWallpaperPath)
+        readonly property bool previewingVideo:
+            Wallpapers.previewPath.length > 0 && Images.isVideoPath(Wallpapers.previewPath)
+        readonly property bool previewVideoWithoutPlayer:
+            previewingVideo && !LiveWallpaper.previewPlayerActive
+                && !LiveWallpaper.queryInFlight
+        readonly property bool showLiveVideo:
+            wallpaperIsVideo && !previewVideoWithoutPlayer
+                && (previewingVideo || LiveWallpaper.available)
+
         StyledImage {
             anchors.fill: parent
-            source: Wallpapers.displayPathFor(Config.options.background.wallpaperPath)
+            visible: !panelRoot.showLiveVideo
+            // Drop the still entirely while the player is visible: keeping it
+            // loaded would cost a second full-size wallpaper in memory for no
+            // visible benefit.
+            source: panelRoot.showLiveVideo
+                ? ""
+                : Wallpapers.displayPathFor(panelRoot.effectiveWallpaperPath)
             fillMode: Image.PreserveAspectCrop
         }
     }

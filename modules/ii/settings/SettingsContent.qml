@@ -49,6 +49,33 @@ Item {
         }
     }
 
+    // The collapsible ContentSections of the page that is open right now.
+    function pageSectionIds() {
+        const ids = []
+        const walk = (item) => {
+            if (!item) return
+            if (item.sectionId !== undefined && item.collapsible === true)
+                ids.push(item.sectionId)
+            const kids = item.children ?? []
+            for (let i = 0; i < kids.length; i++) walk(kids[i])
+        }
+        walk(GlobalStates.currentPageInstance)
+        return ids
+    }
+
+    function setPageSectionsCollapsed(collapsed) {
+        const ids = root.pageSectionIds()
+        if (ids.length === 0) return
+
+        let list = Config.options.settings.collapsedSections.slice()
+        for (let i = 0; i < ids.length; i++) {
+            const idx = list.indexOf(ids[i])
+            if (collapsed && idx === -1) list.push(ids[i])
+            else if (!collapsed && idx !== -1) list.splice(idx, 1)
+        }
+        Config.options.settings.collapsedSections = list
+    }
+
     onCurrentPageChanged: {
         if (root.pages[currentPage]?.id === "about") {
             if (SystemInfo.cpu === "") SystemInfo.refresh()
@@ -141,6 +168,24 @@ Item {
                             text = "";
                             event.accepted = true;
                         }
+                    }
+                }
+
+                // Collapse or expand every block of the page that is open
+                // right now; the state lives in settings.collapsedSections,
+                // the same list the section headers toggle one by one.
+                IconToolbarButton {
+                    text: "unfold_less"
+                    onClicked: root.setPageSectionsCollapsed(true)
+                    StyledToolTip {
+                        text: Translation.tr("Collapse all")
+                    }
+                }
+                IconToolbarButton {
+                    text: "unfold_more"
+                    onClicked: root.setPageSectionsCollapsed(false)
+                    StyledToolTip {
+                        text: Translation.tr("Expand all")
                     }
                 }
             }

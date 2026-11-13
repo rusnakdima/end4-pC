@@ -126,10 +126,9 @@ Item {
                         }
                     }
 
-                    // Only the selected or hovered cell plays — the one
-                    // transient in-shell decode — so browsing the grid costs
-                    // at most one extra decoder while the pointer sits on a
-                    // video cell. The still underneath stays as the fallback.
+                    // Only the selected or hovered cell plays, using a local
+                    // preview stream. The still underneath stays as the
+                    // fallback. No other surface is touched by this hover.
                     Loader {
                         anchors.fill: parent
                         active: root.playSelected && root.isVideoSource

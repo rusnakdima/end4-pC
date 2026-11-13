@@ -862,6 +862,17 @@ Singleton {
                 property bool centerIcons: true
             }
 
+            property JsonObject windowSwitcher: JsonObject {
+                property bool enable: true
+                property int cardWidth: 400 // Width of the focused card in px
+                // workspace: current workspace first; monitor: all windows on
+                // the focused monitor; all: every mapped window.
+                property string scope: "workspace"
+                // Widen the scope when the chosen one has fewer than two
+                // windows, instead of making Alt+Tab do nothing.
+                property bool fallback: true
+            }
+
             property JsonObject regionSelector: JsonObject {
                 property JsonObject targetRegions: JsonObject {
                     property bool windows: true

@@ -104,6 +104,14 @@ if [[ -n "$dup" ]]; then
     printf '%s\n' "$dup" | sed -E 's/^([^:]+):[0-9]+: /\1: /'
 fi
 
+# A Material Symbols name that is not in the Google pack renders as the
+# literal text instead of an icon, so the names are checked against the
+# pinned pack list.
+if ! icons=$(python3 ./tests/icon-audit.py 2>&1); then
+    status=1
+    printf '%s\n' "$icons"
+fi
+
 if [[ $status -eq 0 ]]; then
     echo "PASS: the QML compiles"
 fi

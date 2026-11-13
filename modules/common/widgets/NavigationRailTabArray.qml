@@ -29,9 +29,22 @@ Item {
         contentWidth: width
         alwaysShowVerticalScrollBar: true
 
+        // The Repeater lives in the column too, so children[0] is not a tab
+        // and children[index] is off by one: the highlight used a 56px
+        // fallback for compact tabs and the visual width of the wrong button.
+        readonly property var tabButtons: {
+            const out = []
+            const kids = tabBarColumn.children
+            for (let i = 0; i < kids.length; i++) {
+                const kid = kids[i]
+                if (kid && kid.baseSize !== undefined) out.push(kid)
+            }
+            return out
+        }
+
         Rectangle {
-            property real itemHeight: tabBarColumn.children[0]?.baseSize ?? 56
-            property real baseHighlightHeight: tabBarColumn.children[0]?.baseHighlightHeight ?? 56
+            property real itemHeight: railScroll.tabButtons[0]?.baseSize ?? 56
+            property real baseHighlightHeight: railScroll.tabButtons[0]?.baseHighlightHeight ?? 56
             anchors {
                 top: tabBarColumn.top
                 left: tabBarColumn.left
@@ -40,7 +53,7 @@ Item {
             radius: Config.options.settings.style === "minimal" ? Appearance.rounding.small : Appearance.rounding.full
             color: root.colToggled
             implicitHeight: root.expanded ? itemHeight : baseHighlightHeight
-            implicitWidth: tabBarColumn?.children[root.currentIndex]?.visualWidth ?? 100
+            implicitWidth: railScroll.tabButtons[root.currentIndex]?.visualWidth ?? 100
 
             Behavior on anchors.topMargin {
                 NumberAnimation {
