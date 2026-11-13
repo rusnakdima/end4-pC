@@ -24,21 +24,73 @@ MouseArea {
     property Item activeFilterField: null
 
     // The "Live walls" shortcut follows the folder configured in
-    // Settings > Background > Live Wallpaper Folder. The old hardcoded path
-    // had a typo ("Walpapers") and ignored that setting, which left the grid
-    // pointing at a folder that does not exist.
-    readonly property string liveWallsPath: {
+    // Settings > Background > Live Wallpaper Folder. If that setting is empty
+    // (the default), use the folder that actually holds the current clip,
+    // then the conventional Videos/Pictures locations. The old fallback was
+    // a fixed ~/Videos/Wallpapers path, which does not exist on machines
+    // whose clip folder is spelled differently (for example Walpapers).
+    readonly property string configuredLiveWallsPath: {
         let configured = String(Config.options.wallpaperSelector.liveWallpapersPath ?? "").trim();
         if (configured.startsWith("~"))
             configured = `${Quickshell.env("HOME")}${configured.slice(1)}`;
-        if (configured.length === 0) configured = `${Directories.videos}/Wallpapers`;
         return configured.replace(/\/+$/, "");
+    }
+
+    // A video wallpaper is the best hint for where the user keeps live walls.
+    readonly property string liveWallsVideoParent: {
+        const current = FileUtils.trimFileProtocol(String(Config.options.background.wallpaperPath ?? ""));
+        if (!Images.isVideoPath(current)) return "";
+        return FileUtils.parentDirectory(current).replace(/\/+$/, "");
+    }
+
+    readonly property var liveWallsCandidates: {
+        const list = [];
+        if (root.configuredLiveWallsPath.length > 0) list.push(root.configuredLiveWallsPath);
+        if (root.liveWallsVideoParent.length > 0) list.push(root.liveWallsVideoParent);
+        list.push(`${Directories.videos}/Wallpapers`);
+        list.push(`${Directories.videos}`);
+        list.push(`${Directories.pictures}/Wallpapers`);
+        list.push(`${Directories.home}`);
+        return list;
+    }
+
+    // Only a directory that passed the test -d probe may be handed to
+    // Wallpapers.setDirectory(): the service ignores missing paths, which is
+    // what made the tab look dead.
+    property string resolvedLiveWallsPath: ""
+
+    readonly property string liveWallsPath: root.resolvedLiveWallsPath.length > 0
+        ? root.resolvedLiveWallsPath
+        : (root.liveWallsVideoParent || root.configuredLiveWallsPath || `${Directories.videos}/Wallpapers`)
+
+    function probeLiveWalls() {
+        const candidates = root.liveWallsCandidates.filter(path => path.length > 0);
+        if (candidates.length === 0) return;
+        liveWallsProbe.command = ["bash", "-c",
+            'for d in "$@"; do [ -d "$d" ] && { printf "%s" "$d"; exit 0; }; done',
+            "_"].concat(candidates);
+        liveWallsProbe.running = false;
+        liveWallsProbe.running = true;
+    }
+
+    Process {
+        id: liveWallsProbe
+        stdout: StdioCollector {
+            onStreamFinished: root.resolvedLiveWallsPath = text.trim()
+        }
+    }
+
+    Component.onCompleted: root.probeLiveWalls()
+    onLiveWallsCandidatesChanged: root.probeLiveWalls()
+    Component.onDestruction: {
+        Wallpapers.stopPreview();
+        PreviewStream.clear();
     }
 
     property var quickDirs: [
         { icon: "home",       name: "Home   ",       path: `${Directories.home}`,                alwaysVisible: Config.options.wallpaperSelector.showHomePath },
         { icon: "wallpaper",  name: "Wallpapers   ", path: `${Directories.pictures}/Wallpapers`, alwaysVisible: true },
-        { icon: "video_library", name: "Live walls   ", path: root.liveWallsPath, alwaysVisible: true },
+        { icon: "video_library", name: "Live walls   ", id: "live", path: root.liveWallsPath, alwaysVisible: true },
         { icon: "imagesmode", name: "Homework   ",   path: `${Directories.pictures}/homework`,   alwaysVisible: Config.options.policies.weeb },
         { icon: "casino",     name: "Random   ",     path: `${Directories.pictures}/Random`,     alwaysVisible: true },
         { 
@@ -313,7 +365,14 @@ MouseArea {
                                         colBackgroundToggled: Appearance.colors.colSecondaryContainer
                                         colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
                                         colRippleToggled: Appearance.colors.colSecondaryContainerActive
-                                        onClicked: Wallpapers.setDirectory(modelData.path)
+                                        onClicked: {
+                                            if (modelData.id === "live") {
+                                                if (root.resolvedLiveWallsPath.length === 0) return;
+                                                Wallpapers.setDirectory(root.resolvedLiveWallsPath);
+                                                return;
+                                            }
+                                            Wallpapers.setDirectory(modelData.path);
+                                        }
                                         contentItem: RowLayout {
                                             anchors.fill: parent
                                             anchors.leftMargin: 12
@@ -901,6 +960,7 @@ MouseArea {
             } else if (!GlobalStates.wallpaperSelectorOpen) {
                 sortMenuPopup.open = false;
                 Wallpapers.stopPreview();
+                PreviewStream.clear();
                 WallhavenSearch.clearQuery();
             }
         }

@@ -73,6 +73,17 @@ sk.close()`
     function pause()  { root.setPaused(true) }
     function resume() { root.setPaused(false) }
 
+    // Re-read the player immediately. The apply path uses this so a fresh
+    // mpvpaper is noticed before the regular 4 s poll runs.
+    function refresh() {
+        if (pollProc.running) {
+            pollProc.running = false;
+            Qt.callLater(() => pollProc.running = true);
+        } else {
+            pollProc.running = true;
+        }
+    }
+
     // ── Live preview of a video from the picker ────────────────────────────
     // The desktop shows the running wallpaper player, so previewing a video
     // means handing that player the previewed file. What was playing is

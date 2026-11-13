@@ -23,6 +23,67 @@ Item {
     property int columns: Config.options.wallpaperSelector.columns || 4
     property real previewCellAspectRatio: 4 / 3
 
+    // The picker owns the local frame stream; cells only display it. Keeping
+    // the request here (instead of in a cell's onEntered/onDestruction) means
+    // delegate recycling cannot restart a clip that is already playing.
+    // The debounce coalesces the burst of currentIndex changes that a grid
+    // layout/scroll produces, so only the settled cell starts a stream.
+    function syncPreviewForCurrent() {
+        previewDebounce.restart();
+    }
+
+    function applyPreviewForCurrent() {
+        if (!grid.model || grid.model.count === 0) {
+            PreviewStream.clear();
+            return;
+        }
+        const filePath = grid.getModelProp(grid.currentIndex, "filePath");
+        const fileName = grid.getModelProp(grid.currentIndex, "fileName");
+        const isDir = grid.getModelProp(grid.currentIndex, "fileIsDir");
+        if (isDir || !filePath || !Images.isVideoPath(fileName || filePath)) {
+            PreviewStream.clear();
+            return;
+        }
+        PreviewStream.request(filePath);
+    }
+
+    Timer {
+        id: previewDebounce
+        interval: 120
+        onTriggered: root.applyPreviewForCurrent()
+    }
+
+    // Arrow/scroll navigation should update the desktop preview too, but only
+    // after the selection settles. Without this pause, holding an arrow key
+    // reloads mpvpaper from the beginning on every step.
+    property string pendingDesktopPreview: ""
+
+    function previewDesktopForCurrent() {
+        if (!Config.options.background.enableWallpaperPreview) return;
+        const filePath = grid.getModelProp(grid.currentIndex, "filePath");
+        const isDir = grid.getModelProp(grid.currentIndex, "fileIsDir");
+        if (isDir || !filePath) return;
+        root.pendingDesktopPreview = filePath;
+        desktopPreviewTimer.restart();
+    }
+
+    Timer {
+        id: desktopPreviewTimer
+        interval: 180
+        onTriggered: {
+            if (root.pendingDesktopPreview !== "") {
+                Wallpapers.startPreview(root.pendingDesktopPreview);
+                root.pendingDesktopPreview = "";
+            }
+        }
+    }
+
+    Component.onDestruction: {
+        previewDebounce.stop();
+        desktopPreviewTimer.stop();
+        PreviewStream.clear();
+    }
+
     // Drag-and-drop state
     property bool isDragging: false
     property int dragFromIndex: -1
@@ -340,8 +401,14 @@ Item {
         id: grid
         property bool introDone: false
         property int introCounter: 0
-        onCountChanged: if (count > 0 && !introDone && !introTimer.running) introTimer.start()
-        Component.onCompleted: if (count > 0) introTimer.start()
+        onCountChanged: {
+            if (count > 0 && !introDone && !introTimer.running) introTimer.start();
+            root.syncPreviewForCurrent();
+        }
+        Component.onCompleted: {
+            if (count > 0) introTimer.start();
+            root.syncPreviewForCurrent();
+        }
         anchors.fill: parent
         visible: Wallpapers.wallpaperModel.count > 0
 
@@ -368,9 +435,10 @@ Item {
         function moveSelection(delta) {
             currentIndex = Math.max(0, Math.min(grid.model.count - 1, currentIndex + delta));
             positionViewAtIndex(currentIndex, GridView.Contain);
-            const filePath = getModelProp(currentIndex, "filePath");
-            const isDir = getModelProp(currentIndex, "fileIsDir");
-            if (!isDir && filePath && Config.options.background.enableWallpaperPreview) Wallpapers.startPreview(filePath);
+            // Update the desktop preview once the selection settles. Keeping
+            // it on every step made mpvpaper reload the clip from the start
+            // while an arrow key was held.
+            root.previewDesktopForCurrent();
         }
 
         function activateCurrent() {
@@ -379,7 +447,8 @@ Item {
         }
 
         model: Wallpapers.wallpaperModel
-        onModelChanged: { currentIndex = 0; Wallpapers.stopPreview(); }
+        onModelChanged: { currentIndex = 0; Wallpapers.stopPreview(); PreviewStream.clear(); root.syncPreviewForCurrent(); }
+        onCurrentIndexChanged: root.syncPreviewForCurrent()
 
         Connections {
             target: Wallpapers
@@ -496,6 +565,7 @@ Item {
             MouseArea {
                 id: cellMouseArea
                 anchors.fill: parent
+                z: 20
                 hoverEnabled: true
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
 

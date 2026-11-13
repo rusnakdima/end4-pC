@@ -57,7 +57,7 @@ Variants {
             return Wallpapers.previewPath || Wallpapers.confirmedPath || Config.options.background.wallpaperPath;
         }
 
-        property bool wallpaperIsVideo: bgRoot.effectiveWallpaperPath.endsWith(".mp4") || bgRoot.effectiveWallpaperPath.endsWith(".webm") || bgRoot.effectiveWallpaperPath.endsWith(".mkv") || bgRoot.effectiveWallpaperPath.endsWith(".avi") || bgRoot.effectiveWallpaperPath.endsWith(".mov") || bgRoot.effectiveWallpaperPath.endsWith(".gif") || bgRoot.effectiveWallpaperPath.endsWith(".m4v") || bgRoot.effectiveWallpaperPath.endsWith(".wmv") || bgRoot.effectiveWallpaperPath.endsWith(".flv") || bgRoot.effectiveWallpaperPath.endsWith(".ogv") || bgRoot.effectiveWallpaperPath.endsWith(".3gp") || bgRoot.effectiveWallpaperPath.endsWith(".qt")
+        property bool wallpaperIsVideo: Images.isVideoPath(bgRoot.effectiveWallpaperPath)
         // What the desktop shows when a video is involved:
         //  - while previewing, the per-preview query result (previewPlayerActive)
         //    decides — not the 4s poll, which is stale right after every apply

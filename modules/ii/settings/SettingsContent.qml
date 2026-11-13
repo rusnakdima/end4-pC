@@ -86,6 +86,13 @@ Item {
     property var pages: SettingsPages.pages
     readonly property bool compactSidebar: Config.options.settings.sidebarDensity === "compact"
 
+    // Pages load one at a time after the panel has painted. Activating every
+    // loader in one callback builds all ~16 pages on the GUI thread before the
+    // first frame, which made opening Settings look frozen. The current page
+    // is always loaded by the Loader binding below; this index only advances
+    // the background preload, so a click on a not-yet-loaded page still wins.
+    property int preloadUpTo: -1
+
     Component.onCompleted: {
         Config.readWriteDelay = 0
         // The settings pages used to own this: with the Hyprland pane split
@@ -95,13 +102,22 @@ Item {
             HyprlandOptions.refresh()
             HyprlandConfig.applyFromConfig()
         }
-        Qt.callLater(() => {
-            for (let i = 0; i < root.pages.length; i++) {
-                let loader = pagesRepeater.itemAt(i)
-                if (loader) loader.active = true
+        preloadTimer.start()
+    }
+
+    Timer {
+        id: preloadTimer
+        interval: 180
+        repeat: true
+        running: false
+        onTriggered: {
+            if (!Config.ready) return
+            if (root.preloadUpTo + 1 >= root.pages.length) {
+                running = false
+                return
             }
-            if (profileLoader) profileLoader.active = true
-        })
+            root.preloadUpTo += 1
+        }
     }
 
     ColumnLayout {
@@ -379,7 +395,7 @@ Item {
                             required property var index
                             source: modelData.component
 
-                            active: Config.ready && (root.currentPage === index || item !== null)
+                            active: Config.ready && (root.currentPage === index || item !== null || index <= root.preloadUpTo)
 
                             anchors.fill: parent
 
@@ -414,7 +430,7 @@ Item {
 
                     Loader {
                         id: profileLoader
-                        active: false
+                        active: root.showingProfile || item !== null
                         anchors.fill: parent
                         source: Qt.resolvedUrl("pages/Profile.qml")
 

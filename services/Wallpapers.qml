@@ -158,6 +158,28 @@ Singleton {
         root.confirmedPath = path;
         Quickshell.execDetached([Directories.wallpaperSwitchScriptPath, "--mode", darkMode ? "dark" : "light", "--image", path]);
         root.changed()
+        // Applying a clip restarts mpvpaper. The regular 4 s poll can leave
+        // the desktop on the old poster long enough to look like the apply
+        // failed; poll briefly until the new player answers.
+        if (Images.isVideoPath(path)) {
+            liveRefreshTimer.tries = 0;
+            liveRefreshTimer.restart();
+        }
+    }
+
+    Timer {
+        id: liveRefreshTimer
+        interval: 750
+        repeat: true
+        running: false
+        property int tries: 0
+        onTriggered: {
+            LiveWallpaper.refresh();
+            if (++tries >= 6) {
+                running = false;
+                tries = 0;
+            }
+        }
     }
 
     Process {

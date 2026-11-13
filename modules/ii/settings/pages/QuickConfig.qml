@@ -19,6 +19,31 @@ ContentPage {
     baseWidth: !isMinimal ? 700 : 600
     bottomContentPadding: 35
 
+    // The preview must be usable before the wallpaper decodes. The image is
+    // already asynchronous; this flag only decides when the expensive glass
+    // blur may be built.
+    readonly property bool wallpaperReady: wallpaperImg.status === Image.Ready
+    property bool glassReady: false
+
+    onWallpaperReadyChanged: {
+        if (wallpaperReady) {
+            glassDelay.restart();
+        } else {
+            glassDelay.stop();
+            glassReady = false;
+        }
+    }
+
+    Component.onCompleted: {
+        if (wallpaperReady) glassDelay.restart();
+    }
+
+    Timer {
+        id: glassDelay
+        interval: 160
+        onTriggered: page.glassReady = page.wallpaperReady
+    }
+
     component SmallLightDarkPreferenceButton: RippleButton {
         id: smallLightDarkPreferenceButton
         required property bool dark
@@ -51,34 +76,52 @@ ContentPage {
         id: glass
         required property Item backdrop
         property real cardRadius: Appearance.rounding.large
+        // The blur reads the backdrop through a ShaderEffectSource, which is
+        // expensive to build and redraws every frame. The Quick page enables
+        // it only once the wallpaper has decoded, so the first frame is just
+        // the themed placeholder and the bar's solid tint.
+        property bool blurEnabled: true
         default property alias content: contentHolder.data
 
-        Item {
+        // Shown immediately and left underneath the blur. It keeps the bar
+        // readable while the wallpaper is still loading.
+        Rectangle {
             anchors.fill: parent
-            layer.enabled: true
-            layer.effect: OpacityMask {
-                maskSource: Rectangle {
-                    width: glass.width
-                    height: glass.height
-                    radius: glass.cardRadius
-                }
-            }
+            radius: glass.cardRadius
+            color: ColorUtils.transparentize(Appearance.colors.colLayer1, 0.4)
+        }
 
-            ShaderEffectSource {
-                id: blurSource
+        Loader {
+            anchors.fill: parent
+            active: glass.blurEnabled
+
+            sourceComponent: Item {
                 anchors.fill: parent
-                sourceItem: glass.backdrop
-                sourceRect: Qt.rect(glass.x, glass.y, glass.width, glass.height)
-                visible: false
-            }
-            FastBlur {
-                anchors.fill: parent
-                source: blurSource
-                radius: 128
-            }
-            Rectangle {
-                anchors.fill: parent
-                color: ColorUtils.transparentize(Appearance.colors.colLayer1, 0.4)
+                layer.enabled: true
+                layer.effect: OpacityMask {
+                    maskSource: Rectangle {
+                        width: glass.width
+                        height: glass.height
+                        radius: glass.cardRadius
+                    }
+                }
+
+                ShaderEffectSource {
+                    id: blurSource
+                    anchors.fill: parent
+                    sourceItem: glass.backdrop
+                    sourceRect: Qt.rect(glass.x, glass.y, glass.width, glass.height)
+                    visible: false
+                }
+                FastBlur {
+                    anchors.fill: parent
+                    source: blurSource
+                    radius: Config.options.background.widgets.blurRadius ?? 32
+                }
+                Rectangle {
+                    anchors.fill: parent
+                    color: ColorUtils.transparentize(Appearance.colors.colLayer1, 0.4)
+                }
             }
         }
 
@@ -389,7 +432,10 @@ ContentPage {
                     source: /\.(mp4|webm|mkv|avi|mov)$/i.test(Config.options.background.wallpaperPath)
                         ? Config.options.background.thumbnailPath
                         : Config.options.background.wallpaperPath
-                    cache: false
+                    // Reopening Settings must not decode the same wallpaper
+                    // again. The status binding above still resets the blur
+                    // when the path changes.
+                    cache: true
                     layer.enabled: true
                     layer.effect: OpacityMask {
                         maskSource: Rectangle {
@@ -405,6 +451,7 @@ ContentPage {
                 GlassCard {
                     id: bottomBar
                     backdrop: wallpaperImg
+                    blurEnabled: page.glassReady
                     height: 64
                     anchors {
                         left: parent.left

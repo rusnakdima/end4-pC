@@ -250,7 +250,11 @@ write_mpv_conf() {
 
 is_video() {
     local extension="${1##*.}"
-    [[ "$extension" == "mp4" || "$extension" == "webm" || "$extension" == "mkv" || "$extension" == "avi" || "$extension" == "mov" || "$extension" == "gif" || "$extension" == "m4v" || "$extension" == "wmv" || "$extension" == "flv" || "$extension" == "ogv" || "$extension" == "3gp" || "$extension" == "qt" ]] && return 0 || return 1
+    extension="${extension,,}"
+    case "$extension" in
+        mp4|webm|mkv|avi|mov|gif|m4v|wmv|flv|ogv|3gp|qt) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
 # Deploys the video wallpaper supervisor.

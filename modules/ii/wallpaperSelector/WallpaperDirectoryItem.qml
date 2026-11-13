@@ -13,10 +13,19 @@ Item {
     required property var fileModelData
     property bool isDirectory: fileModelData ? Boolean(fileModelData.fileIsDir) : false
     readonly property bool isVideoSource: fileModelData ? Images.isVideoPath(fileModelData.fileName) : false
+    readonly property string videoPath: (fileModelData && fileModelData.filePath) ? fileModelData.filePath : ""
     property bool useThumbnail: fileModelData ? (!root.isDirectory && Images.isValidImageByName(fileModelData.fileName)) : false
     // Set by the grid: this is the cell the pointer or the keyboard selection
     // is on, so exactly one cell plays at a time.
     property bool playSelected: false
+    // The cell shows the shared stream whenever it owns the current path; this
+    // does not depend on the hover highlight, which can lag behind the path.
+    readonly property bool previewWanted: root.isVideoSource
+        && PreviewStream.path === root.videoPath
+        && PreviewStream.ready
+    readonly property int previewImageStatus: previewImage.status
+    readonly property bool previewImageVisible: previewImage.visible
+
     // The colors of the cell. The shell theme provides the defaults, the
     // grid overrides them for the selected and the hovered cells.
     property color colBackground: Appearance.colors.colLayer1
@@ -126,17 +135,18 @@ Item {
                         }
                     }
 
-                    // Only the selected or hovered cell plays, using a local
-                    // preview stream. The still underneath stays as the
-                    // fallback. No other surface is touched by this hover.
-                    Loader {
+                    // Only the selected or hovered cell shows the shared
+                    // preview stream. The still underneath stays visible and
+                    // is the fallback when the stream is not ready.
+                    Image {
+                        id: previewImage
                         anchors.fill: parent
-                        active: root.playSelected && root.isVideoSource
-
-                        sourceComponent: LiveWallpaperPreview {
-                            anchors.fill: parent
-                            path: (fileModelData && fileModelData.filePath) ? fileModelData.filePath : ""
-                        }
+                        visible: root.previewWanted
+                        source: root.previewWanted ? PreviewStream.frameUrl : ""
+                        fillMode: Image.PreserveAspectCrop
+                        cache: false
+                        smooth: true
+                        mipmap: false
                     }
                 }
 

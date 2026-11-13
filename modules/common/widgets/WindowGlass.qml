@@ -180,7 +180,7 @@ Item {
     readonly property string wallpaper: {
         const lockWall = Config.options.background.lockWall ?? ""
         const path = GlobalStates.screenLocked && lockWall !== "" ? lockWall : Config.options.background.wallpaperPath
-        return /\.(mp4|webm|mkv|avi|mov)$/.test(path) ? Config.options.background.thumbnailPath : path
+        return Images.isVideoPath(path) ? Config.options.background.thumbnailPath : path
     }
 
     Loader {

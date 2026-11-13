@@ -143,12 +143,16 @@ source_needs_proxy() {
     return 1
 }
 
-# Cache key: source path + mtime + size.
+# Cache key: source path + mtime + size + the encoder contract. The last
+# field is bumped whenever the filter/encoder changes, so a proxy built with
+# the old stretching filter is never reused after the fix.
 proxy_path_for() {
     local src="$1" mtime size key base
     mtime="$(stat -c %Y "$src" 2>/dev/null || echo 0)"
     size="$(stat -c %s "$src" 2>/dev/null || echo 0)"
-    key="$(printf '%s|%s|%s' "$src" "$mtime" "$size" | sha1sum | cut -c1-16)"
+    key="$(printf '%s|%s|%s|%sx%s@%s|encode-v2' \
+        "$src" "$mtime" "$size" "$TARGET_W" "$TARGET_H" "$TARGET_FPS" \
+        | sha1sum | cut -c1-16)"
     base="$(basename "${src%.*}")"
     printf '%s/%s-%s.mp4' "$PROXY_DIR" "$base" "$key"
 }
@@ -157,15 +161,15 @@ encode_proxy() {
     local src="$1" dst="$2" tmp="${2}.part.mp4"
     rm -f "$tmp" 2>/dev/null || true
     if ffmpeg -y -loglevel error -hwaccel vaapi -hwaccel_output_format vaapi \
-        -i "$src" -vf "scale_vaapi=w=${TARGET_W}:h=${TARGET_H}" -r "$TARGET_FPS" \
-        -c:v h264_vaapi -b:v 5M -f mp4 -movflags +faststart "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+        -i "$src" -vf "scale_vaapi=w=${TARGET_W}:h=${TARGET_H}:force_original_aspect_ratio=decrease:force_divisible_by=2" -r "$TARGET_FPS" \
+        -an -c:v h264_vaapi -b:v 5M -f mp4 -movflags +faststart "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
         mv -f "$tmp" "$dst"
         return 0
     fi
     rm -f "$tmp" 2>/dev/null || true
     log "VAAPI encode failed, falling back to software encode"
-    if ffmpeg -y -loglevel error -i "$src" -vf "scale=${TARGET_W}:${TARGET_H}" -r "$TARGET_FPS" \
-        -c:v libx264 -preset veryfast -crf 22 -pix_fmt yuv420p -f mp4 -movflags +faststart "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+    if ffmpeg -y -loglevel error -i "$src" -vf "scale=w=${TARGET_W}:h=${TARGET_H}:force_original_aspect_ratio=decrease:force_divisible_by=2" -r "$TARGET_FPS" \
+        -an -c:v libx264 -preset veryfast -crf 22 -pix_fmt yuv420p -f mp4 -movflags +faststart "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
         mv -f "$tmp" "$dst"
         return 0
     fi
