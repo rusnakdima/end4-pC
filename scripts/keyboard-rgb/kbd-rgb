@@ -1,0 +1,358 @@
+#!/bin/bash
+#
+# kbd-rgb — keyboard RGB backlight helper for TongFang QC71 (Maibenben X16C).
+#
+# Why this exists: nothing else on the system can drive this keyboard. The
+# qc71_laptop driver refuses to register a lightbar LED (the BIOS reports the
+# capability bit as clear), and the registers everyone reaches for first --
+# lightbar_red/green/blue at 0x0749-0x074b -- belong to a *lightbar* this
+# chassis does not have. Writing them changes the registers and nothing else.
+#
+# The keyboard itself is a 1-zone RGB zone controlled through a different part
+# of EC RAM. That map is documented in the Tuxedo uniwill driver
+# (tuxedo-drivers uniwill_interfaces.h / uniwill_leds.h), which is where the
+# conversions below come from -- this helper reproduces that driver's own
+# sequence rather than inventing one:
+#
+#   0x0769  KBD red      0..50 in the EC (0..255 from the caller)
+#   0x076a  KBD green    0..50
+#   0x076b  KBD blue     0..50
+#   0x0767  KBD mode     0x20 = latch the colour, 0x80 = rainbow
+#   0x078c  KBD status   bits7-5 = brightness 0..4, 0x10 = latch
+#
+# Two traps this helper exists to avoid:
+#   * Writing 0,0,0 to the colour registers makes the EC substitute its own
+#     defaults, so "off" is brightness 0 with the colour registers untouched.
+#   * Changing brightness without the 0x10 latch does nothing at all, which is
+#     exactly why editing the raw register looked like it "did not work".
+#
+# Subcommands:
+#   probe                                       capability + current state
+#   set --color RRGGBB [--brightness 0-100] [--mode static|rainbow]
+#   off                                         panel off (brightness 0)
+#   save                                        persist current colour/brightness
+#   restore                                     apply the saved state
+#   dump                                        raw keyboard registers (debug)
+#
+# Contract: exactly one line of JSON on stdout, exit 0 on success and 1 on
+# error. The `error` field carries the reason. Called by the theme through
+# `sudo -n`, with no shell involved.
+#
+# Environment overrides (used by the test suite; not needed in production):
+#   KBD_RGB_EC     raw EC RAM file
+#   KBD_RGB_STATE  state file
+#
+set -euo pipefail
+
+EC="${KBD_RGB_EC:-/sys/kernel/debug/qc71_laptop/ec}"
+STATE="${KBD_RGB_STATE:-/var/lib/ambxst/kbd-rgb.state}"
+
+REG_RGB_MODE=0x0767
+REG_KBD_R=0x0769
+REG_KBD_G=0x076a
+REG_KBD_B=0x076b
+REG_KBD_STATUS=0x078c
+
+MODE_APPLY_COLOR=0x20   # UW_EC_REG_KBD_BL_RGB_MODE_BIT_APPLY_COLOR
+MODE_RAINBOW=0x80       # UW_EC_REG_KBD_BL_RGB_MODE_BIT_RAINBOW
+ST_APPLY=0x10           # UW_EC_REG_KBD_BL_STATUS_SUBCMD_RESET, the latch
+ST_WHITE_ONLY=0x01      # UW_EC_REG_KBD_BL_STATUS_BIT_WHITE_ONLY_KB
+
+EC_LEVEL_MAX=50         # tf_convert_rgb_range(): 0..255 -> 0..50
+BRIGHTNESS_MAX=4        # UNIWILL_KBD_BRIGHTNESS_MAX_1_ZONE_RGB
+BRIGHTNESS_MIN=1        # level 0 does not hold: the EC rewrites it back within
+                        # ~2s (as it does CTRL_2_SINGLE_COLOR_KBD_BL_OFF), so 1
+                        # is the lowest level this panel will keep.
+
+# ---------------------------------------------------------------------------
+# output
+# ---------------------------------------------------------------------------
+json_escape() {
+    local s="${1//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\t'/\\t}"
+    s="${s//$'\n'/\\n}"
+    printf '%s' "$s"
+}
+
+emit_ok() { # <extra fields without braces>
+    local out="" a
+    for a in "$@"; do out+="$a"; done
+    printf '{"ok":true%s}\n' "${out:+,$out}"
+    exit 0
+}
+
+emit_err() {
+    printf '{"ok":false,"error":"%s"}\n' "$(json_escape "$1")"
+    exit 1
+}
+
+# ---------------------------------------------------------------------------
+# EC RAM access
+# ---------------------------------------------------------------------------
+# Every byte costs the EC a WMI round trip of about 55ms, so a wide span read
+# is expensive: the 48-byte span this used to take was 2.7 seconds and a colour
+# change performed two of them -- that alone was a 5.7 second update. Only the
+# five registers that matter are read, one byte at a time, which brings a full
+# change to roughly 0.6s.
+#
+# The EC occasionally drops a read when several land in quick succession, so
+# each one retries instead of failing outright.
+ec_read() { # <addr> -> decimal byte
+    local a=$(( $1 )) v="" i
+    for i in 1 2 3 4 5; do
+        v="$(timeout 20 dd if="$EC" bs=1 skip="$a" count=1 2>/dev/null \
+             | od -An -tu1 | tr -d ' \n' || true)"
+        if [[ "$v" =~ ^[0-9]+$ ]]; then
+            printf '%d' "$v"
+            return 0
+        fi
+        sleep 0.05
+    done
+    return 1
+}
+
+ec_write() { # <addr> <byte 0-255>; addr may be written in hex
+    printf '%b' "$(printf '\\x%02x' "$2")" \
+        | timeout 30 dd of="$EC" bs=1 seek=$(($1)) conv=notrunc 2>/dev/null \
+        || return 1
+}
+
+# ---------------------------------------------------------------------------
+# colour <-> EC levels
+# ---------------------------------------------------------------------------
+hex_to_rgb() { # <#RRGGBB> -> sets RGB_R RGB_G RGB_B
+    local hex="${1#\#}"
+    [[ "$hex" =~ ^[0-9a-fA-F]{6}$ ]] || return 1
+    RGB_R=$((16#${hex:0:2}))
+    RGB_G=$((16#${hex:2:2}))
+    RGB_B=$((16#${hex:4:2}))
+}
+
+# tf_convert_rgb_range() from the driver, verbatim.
+tf_convert() { printf '%d' $(( $1 * 200 / (255 * 4) )); }
+
+# The inverse: which 0..255 colour a stored EC level actually displays.
+tf_invert() { printf '%d' $(( ($1 * (255 * 4) + 100) / 200 )); }
+
+rgb_to_hex() { printf '#%02x%02x%02x' "$1" "$2" "$3"; }
+
+pct_to_level() { # 0-100 -> 1..4 (never 0; see BRIGHTNESS_MIN)
+    local lvl
+    lvl=$(( ($1 * BRIGHTNESS_MAX + 50) / 100 ))
+    [ "$lvl" -lt "$BRIGHTNESS_MIN" ] && lvl=$BRIGHTNESS_MIN
+    [ "$lvl" -gt "$BRIGHTNESS_MAX" ] && lvl=$BRIGHTNESS_MAX
+    printf '%d' "$lvl"
+}
+level_to_pct() { printf '%d' $(( ($1 * 100 + BRIGHTNESS_MAX / 2) / BRIGHTNESS_MAX )); }
+
+# ---------------------------------------------------------------------------
+# commands
+# ---------------------------------------------------------------------------
+backend_check() {
+    [ -e "$EC" ] || emit_err "no EC register file (is qc71_laptop loaded with debugregs=1?)"
+    [ -r "$EC" ] || emit_err "EC register file is not readable (needs root)"
+}
+
+# Reads the keyboard registers into R_/G_/B_ (EC levels), MODE_BYTE and STATUS_BYTE.
+read_live() {
+    R_="$(ec_read $REG_KBD_R)"            || emit_err "cannot read the red register"
+    G_="$(ec_read $REG_KBD_G)"            || emit_err "cannot read the green register"
+    B_="$(ec_read $REG_KBD_B)"            || emit_err "cannot read the blue register"
+    MODE_BYTE="$(ec_read $REG_RGB_MODE)"  || emit_err "cannot read the mode register"
+    STATUS_BYTE="$(ec_read $REG_KBD_STATUS)" || emit_err "cannot read the status register"
+}
+
+# The one sequence that actually drives the panel: colour, latch, then
+# brightness with its own latch. Omitting either latch is why raw register
+# pokes appear to do nothing.
+write_color() { # <ec-level r> <ec-level g> <ec-level b> <brightness 1-4>
+    local lr="$1" lg="$2" lb="$3" bl="$4" mode status
+    ec_write $REG_KBD_R "$lr"   || emit_err "cannot write the red register"
+    ec_write $REG_KBD_G "$lg"   || emit_err "cannot write the green register"
+    ec_write $REG_KBD_B "$lb"   || emit_err "cannot write the blue register"
+
+    # Sampled here rather than reused: the firmware clears the latch itself,
+    # and only this one byte has to be read to preserve its other bits.
+    mode="$(ec_read $REG_RGB_MODE)" || emit_err "cannot read the mode register"
+    if [ "$RAINBOW_ON" -eq 1 ]; then
+        mode=$(( (mode & ~MODE_APPLY_COLOR) | MODE_RAINBOW ))
+    else
+        mode=$(( (mode | MODE_APPLY_COLOR) & ~MODE_RAINBOW ))
+    fi
+    ec_write $REG_RGB_MODE "$mode" || emit_err "cannot write the mode register"
+
+    status="$(ec_read $REG_KBD_STATUS)" || emit_err "cannot read the status register"
+    # Preserve the low nibble (white-only flag and whatever else the firmware
+    # owns), replace the brightness field, set the latch.
+    status=$(( (status & 0x0f) | (bl << 5) | ST_APPLY ))
+    ec_write $REG_KBD_STATUS "$status" || emit_err "cannot write the status register"
+}
+
+verify_color() { # <ec-level r> <ec-level g> <ec-level b>
+    local gr gg gb
+    gr="$(ec_read $REG_KBD_R)" || emit_err "cannot read back the red register"
+    gg="$(ec_read $REG_KBD_G)" || emit_err "cannot read back the green register"
+    gb="$(ec_read $REG_KBD_B)" || emit_err "cannot read back the blue register"
+    if [ "$gr" -ne "$1" ] || [ "$gg" -ne "$2" ] || [ "$gb" -ne "$3" ]; then
+        emit_err "the EC did not keep the colour (wanted $1 $2 $3, read $gr $gg $gb)"
+    fi
+}
+
+save_state() { # <#RRGGBB> <brightness pct> <mode>
+    mkdir -p "$(dirname "$STATE")"
+    printf '%s %s %s\n' "$1" "$2" "$3" > "$STATE.tmp"
+    mv "$STATE.tmp" "$STATE"
+    chmod 644 "$STATE" 2>/dev/null || true
+}
+
+read_state() { # sets ST_COLOR ST_BRIGHT ST_MODE; fails when absent
+    local color bright mode
+    [ -r "$STATE" ] || return 1
+    read -r color bright mode < "$STATE" || return 1
+    [[ "$color" =~ ^#?[0-9a-fA-F]{6}$ ]] || return 1
+    [[ "$bright" =~ ^[0-9]+$ ]] || bright=100
+    case "$mode" in static|rainbow) ;; *) mode=static ;; esac
+    ST_COLOR="$color"
+    ST_BRIGHT="$bright"
+    ST_MODE="$mode"
+}
+
+payload_color() { # <ec-level r> <ec-level g> <ec-level b> -> "color":"#rrggbb"
+    local r g b
+    r="$(tf_invert "$1")"; g="$(tf_invert "$2")"; b="$(tf_invert "$3")"
+    printf '"color":"%s","levels":[%d,%d,%d]' "$(rgb_to_hex "$r" "$g" "$b")" "$1" "$2" "$3"
+}
+
+cmd_probe() {
+    backend_check
+    read_live
+    local bright_level=$(( (STATUS_BYTE >> 5) & 0x07 ))
+    local rainbow=0 white=0 off=0 mode="static" bright_pct=0
+    local off_json="false" white_json="false"
+
+    if [ $(( MODE_BYTE & MODE_RAINBOW )) -ne 0 ]; then rainbow=1; fi
+    if [ $(( STATUS_BYTE & ST_WHITE_ONLY )) -ne 0 ]; then white=1; fi
+    # Off is derived, never stored: the panel has no off state (brightness 0
+    # and the off bit are both rewritten by the EC within a couple of seconds),
+    # so "off" means every channel sits at its lowest level -- as dark as it goes.
+    if [ "$R_" -le 1 ] && [ "$G_" -le 1 ] && [ "$B_" -le 1 ]; then off=1; fi
+
+    if [ "$rainbow" -eq 1 ]; then mode="rainbow"; fi
+    # Reporting 0 while dark is what the UI must show: a stale non-zero level
+    # would make the slider lie about a panel the user switched off.
+    if [ "$off" -eq 0 ]; then bright_pct="$(level_to_pct "$bright_level")"; fi
+    if [ "$off" -eq 1 ]; then off_json="true"; fi
+    if [ "$white" -eq 1 ]; then white_json="true"; fi
+
+    emit_ok "\"available\":true,\"backend\":\"ec\"," \
+            "$(payload_color "$R_" "$G_" "$B_")," \
+            "\"brightness\":$bright_pct,\"brightnessLevel\":$bright_level," \
+            "\"mode\":\"$mode\",\"rainbow\":$rainbow,\"off\":$off_json," \
+            "\"whiteOnly\":$white_json,\"status\":$STATUS_BYTE,\"modeReg\":$MODE_BYTE"
+}
+
+cmd_set() {
+    local color="" bright="" mode="static"
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --color)      color="${2-}"; shift 2 ;;
+            --brightness) bright="${2-}"; shift 2 ;;
+            --mode)       mode="${2-}"; shift 2 ;;
+            *) emit_err "unknown option '$1'" ;;
+        esac
+    done
+    [ -n "$color" ] || emit_err "usage: set --color #RRGGBB [--brightness 0-100] [--mode static|rainbow]"
+    case "$mode" in static|rainbow) ;; *) emit_err "mode must be static or rainbow" ;; esac
+    hex_to_rgb "$color" || emit_err "colour must be #RRGGBB (got '$color')"
+
+    backend_check
+
+    if [ -z "$bright" ]; then
+        if read_state; then bright="$ST_BRIGHT"; else bright=100; fi
+    fi
+    [[ "$bright" =~ ^[0-9]+$ ]] || emit_err "brightness must be 0-100"
+    [ "$bright" -le 100 ] && [ "$bright" -ge 0 ] || bright=100
+
+    local lr lg lb bl is_dark=0
+    lr="$(tf_convert "$RGB_R")"
+    lg="$(tf_convert "$RGB_G")"
+    lb="$(tf_convert "$RGB_B")"
+    bl="$(pct_to_level "$bright")"
+
+    RAINBOW_ON=0
+    if [ "$mode" = "rainbow" ]; then RAINBOW_ON=1; fi
+
+    # A true 0,0,0 makes the EC substitute its own default colour, so pure black
+    # is expressed as the lowest level the hardware will hold (1 per channel).
+    # That is as dark as this panel gets: it has no off state, neither
+    # brightness 0 nor the off bit survives a write.
+    if [ "$lr" -eq 0 ] && [ "$lg" -eq 0 ] && [ "$lb" -eq 0 ] && [ "$RAINBOW_ON" -eq 0 ]; then
+        lr=1; lg=1; lb=1; is_dark=1
+    fi
+    if [ "$lr" -le 1 ] && [ "$lg" -le 1 ] && [ "$lb" -le 1 ]; then is_dark=1; fi
+
+    write_color "$lr" "$lg" "$lb" "$bl"
+    verify_color "$lr" "$lg" "$lb"
+
+    local hex
+    hex="$(rgb_to_hex "$RGB_R" "$RGB_G" "$RGB_B")"
+    save_state "$hex" "$bright" "$mode"
+
+    local st_mode="static" off_json="false"
+    if [ "$RAINBOW_ON" -eq 1 ]; then st_mode="rainbow"; fi
+    if [ "$is_dark" -eq 1 ]; then off_json="true"; fi
+    emit_ok "\"backend\":\"ec\",\"mode\":\"$st_mode\"," \
+            "$(payload_color "$lr" "$lg" "$lb")," \
+            "\"requested\":\"$hex\",\"brightness\":$bright,\"brightnessLevel\":$bl," \
+            "\"off\":$off_json"
+}
+
+cmd_off() {
+    backend_check
+    read_live
+    # The panel has no true off: brightness 0 and the off bit are both rejected
+    # by the EC. The darkest state it will hold is level 1 on every channel at
+    # the lowest brightness, which is what "off" drives.
+    RAINBOW_ON=0
+    write_color 1 1 1 "$BRIGHTNESS_MIN"
+    emit_ok "\"backend\":\"ec\",\"off\":true,\"note\":\"darkest achievable state\""
+}
+
+cmd_save() {
+    backend_check
+    read_live
+    local color bright mode
+    color="$(rgb_to_hex "$(tf_invert "$R_")" "$(tf_invert "$G_")" "$(tf_invert "$B_")")"
+    if read_state; then bright="$ST_BRIGHT"; else bright=100; fi
+    if read_state; then mode="$ST_MODE"; else mode=static; fi
+    if [ $(( MODE_BYTE & MODE_RAINBOW )) -ne 0 ]; then mode=rainbow; fi
+    save_state "$color" "$bright" "$mode"
+    emit_ok "\"saved\":true"
+}
+
+cmd_restore() {
+    if ! read_state; then
+        # A fresh machine has nothing to restore; the boot unit must not fail.
+        emit_ok "\"restored\":false,\"reason\":\"no saved state\""
+    fi
+    cmd_set --color "$ST_COLOR" --brightness "$ST_BRIGHT" --mode "$ST_MODE"
+}
+
+cmd_dump() {
+    backend_check
+    read_live
+    printf 'mode=0x%02x red=0x%02x green=0x%02x blue=0x%02x status=0x%02x\n' \
+        "$MODE_BYTE" "$R_" "$G_" "$B_" "$STATUS_BYTE"
+    emit_ok "\"modeReg\":$MODE_BYTE,\"red\":$R_,\"green\":$G_,\"blue\":$B_,\"status\":$STATUS_BYTE"
+}
+
+case "${1:-}" in
+    probe)    shift; cmd_probe "$@" ;;
+    set)      shift; cmd_set "$@" ;;
+    off)      shift; cmd_off "$@" ;;
+    save)     shift; cmd_save "$@" ;;
+    restore)  shift; cmd_restore "$@" ;;
+    dump)     shift; cmd_dump "$@" ;;
+    *)        emit_err "usage: kbd-rgb {probe|set|off|save|restore|dump}" ;;
+esac
