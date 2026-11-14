@@ -76,6 +76,13 @@ Item {
         Config.options.settings.collapsedSections = list
     }
 
+    // Ctrl+K: the window's keyScope in Settings.qml owns the shortcut and
+    // calls this, because the search field lives in this file and an id is
+    // only visible inside the file that declares it.
+    function focusSearch() {
+        settingsSearch.forceActiveFocus()
+    }
+
     onCurrentPageChanged: {
         if (root.pages[currentPage]?.id === "about") {
             if (SystemInfo.cpu === "") SystemInfo.refresh()

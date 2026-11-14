@@ -96,6 +96,17 @@ Scope {
                         return;
                     }
 
+                    // Ctrl+K focuses the header search field. It is handled
+                    // here rather than in SettingsContent because the keys
+                    // are delivered to this scope first: it is the item that
+                    // holds the focus when nothing narrower has taken it, and
+                    // a key pressed inside the search field bubbles up to it.
+                    if (event.key === Qt.Key_K && (event.modifiers & Qt.ControlModifier)) {
+                        contentLoader.item?.focusSearch();
+                        event.accepted = true;
+                        return;
+                    }
+
                     if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
                         const instance = GlobalStates.currentPageInstance;
                         if (instance && instance.contentY !== undefined) {

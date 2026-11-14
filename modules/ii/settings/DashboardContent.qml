@@ -116,6 +116,12 @@ Item {
         } else if (event.key === Qt.Key_F && (event.modifiers & Qt.ControlModifier)) {
             if (searchOpen) closeSearch();
             else openSearch();
+        } else if (event.key === Qt.Key_K && (event.modifiers & Qt.ControlModifier)) {
+            // Ctrl+K only reaches this handler while the settings window has
+            // focus, so it can never steal the shortcut from other apps.
+            // It always focuses the bar: openSearch() on an already open
+            // search just puts the caret back in the field.
+            openSearch();
         } else if (currentPage === settingsPage && event.key === Qt.Key_Slash) {
             openSearch();
         } else if (currentPage === wallpapersPage && (event.key === Qt.Key_Left || event.key === Qt.Key_Right || event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
