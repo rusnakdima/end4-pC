@@ -52,15 +52,40 @@ ContentPage {
     // Apply button all go through here instead of having three paths.
     function pickColour(hex: string): void {
         Config.options.light.keyboardColor.color = hex;
-        Config.options.light.keyboardColor.enable = true;
-        Brightness.kbMonitor.setColorHex(hex);
+        // There is now one switch: choosing a colour by hand *is* the off side
+        // of "Match the wallpaper colour", so the toggle reflects it instead of
+        // two sources fighting over the panel.
+        if (Config.options.light.keyboardColor.followWallpaper)
+            Config.options.light.keyboardColor.followWallpaper = false;
+        // "Off" is a real panel state rather than merely a black colour: the
+        // helper has a command for it, and it is visible in probe() as off:true.
+        if (hex === "#000000")
+            Brightness.kbMonitor.switchOff();
+        else
+            Brightness.kbMonitor.setColorHex(hex);
     }
 
+    // While a drag is in progress only the hardware is told -- Brightness
+    // debounces the writes, so a whole gesture costs one EC transaction per
+    // 120ms instead of one per frame. config.json is written only when the
+    // gesture ends, so a drag cannot rewrite the file hundreds of times.
+
     Component.onCompleted: {
-        // Whatever is already on the hardware wins, then the stored choice.
-        const applied = Brightness.kbMonitor?.color;
-        const stored = Config.options.light.keyboardColor.color;
-        currentColor = applied || (stored && stored !== "" ? stored : "#FFFFFF");
+        // Re-sync on open rather than only at startup. When following the
+        // wallpaper, the preview is seeded with the colour matugen derived from
+        // it and the state is pushed again -- so opening this page is itself a
+        // check that wallpaper following is alive, without having to change the
+        // wallpaper first. Otherwise the hardware colour wins, then the stored
+        // choice.
+        if (Config.options.light.keyboardColor.followWallpaper) {
+            const fromWall = Brightness.kbMonitor.normalizeHex(Brightness.kbMonitor.followColour());
+            currentColor = fromWall !== "" ? fromWall : "#FFFFFF";
+            Brightness.kbMonitor.applyFromConfig();
+        } else {
+            const applied = Brightness.kbMonitor?.color;
+            const stored = Config.options.light.keyboardColor.color;
+            currentColor = applied || (stored && stored !== "" ? stored : "#FFFFFF");
+        }
     }
 
     property string currentColor: "#FFFFFF"
@@ -69,18 +94,65 @@ ContentPage {
     property real value: 100
 
     // Update currentColor when HSV changes
-    property var hsvColor: Qt.hsva(hue / 360, saturation / 100, value / 100, 1)
+    // Built channel by channel rather than assigned straight from Qt.hsva():
+    // this Qt build's colour objects stringify reliably, but reading h/s/v back
+    // from them does not, and the picker needs one canonical hex string.
+    function hsvHex(h: real, s: real, v: real): string {
+        const c = Qt.hsva(Math.max(0, Math.min(1, h / 360)),
+                          Math.max(0, Math.min(1, s / 100)),
+                          Math.max(0, Math.min(1, v / 100)), 1);
+        const two = x => Math.round(Math.max(0, Math.min(1, x)) * 255)
+            .toString(16).padStart(2, "0");
+        return "#" + two(c.r) + two(c.g) + two(c.b);
+    }
+    // An HTML-style palette: every cell is one colour you can see and press,
+    // laid out hue by hue across and lightness down -- no separate sliders, so
+    // what is on screen is exactly what can be picked.
+    readonly property int paletteCols: 16
+    readonly property int paletteRows: 8
+    function paletteCell(i: int): var {
+        const c = i % paletteCols
+        const r = Math.floor(i / paletteCols)
+        const h = c / paletteCols
+        const t = r / (paletteRows - 1)
+        let s, v
+        if (t <= 0.5) {          // light -> vivid: lift saturation, full value
+            s = 0.2 + 0.8 * (t / 0.5)
+            v = 1
+        } else {                 // vivid -> dark: keep saturation, drop value
+            s = 1
+            v = 1 - 0.88 * ((t - 0.5) / 0.5)
+        }
+        return { h: h, s: s, v: v, hex: hsvHex(h * 360, s * 100, v * 100) }
+    }
+    property var hsvColor: hsvHex(hue, saturation, value)
 
     onHueChanged: currentColor = hsvColor
     onSaturationChanged: currentColor = hsvColor
     onValueChanged: currentColor = hsvColor
 
-    // When currentColor changes externally, update HSV
+    // When currentColor changes externally (a swatch, the hex field), follow it.
+    // Qt.color() exposes r/g/b here but *not* h/s/v -- reading them yielded
+    // undefined and turned hue into NaN, which is what made the sliders die.
+    // The HSV axes are therefore derived from the channels, and only material
+    // differences are applied so a slider drag cannot feed back on itself.
     onCurrentColorChanged: {
-        const col = Qt.color(currentColor);
-        hue = col.h * 360;
-        saturation = col.s * 100;
-        value = col.v * 100;
+        const c = Qt.color(currentColor);
+        const r = c.r, g = c.g, b = c.b;
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+        let h = 0;
+        if (d > 0) {
+            if (mx === r) h = ((g - b) / d + 6) % 6;
+            else if (mx === g) h = (b - r) / d + 2;
+            else h = (r - g) / d + 4;
+            h *= 60;
+        }
+        const s = mx === 0 ? 0 : d / mx * 100;
+        const v = mx * 100;
+        if (!isFinite(h) || !isFinite(s) || !isFinite(v)) return;
+        if (Math.abs(h - hue) > 1) hue = h;
+        if (Math.abs(s - saturation) > 1) saturation = s;
+        if (Math.abs(v - value) > 1) value = v;
     }
 
     // A labelled slider for the three HSV controls. The caller keeps a
@@ -143,6 +215,12 @@ ContentPage {
         }
     }
 
+    // Saturation/value square, in the shape every HTML colour picker uses:
+    // horizontal axis is saturation, vertical axis is value. Both are 0..100.
+    // One square holds every colour: the whole hue range runs top to bottom and
+    // saturation runs left to right (white at the far left). This replaces the
+    // saturation/value square plus the separate hue strip with a single control.
+    // Hue strip, 0..360 left to right.
     // ------------------------------------------------------
     // Shortcut capture
     // ------------------------------------------------------
@@ -264,127 +342,106 @@ ContentPage {
                     }
                 }
 
+                // The picker, in the shape people already know: a saturation/
+                // value square over a hue strip, the way an HTML colour picker
+                // is laid out. It applies as you drag.
+                // The palette itself: one block of visible colours, clicked to
+                // be applied. Hue runs across, lightness down, so both the
+                // saturation and the darkness of a colour are reachable without
+                // a slider beside it.
                 GridLayout {
-                    visible: Brightness.kbMonitor.available
-                    columns: 2
-                    columnSpacing: 16
-                    rowSpacing: 16
+                    Layout.fillWidth: true
                     Layout.maximumWidth: 700
+                    columns: page.paletteCols
+                    columnSpacing: 3
+                    rowSpacing: 3
+                    visible: Brightness.kbMonitor.available
 
-                    SliderCard {
-                        title: Translation.tr("Hue")
-                        value: hue
-                        from: 0
-                        to: 360
-                        step: 1
-                        onValueEdited: page.hue = newValue
-                        Layout.fillWidth: true
-                    }
+                    Repeater {
+                        model: page.paletteCols * page.paletteRows
+                        delegate: Rectangle {
+                            required property int index
+                            readonly property var cell: page.paletteCell(index)
+                            readonly property bool isSelected:
+                                page.currentColor.toLowerCase() === cell.hex
 
-                    SliderCard {
-                        title: Translation.tr("Saturation")
-                        value: saturation
-                        from: 0
-                        to: 100
-                        step: 1
-                        onValueEdited: page.saturation = newValue
-                        Layout.fillWidth: true
-                    }
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 36
+                            // verysmall (8) rather than small (12): at ~40px a
+                            // cell would otherwise read as a pill, not a swatch.
+                            radius: Appearance.rounding.verysmall
+                            color: cell.hex
+                            border.width: isSelected ? 2 : 1
+                            border.color: isSelected
+                                ? Appearance.colors.colOnSurface
+                                : Appearance.colors.colOutline
 
-                    SliderCard {
-                        title: Translation.tr("Brightness")
-                        // page.value, not `value`: unqualified it would bind to the
-                        // card's own property and never read the model.
-                        value: page.value
-                        from: 0
-                        to: 100
-                        step: 1
-                        onValueEdited: page.value = newValue
-                        Layout.fillWidth: true
-                    }
-
-                    Rectangle {
-                        id: colorPreview
-                        width: 120
-                        height: 120
-                        radius: 12
-                        color: currentColor
-                        border.width: 1
-                        border.color: Appearance.colors.colOutline
-                        Layout.rowSpan: 2
-                        Layout.columnSpan: 1
-
-                        MaterialSymbol {
-                            anchors.centerIn: parent
-                            text: "color_lens"
-                            iconSize: 48
-                            color: Appearance.colors.colOnSurface
-                        }
-                    }
-
-                    TextField {
-                        id: colorInput
-                        text: currentColor
-                        placeholderText: Translation.tr("#RRGGBB")
-                        Layout.fillWidth: true
-                        Layout.columnSpan: 1
-                        Layout.rowSpan: 1
-
-                        onEditingFinished: {
-                            const c = Qt.color(text);
-                            if (c.isValid) {
-                                page.currentColor = c.name();
-                                page.pickColour(c.name());
-                            }
-                        }
-                    }
-
-                    Rectangle {
-                        Layout.rowSpan: 1
-                        Layout.columnSpan: 1
-                        Layout.minimumWidth: 120
-                        Layout.minimumHeight: 48
-                        color: "transparent"
-
-                        RowLayout {
-                            anchors.fill: parent
-                            spacing: 8
-
-                            RippleButton {
-                                text: Translation.tr("Apply")
-                                colBackground: currentColor
-                                colBackgroundHover: Qt.darker(currentColor, 1.1)
-                                colRipple: Appearance.colors.colPrimaryHover
-                                onClicked: page.pickColour(page.currentColor)
-                                Layout.fillWidth: true
-                            }
-
-                            RippleButton {
-                                text: Translation.tr("Reset")
-                                colBackground: Appearance.colors.colSurfaceContainer
-                                colBackgroundHover: Appearance.colors.colSurfaceContainerHigh
-                                colRipple: Appearance.colors.colPrimaryHover
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
                                 onClicked: {
-                                    page.currentColor = "#FFFFFF";
-                                    page.hue = 0;
-                                    page.saturation = 0;
-                                    page.value = 100;
-                                    page.pickColour("#FFFFFF");
+                                    page.hue = cell.h * 360
+                                    page.saturation = cell.s * 100
+                                    page.value = cell.v * 100
+                                    page.pickColour(cell.hex)
                                 }
-                                Layout.fillWidth: true
                             }
                         }
                     }
                 }
 
-                // Say exactly what is missing rather than the old vague "may appear
-                // disabled": on this machine the LED comes from the uniwill_wmi
-                // module, which is listed in /etc/modules-load.d/ but is not loaded.
+                // The panel's own level. Distinct from anything in the palette
+                // above: this is written to the hardware and scales all three
+                // channels together, so it survives a colour change.
+                SliderCard {
+                    Layout.fillWidth: true
+                    Layout.maximumWidth: 700
+                    visible: Brightness.kbMonitor.available
+                    title: Translation.tr("Keyboard brightness")
+                    value: Brightness.kbMonitor.brightnessPercent
+                    from: 0
+                    to: 100
+                    step: 5
+                    onValueEdited: Brightness.kbMonitor.set(newValue)
+                }
+
+                // The panel does exactly two things with colour: a static level
+                // per channel, or the firmware's own cycling effect.
+                ConfigSwitch {
+                    Layout.fillWidth: true
+                    visible: Brightness.kbMonitor.available
+                    buttonIcon: "auto_awesome"
+                    text: Translation.tr("Rainbow cycling")
+                    checked: Brightness.kbMonitor.rainbow
+                    onCheckedChanged: Brightness.kbMonitor.setMode(checked ? "rainbow" : "static")
+                }
+
+                // The panel has 51 steps per channel, so some picks land a shade
+                // away from what was chosen. Shown only when that actually
+                // happens, as one quiet line -- a permanent notice box here just
+                // filled the page.
+                Text {
+                    Layout.fillWidth: true
+                    Layout.maximumWidth: 500
+                    visible: Brightness.kbMonitor.available
+                        && !Brightness.kbMonitor.rainbow
+                        && Brightness.kbMonitor.color !== ""
+                        && Brightness.kbMonitor.color.toLowerCase()
+                            !== String(page.currentColor).toLowerCase()
+                    text: Translation.tr("Panel shows %1").arg(Brightness.kbMonitor.color)
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.colors.colSubtext
+                    wrapMode: Text.WordWrap
+                }
+
+                // Say exactly what is missing: on this machine the qc71_laptop
+                // driver never registers a lightbar LED (the BIOS reports the
+                // capability bit as clear), so the only path is the helper.
                 NoticeBox {
                     Layout.fillWidth: true
                     visible: !Brightness.kbMonitor.available
                     materialIcon: "memory"
-                    text: Translation.tr("No keyboard backlight device was found. It is provided by the uniwill_wmi module, which is listed in /etc/modules-load.d/ but is not loaded. Run: sudo modprobe uniwill_wmi - then reopen this page.")
+                    text: Translation.tr("No keyboard backlight device was found. Run: cd scripts/keyboard-rgb && sudo ./setup-keyboard-rgb.sh - then reopen this page.")
                 }
 
                 // sudo -n cannot prompt from a background process, so whatever the
@@ -398,24 +455,35 @@ ContentPage {
 
                 ConfigSwitch {
                     Layout.fillWidth: true
-                    buttonIcon: "palette"
-                    text: Translation.tr('Manage keyboard colour')
-                    checked: Config.options.light.keyboardColor.enable
-                    onCheckedChanged: {
-                        Config.options.light.keyboardColor.enable = checked;
-                        if (checked) Brightness.kbMonitor.applyFromConfig();
-                    }
-                }
-
-                ConfigSwitch {
-                    Layout.fillWidth: true
                     buttonIcon: "wallpaper"
                     text: Translation.tr('Match the wallpaper colour')
-                    enabled: Config.options.light.keyboardColor.enable
                     checked: Config.options.light.keyboardColor.followWallpaper
                     onCheckedChanged: {
                         Config.options.light.keyboardColor.followWallpaper = checked;
                         if (checked) Brightness.kbMonitor.applyFromConfig();
+                    }
+                }
+
+                // Which Appearance.colors role to follow. Still the theme's own
+                // signal -- only the colour picked out of it changes. Plain
+                // primary is pale by design (it sits on a UI surface), so the
+                // active shade is offered as a deeper default.
+                ConfigSelectionArray {
+                    Layout.fillWidth: true
+                    visible: Config.options.light.keyboardColor.followWallpaper
+                    text: Translation.tr("Accent role")
+                    icon: "palette"
+                    currentValue: Config.options.light.keyboardColor.role
+                    options: [
+                        { displayName: Translation.tr("Primary active"), icon: "contrast", value: "primaryActive" },
+                        { displayName: Translation.tr("Primary"), icon: "palette", value: "primary" },
+                        { displayName: Translation.tr("Secondary"), icon: "tonality", value: "secondary" },
+                        { displayName: Translation.tr("Tertiary"), icon: "auto_awesome", value: "tertiary" }
+                    ]
+                    onSelected: v => {
+                        if (Config.options.light.keyboardColor.role === v) return;
+                        Config.options.light.keyboardColor.role = v;
+                        Brightness.kbMonitor.applyFromConfig();
                     }
                 }
 
