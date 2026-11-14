@@ -1254,7 +1254,6 @@
   "Running window": "Running window",
   "Choose one": "Choose one",
   "Window class": "Window class",
-  "Stacking floats every window so they overlap, tiling keeps the layout. A rule below keeps one app on the other side of that choice; All monitors also floats it, stretches it over every screen and ignores fullscreen requests.": "Stacking floats every window so they overlap, tiling keeps the layout. A rule below keeps one app on the other side of that choice; All monitors also floats it, stretches it over every screen and ignores fullscreen requests.",
   "No rules yet. Every app then follows the mode of the session.": "No rules yet. Every app then follows the mode of the session.",
   "Follow frame color": "Follow frame color",
   "CPU temperature": "CPU temperature",
@@ -1335,6 +1334,9 @@
   "Dock style": "Dock style",
   "Daily": "Daily",
   "Active opacity": "Active opacity",
+  "Disable opacity (ignore global)": "Disable opacity (ignore global)",
+  "Picker": "Picker",
+  "Click a window…": "Click a window…",
   "Tap again to clear": "Tap again to clear",
   "Tip · %1% combined": "Tip · %1% combined",
   "Tooltip style": "Tooltip style",
@@ -1775,5 +1777,12 @@
   "Collapse sidebar": "Collapse sidebar",
   "Expand sidebar": "Expand sidebar",
   "Collapse all": "Collapse all",
-  "Expand all": "Expand all"
+  "Expand all": "Expand all",
+  "%1 (all windows)": "%1 (all windows)",
+  "%1 — %2": "%1 — %2",
+  "Pick a single window to target only it, or the app entry to target every window of the app": "Pick a single window to target only it, or the app entry to target every window of the app",
+  "Window subclass (title regex)": "Window subclass (title regex)",
+  "Narrows the rule to one window, e.g. Picture-in-Picture. Leave empty to match every window of the app": "Narrows the rule to one window, e.g. Picture-in-Picture. Leave empty to match every window of the app",
+  "Regex matched against the window class, e.g. zen": "Regex matched against the window class, e.g. zen",
+  "Stacking floats every window so they overlap, tiling keeps the layout. A rule below keeps one app on the other side of that choice; All monitors also floats it, stretches it over every screen and ignores fullscreen requests. Window class plus Window subclass narrow a rule to one window of an app (a picture-in-picture, for example), and Disable opacity makes exactly that window ignore the global opacity.": "Stacking floats every window so they overlap, tiling keeps the layout. A rule below keeps one app on the other side of that choice; All monitors also floats it, stretches it over every screen and ignores fullscreen requests. Window class plus Window subclass narrow a rule to one window of an app (a picture-in-picture, for example), and Disable opacity makes exactly that window ignore the global opacity."
 }

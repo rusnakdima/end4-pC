@@ -77,13 +77,56 @@ TestCase {
         verify(testCase.rulesInstance.modeLabel("span") !== testCase.rulesInstance.modeLabel("stacking"));
     }
 
-    function test_the_running_window_list_offers_a_name_and_a_class() {
-        const apps = testCase.rulesInstance.runningApps;
-        verify(Array.isArray(apps));
-        for (const app of apps) {
-            compare(typeof app.displayName, "string");
-            compare(typeof app.value, "string");
-            verify(app.value.length > 0);
+    function test_a_typed_subclass_is_kept_in_the_model() {
+        // Regression: the title field used to write a role that does not
+        // exist ("title" instead of "winTitle"), so a subclass like
+        // Picture-in-Picture was dropped on the floor and the rule
+        // silently widened to every window of the app.
+        const rules = testCase.rulesInstance;
+        rules.addEntry();
+        const index = rules.snapshot().length - 1;
+        try {
+            rules.setField(index, "winClass", "zen");
+            rules.setField(index, "winTitle", "Picture-in-Picture");
+            const entry = rules.snapshot()[index];
+            compare(entry.class, "zen");
+            compare(entry.title, "Picture-in-Picture");
+            compare(entry.disableOpacity, false);
+
+            // The subclass survives a round trip through the config view
+            // as well: that is what the settings page reads back.
+            const fromConfig = rules.configSnapshot()[index];
+            compare(fromConfig.title, "Picture-in-Picture");
+        } finally {
+            rules.removeEntry(index);
         }
+        compare(JSON.stringify(rules.snapshot()), JSON.stringify(rules.configSnapshot()));
+    }
+
+    function test_the_running_window_list_offers_a_name_class_and_title() {
+        const windows = testCase.rulesInstance.runningWindows;
+        verify(Array.isArray(windows));
+        for (const win of windows) {
+            compare(typeof win.displayName, "string");
+            compare(typeof win.value, "string");
+            verify(win.value.length > 0);
+            compare(typeof win.winClass, "string");
+            verify(win.winClass.length > 0);
+            compare(typeof win.winTitle, "string");
+        }
+        // Every app that is running is offered as a whole, plus each of
+        // its windows with a title for targeting a single one.
+        const wholeApps = windows.filter(win => win.winTitle === "");
+        for (const app of wholeApps) {
+            verify(windows.some(win => win.winClass === app.winClass && win.winTitle !== ""));
+        }
+    }
+
+    function test_the_picker_shows_the_entry_the_rule_describes() {
+        const rules = testCase.rulesInstance;
+        // Nothing selected without a class, and the placeholder is what a
+        // typed subclass that is not running falls back to.
+        compare(rules.currentPickerValue("", ""), "");
+        compare(rules.currentPickerValue("definitely-not-running", "whatever"), "");
     }
 }

@@ -68,6 +68,7 @@ Singleton {
         ? `${root.spanRect.x},${root.spanRect.y},${root.spanRect.width},${root.spanRect.height}`
         : ""
     readonly property bool hasSpanRules: (root.appRules ?? []).some(rule => rule?.mode === "span")
+    readonly property bool hasOpacityRules: (root.appRules ?? []).some(rule => rule?.disableOpacity === true)
 
     readonly property string rulesDir: FileUtils.trimFileProtocol(`${Directories.config}/hypr/hyprland/shellOverrides`)
     readonly property string rulesPath: `${root.rulesDir}/windowMode.lua`
@@ -91,18 +92,65 @@ Singleton {
     // Decision logic. Pure, so tst_window_mode.qml can assert it.
     // ------------------------------------------------------------------
 
-    // The first rule whose class pattern matches the window, or null.
-    // The pattern is a regular expression, searched like the compositor
-    // searches its own rules: "firefox" matches "org.mozilla.firefox".
-    function matchRule(winClass, rules) {
+    // Resolve a (class, title) pair from either a string, a window object
+    // or an explicit title argument, so the existing string callers keep
+    // working while windows can also be matched by their title.
+    function _winClassOf(winOrClass, titleArg) {
+        if (typeof winOrClass === "string") return winOrClass;
+        if (winOrClass && typeof winOrClass === "object") {
+            return winOrClass.class ?? winOrClass.winClass ?? winOrClass.windowClass ?? "";
+        }
+        return "";
+    }
+    function _winTitleOf(winOrClass, titleArg) {
+        if (typeof winOrClass === "string") return titleArg;
+        if (winOrClass && typeof winOrClass === "object") {
+            return winOrClass.title ?? winOrClass.initialTitle ?? winOrClass.windowTitle ?? titleArg;
+        }
+        return titleArg;
+    }
+
+    // The first rule whose class/title patterns match the window, or null.
+    // The patterns are regular expressions, searched like the compositor
+    // searches its own rules: "firefox" matches "org.mozilla.firefox". An
+    // empty class or title pattern means "no constraint on that field", so
+    // a PiP window can be targeted by its title alone.
+    function matchRule(winOrClass, rules, titleArg) {
+        const winClass = String(root._winClassOf(winOrClass, titleArg) ?? "");
+        const winTitle = (titleArg !== undefined)
+            ? titleArg
+            : root._winTitleOf(winOrClass, undefined);
         for (const rule of rules ?? []) {
-            const pattern = String(rule?.class ?? "");
-            if (pattern.length === 0) continue;
-            try {
-                if (new RegExp(pattern).test(String(winClass ?? ""))) return rule;
-            } catch (error) {
-                console.warn("[WindowMode] invalid window class pattern:", pattern, error);
+            const classPattern = String(rule?.class ?? "");
+            const titlePattern = String(rule?.title ?? "");
+            if (classPattern.length === 0 && titlePattern.length === 0) continue;
+            let ok = true;
+            if (classPattern.length > 0) {
+                try {
+                    if (!new RegExp(classPattern).test(winClass)) ok = false;
+                } catch (error) {
+                    console.warn("[WindowMode] invalid window class pattern:", classPattern, error);
+                    ok = false;
+                }
             }
+            if (ok && titlePattern.length > 0) {
+                try {
+                    const titleOk = new RegExp(titlePattern).test(String(winTitle ?? ""))
+                        || new RegExp(titlePattern).test(String(root._winTitleOf(winOrClass, titleArg) ?? ""));
+                    // Also consider the initial title, which is what the
+                    // compositor sees when the window is created.
+                    const initialTitle = (winOrClass && typeof winOrClass === "object")
+                        ? (winOrClass.initialTitle ?? winOrClass.initial_title)
+                        : undefined;
+                    const initialOk = initialTitle !== undefined
+                        && new RegExp(titlePattern).test(String(initialTitle ?? ""));
+                    if (!(titleOk || initialOk)) ok = false;
+                } catch (error) {
+                    console.warn("[WindowMode] invalid window title pattern:", titlePattern, error);
+                    ok = false;
+                }
+            }
+            if (ok) return rule;
         }
         return null;
     }
@@ -110,8 +158,8 @@ Singleton {
     // true: the window has to float. false: it has to tile. null: the mode
     // has no opinion and the window keeps what it has - a dialog that
     // floats because of its own rule, or a window the user floated by hand.
-    function desiredFloat(winClass, currentMode, rules) {
-        const rule = root.matchRule(winClass, rules);
+    function desiredFloat(winOrClass, currentMode, rules, titleArg) {
+        const rule = root.matchRule(winOrClass, rules, titleArg);
         // A span window must float in both global modes: tiling a window
         // would confine it to one monitor.
         if (rule?.mode === "span") return true;
@@ -120,9 +168,20 @@ Singleton {
     }
 
     // The rule that stretches this window over every monitor, or null.
-    function desiredSpan(winClass, rules) {
-        return root.matchRule(winClass, rules)?.mode === "span";
+    function desiredSpan(winOrClass, rules, titleArg) {
+        return root.matchRule(winOrClass, rules, titleArg)?.mode === "span";
     }
+
+    // Whether the matching rule disables (ignores) the global opacity for
+    // this window, forcing it to stay fully opaque. The title argument is
+    // forwarded: a rule can target a single window (a browser PiP) by its
+    // title alone, and dropping it would answer for the whole app.
+    function disablesOpacity(winOrClass, rules, titleArg) {
+        return root.matchRule(winOrClass, rules, titleArg)?.disableOpacity === true;
+    }
+    // Aliases kept for callers/tests that name this predicate differently.
+    function desiredOpacity(winOrClass, rules, titleArg) { return root.disablesOpacity(winOrClass, rules, titleArg); }
+    function opacityDisabled(winOrClass, rules, titleArg) { return root.disablesOpacity(winOrClass, rules, titleArg); }
 
     // The bounding box of every enabled screen, in the layout coordinates
     // the compositor uses for windows. Null when no screen is known yet.
@@ -230,17 +289,57 @@ Singleton {
             lines.push('hl.window_rule({ match = { class = ".*" }, float = true })');
         }
         for (const rule of rules ?? []) {
-            const pattern = root.luaQuote(rule?.class ?? "");
-            if (pattern.length === 0) continue;
+            const classPattern = root.luaQuote(rule?.class ?? "");
+            const titlePattern = root.luaQuote(rule?.title ?? "");
+            if (classPattern.length === 0 && titlePattern.length === 0) continue;
+            const disableOpacity = rule?.disableOpacity === true;
+            // Build the match clause: class and/or title, mirroring Hyprland's
+            // own window rule matcher so a PiP window can be targeted by its
+            // title without dragging in every other window of the same app.
+            const matchParts = [];
+            if (classPattern.length > 0) matchParts.push(`class = "${classPattern}"`);
+            if (titlePattern.length > 0) matchParts.push(`title = "${titlePattern}"`);
+            const matchClause = `match = { ${matchParts.join(", ")} }`;
+
             if (rule.mode === "span") {
-                lines.push(`hl.window_rule({ match = { class = "${pattern}" }, float = true${root.spanSizeRule(spanRect)}, border_size = 0, rounding = 0, opacity = "1 1", suppress_event = "fullscreen" })`);
+                lines.push(`hl.window_rule({ ${matchClause}, float = true${root.spanSizeRule(spanRect)}, border_size = 0, rounding = 0, opaque = true, suppress_event = "fullscreen" })`);
+                continue;
+            }
             // A rule that only repeats what the mode already does is left
-            // out: the file then says the same as the mode and nothing has
-            // to be rewritten when only the mode changed.
-            } else if (rule.mode === "tiling") {
-                if (currentMode === "stacking") lines.push(`hl.window_rule({ match = { class = "${pattern}" }, tile = true })`);
+            // out, unless it also disables opacity for this window: then the
+            // opacity override still has to be written even though the float
+            // behaviour is already implied by the mode.
+            const modeRedundant = (rule.mode === "tiling" && currentMode === "tiling")
+                || (rule.mode === "stacking" && currentMode === "stacking");
+            // A title-scoped rule that only repeats the mode is still
+            // redundant (the mode already covers every window), so it is
+            // skipped unless it disables opacity.
+            if (modeRedundant && !disableOpacity) continue;
+
+            const props = [];
+            if (rule.mode === "tiling") {
+                if (currentMode === "stacking") props.push("tile = true");
             } else if (currentMode !== "stacking") {
-                lines.push(`hl.window_rule({ match = { class = "${pattern}" }, float = true })`);
+                props.push("float = true");
+            }
+            // "opaque" is the compositor's own "ignore the global opacity"
+            // switch: it pins decoration:active/inactive/fullscreen_opacity
+            // to 1 for this window only. The plain opacity property cannot
+            // do this job - it is a MULTIPLIER (decoration * rule), so
+            // opacity = "1 1" multiplies the global 0.85 by 1 and changes
+            // nothing. Verified against Hyprland 0.57.2.
+            if (disableOpacity) props.push("opaque = true");
+            if (props.length === 0) continue;
+            lines.push(`hl.window_rule({ ${matchClause}, ${props.join(", ")} })`);
+            // A title may only become known after the window is created, so
+            // also match the initial title (the one Hyprland sees at creation)
+            // for the opacity override. Emitted as a separate rule so the two
+            // matchers are ORed instead of ANDed.
+            if (disableOpacity && titlePattern.length > 0) {
+                const initialMatchParts = [];
+                if (classPattern.length > 0) initialMatchParts.push(`class = "${classPattern}"`);
+                initialMatchParts.push(`initial_title = "${titlePattern}"`);
+                lines.push(`hl.window_rule({ match = { ${initialMatchParts.join(", ")} }, opaque = true })`);
             }
         }
         return lines.join("\n") + "\n";
@@ -455,9 +554,9 @@ Singleton {
         const actions = [];
 
         for (const win of clients) {
-            const want = root.desiredFloat(win.class, currentMode, rules);
+            const want = root.desiredFloat(win, currentMode, rules);
             const isOwned = owned.has(win.address);
-            const isSpan = root.desiredSpan(win.class, rules);
+            const isSpan = root.desiredSpan(win, rules);
             // A fullscreen window is on one monitor by definition. The app
             // cannot request it (the span rule suppresses that), but a
             // keybind can; resizing it back every tick would fight the user.
@@ -521,11 +620,33 @@ Singleton {
             if (action.floating !== undefined) root.setFloat(action.address, action.floating);
             if (action.rect) root.setRect(action.address, action.rect);
         }
+        // Keep opacity overrides applied to open windows even when the
+        // compositor rule did not match at creation time: a rule only runs
+        // when a window is created, so the toggle is re-asserted here. A
+        // window whose rule went away gets the override cleared, otherwise
+        // it would stay opaque until it is closed.
+        const alive = new Set(clients.map(client => client.address));
+        const opaqueWanted = new Set();
+        for (const win of clients) {
+            if (root.matchRule(win, root.appRules)?.disableOpacity === true) {
+                root.setOpacity(win.address, true);
+                opaqueWanted.add(win.address);
+            }
+        }
+        const opaqueOwned = new Set(root.ownedOpacity().filter(address => alive.has(address)));
+        for (const address of Array.from(opaqueOwned)) {
+            if (opaqueWanted.has(address)) continue;
+            root.setOpacity(address, false);
+            opaqueOwned.delete(address);
+        }
+        for (const address of opaqueWanted) opaqueOwned.add(address);
 
         const current = root.ownedFloats();
         if (plan.owned.join("\n") !== current.join("\n")) root.setOwnedFloats(plan.owned);
         const currentSpans = root.ownedSpans();
         if (plan.spans.join("\n") !== currentSpans.join("\n")) root.setOwnedSpans(plan.spans);
+        const ownedOpacity = Array.from(opaqueOwned);
+        if (ownedOpacity.join("\n") !== root.ownedOpacity().join("\n")) root.setOwnedOpacity(ownedOpacity);
     }
 
     function setFloat(address, floating) {
@@ -541,6 +662,31 @@ Singleton {
         if (!address || !rect) return;
         Hyprland.dispatch(`hl.dsp.window.resize({ window = "address:${address}", x = ${Math.round(rect.width)}, y = ${Math.round(rect.height)}, exact = true })`);
         Hyprland.dispatch(`hl.dsp.window.move({ window = "address:${address}", x = ${Math.round(rect.x)}, y = ${Math.round(rect.y)}, exact = true })`);
+    }
+
+    function setOpacity(address, disable) {
+        if (!address) return;
+        // The compositor multiplies every opacity it knows about:
+        // decoration:active/inactive_opacity * rule * ... A bare value of
+        // 1 is therefore a no-op, and a value only counts when the
+        // matching *_override flag is set. Both halves are written, for
+        // active, inactive and fullscreen, because a value without its
+        // override flag is ignored and the inactive one is what a window
+        // keeps after it loses focus. Turning it back off clears the flags
+        // so the global setting applies again.
+        for (const prop of ["opacity", "opacity_inactive", "opacity_fullscreen"]) {
+            if (disable) {
+                root.setWindowProp(address, `${prop}_override`, "1");
+                root.setWindowProp(address, prop, "1");
+            } else {
+                root.setWindowProp(address, prop, "1");
+                root.setWindowProp(address, `${prop}_override`, "0");
+            }
+        }
+    }
+
+    function setWindowProp(address, prop, value) {
+        Hyprland.dispatch(`hl.dsp.window.set_prop({ window = "address:${address}", prop = "${prop}", value = "${value}" })`);
     }
 
     // The windows this service floated. They live in the persisted session
@@ -581,6 +727,25 @@ Singleton {
         Persistent.states.windowMode.ownedSpans = list;
     }
 
+    // The windows this service keeps fully opaque for a rule with
+    // disableOpacity. Kept in the session state so a shell that restarts
+    // still knows which windows it has to hand back to the global opacity
+    // once the rule is switched off again.
+    function ownedOpacity() {
+        return Array.from(Persistent.states.windowMode.ownedOpacity ?? []);
+    }
+
+    function setOwnedOpacity(list) {
+        Persistent.states.windowMode.ownedOpacity = list;
+    }
+
+    function forgetOpacity(address) {
+        if (!address) return;
+        const owned = root.ownedOpacity();
+        if (!owned.includes(address)) return;
+        root.setOwnedOpacity(owned.filter(entry => entry !== address));
+    }
+
     function rememberSpan(address) {
         if (!address) return;
         const owned = root.ownedSpans();
@@ -612,13 +777,28 @@ Singleton {
         if (parts.length < 3) return;
         const address = parts[0].trim();
         const winClass = parts[2];
-        const span = root.desiredSpan(winClass, root.appRules);
-        const want = root.desiredFloat(winClass, root.mode, root.appRules);
+        const winTitle = parts.slice(3).join(",");
+        const win = { "class": winClass, "title": winTitle };
+        const span = root.desiredSpan(win, root.appRules);
+        const want = root.desiredFloat(win, root.mode, root.appRules);
+        const rule = root.matchRule(win, root.appRules);
+        // Disable opacity at runtime too: the compositor rule only matches
+        // at window creation, and a PiP window's title may not be known yet
+        // then, so apply it here based on the current title.
+        if (rule?.disableOpacity === true) {
+            root.setOpacity(address, true);
+        }
         // The stacking mode already floats every window through the rule;
         // a non-span window in tiling mode keeps the old path (the rule
         // floats an always-stacking app, and reconcile catches a miss).
-        if (!root.stacking && !span) return;
-        if (want !== true) return;
+        if (!root.stacking && !span) {
+            if (rule?.disableOpacity === true) root.scheduleReconcile();
+            return;
+        }
+        if (want !== true) {
+            if (rule?.disableOpacity === true) root.scheduleReconcile();
+            return;
+        }
         root.setFloat(address, true);
         root.rememberFloating(address);
         if (span) {
@@ -641,6 +821,7 @@ Singleton {
                 const address = String(event.data ?? "").split(",")[0].trim();
                 root.forgetFloating(address);
                 root.forgetSpan(address);
+                root.forgetOpacity(address);
             }
         }
     }
@@ -695,9 +876,11 @@ Singleton {
                 "mode": root.mode,
                 "spanRect": root.spanRect,
                 "hasSpanRules": root.hasSpanRules,
+                "hasOpacityRules": (root.appRules ?? []).some(rule => rule?.disableOpacity === true),
                 "appRules": root.appRules,
                 "ownedFloats": root.ownedFloats(),
                 "ownedSpans": root.ownedSpans(),
+                "ownedOpacity": root.ownedOpacity(),
                 "rulesKnown": root.rulesKnown,
                 "pendingWrite": root.pendingWrite
             });

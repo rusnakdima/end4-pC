@@ -237,7 +237,10 @@ TestCase {
         verify(source.indexOf("size = { 3840, 1200 }") !== -1);
         verify(source.indexOf("border_size = 0") !== -1);
         verify(source.indexOf("rounding = 0") !== -1);
-        verify(source.indexOf('opacity = "1 1"') !== -1);
+        // "opaque" pins the decoration opacities of this window to 1;
+        // a plain opacity = "1 1" would only multiply the global value.
+        verify(source.indexOf("opaque = true") !== -1);
+        verify(source.indexOf('opacity = "1 1"') === -1);
         verify(source.indexOf('suppress_event = "fullscreen"') !== -1);
         // The position comes from the dispatcher; the rule's "move" is not
         // reliable for a window larger than one monitor.
@@ -430,6 +433,71 @@ TestCase {
         compare(plan.actions[0].floating, false);
         compare(plan.owned.length, 0);
         compare(plan.spans.length, 0);
+    }
+
+    function test_an_opacity_disabled_rule_makes_the_window_opaque() {
+        // The compositor multiplies opacities, so the rule has to be the
+        // "opaque" effect: opacity = "1 1" would multiply the global
+        // decoration opacity by 1 and change nothing.
+        const source = WindowMode.rulesSource("tiling", [{ "class": "firefox", "mode": "tiling", "disableOpacity": true }], null);
+        verify(source.indexOf("firefox") !== -1);
+        verify(source.indexOf("opaque = true") !== -1);
+        verify(source.indexOf('opacity = "1 1"') === -1);
+    }
+
+    function test_a_redundant_mode_rule_with_opacity_is_still_written() {
+        const source = WindowMode.rulesSource("stacking", [{ "class": "firefox", "mode": "stacking", "disableOpacity": true }], null);
+        verify(source.indexOf("firefox") !== -1);
+        verify(source.indexOf("opaque = true") !== -1);
+    }
+
+    function test_a_rule_without_the_opacity_flag_never_forces_opaque() {
+        const source = WindowMode.rulesSource("tiling", [{ "class": "firefox", "mode": "stacking" }], null);
+        verify(source.indexOf("firefox") !== -1);
+        verify(source.indexOf("opaque") === -1);
+    }
+
+    function test_a_plain_redundant_mode_rule_stays_skipped() {
+        verify(WindowMode.rulesSource("tiling", [{ "class": "firefox", "mode": "tiling" }], null).indexOf("firefox") === -1);
+    }
+
+    function test_a_title_scoped_rule_matches_by_title() {
+        const rules = [{ "class": "zen", "title": "Picture-in-Picture", "mode": "stacking", "disableOpacity": true }];
+        verify(WindowMode.matchRule({ "class": "zen", "title": "Picture-in-Picture" }, rules) !== null);
+        compare(WindowMode.matchRule({ "class": "zen", "title": "Mozilla Zen" }, rules), null);
+        const src = WindowMode.rulesSource("tiling", rules, null);
+        verify(src.indexOf('title = "Picture-in-Picture"') !== -1);
+        verify(src.indexOf("opaque = true") !== -1);
+    }
+
+    function test_a_title_scoped_opacity_rule_also_matches_the_initial_title() {
+        // A PiP window can announce its real title only after it is
+        // created, so the opacity effect is written a second time against
+        // the initial title: the two matchers are ORed by being separate
+        // rules.
+        const rules = [{ "class": "zen", "title": "Picture-in-Picture", "mode": "tiling", "disableOpacity": true }];
+        const src = WindowMode.rulesSource("tiling", rules, null);
+        verify(src.indexOf('initial_title = "Picture-in-Picture"') !== -1);
+        compare(src.match(/opaque = true/g).length, 2);
+    }
+
+    function test_disables_opacity_considers_the_title_too() {
+        const rules = [{ "class": "zen", "title": "Picture-in-Picture", "mode": "stacking", "disableOpacity": true }];
+        compare(WindowMode.disablesOpacity({ "class": "zen", "title": "Picture-in-Picture" }, rules), true);
+        compare(WindowMode.disablesOpacity({ "class": "zen", "title": "Mozilla Zen" }, rules), false);
+        compare(WindowMode.disablesOpacity("zen", rules, "Picture-in-Picture"), true);
+        compare(WindowMode.disablesOpacity("zen", rules, "Mozilla Zen"), false);
+
+        // A rule without the flag and a window that matches no rule stay
+        // on the global opacity.
+        compare(WindowMode.disablesOpacity("kitty", [{ "class": "kitty", "mode": "stacking" }]), false);
+        compare(WindowMode.disablesOpacity("kitty", []), false);
+    }
+
+    function test_match_rule_supports_title_only() {
+        const rules = [{ "title": "Picture-in-Picture", "mode": "stacking" }];
+        verify(WindowMode.matchRule({ "class": "zen", "title": "Picture-in-Picture" }, rules) !== null);
+        compare(WindowMode.matchRule({ "class": "zen", "title": "Other" }, rules), null);
     }
 
     function test_the_closed_span_windows_are_dropped_from_the_span_list() {
