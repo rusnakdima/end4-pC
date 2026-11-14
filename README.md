@@ -80,6 +80,22 @@ sudo ./setup-hotspot.sh        # install (idempotent)  ·  ./setup-hotspot.sh --
 
 Full guide — hardware paths (onboard MT7922 vs AIC8800D80 dongle), troubleshooting — in [`scripts/hotspot/README.md`](scripts/hotspot/README.md).
 
+### 🎨 Keyboard RGB (colour from Settings)
+
+The Settings → Keyboard colour palette, brightness slider and *Match the
+wallpaper colour* need one-time system provisioning (root helper, sudoers rule,
+boot-restore unit): the `qc71_laptop` driver never registers a lightbar LED on
+this BIOS, so no LED-based app can reach the keyboard. After installing, run:
+
+```bash
+cd ~/.config/quickshell/end4-pC/scripts/keyboard-rgb
+sudo ./setup-keyboard-rgb.sh     # install (idempotent)  ·  ./setup-keyboard-rgb.sh --check  ·  --uninstall
+```
+
+Full guide — the EC register map, why every other path fails on this machine,
+the hardware limits, troubleshooting — in
+[`scripts/keyboard-rgb/README.md`](scripts/keyboard-rgb/README.md).
+
 ### 🔧 Set as your default shell (optional)
 
 If you like it and want it to load by default instead of `ii`, edit:
