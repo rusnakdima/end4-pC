@@ -189,27 +189,56 @@ Singleton {
     component KeyboardBrightnessMonitor: QtObject {
         id: kbMonitor
 
-        property real brightness: 1 // 0..1, brightness / max
-        readonly property real brightnessPercent: Math.round(brightness * 100)
-        property int maxBrightness: 100
-        property var color: null
+        // 0..100 percent. Both existing callers already speak it: the sidebar
+        // slider divides brightnessPercent by 100, and the settings spin passes
+        // the value straight back into set().
+        property real brightness: 100
+        readonly property real brightnessPercent: Math.round(brightness)
+
+        // What the user asked for. Kept apart from `color` below so that the
+        // snapped value the hardware reports can be shown without being fed
+        // back into the next write as if it had been chosen.
+        property string requestedColor: "#ffffff"
+
+        // What the hardware is actually showing, snapped to the ten levels per
+        // channel the panel has. A string rather than a color so it round-trips
+        // into the page's string field as #RRGGBB instead of Qt's #AARRGGBB.
+        property string color: "#ffffff"
+        property var levels: [0, 0, 0]
+        property bool rainbow: false
+        property bool off: false
+        property string backend: ""
+        property bool available: false
+        readonly property bool hasColor: available
 
         // Result of the last apply, rendered by the Keyboard page so a failure
         // is visible instead of silently doing nothing.
         property bool statusOk: true
         property string statusMessage: ""
 
-        // This machine is a Maibenben X16C: the keyboard LED is the Tuxedo
-        // uniwill_wmi device, not an ASUS aura zone, and it is driven by the
-        // two helpers below. Capability therefore means "the sysfs device with
-        // per-channel colour exists" -- which also replaces the old
-        // Config.options.keyboard.hasColor read of a key that never existed.
-        readonly property string ledDir: "/sys/class/leds/rgb:kbd_backlight"
-        property bool available: false
-        readonly property bool hasColor: available
+        // The combination last handed to the hardware, so a repeated wallpaper
+        // colour or a re-opened page does not hammer the EC.
+        property string appliedKey: ""
+        property string pendingKey: ""
+        // True while a write is in flight: a probe that lands mid-drag must not
+        // yank the slider back to the value the hardware already had.
+        property bool applying: false
+        // Whether the stored choice has been pushed once the config was ready.
+        property bool configApplied: false
+
+        readonly property string helper: "/usr/local/bin/kbd-rgb"
 
         function increase(): void { kbMonitor.set(kbMonitor.brightnessPercent + 5); }
         function decrease(): void { kbMonitor.set(kbMonitor.brightnessPercent - 5); }
+
+        function report(ok: bool, message: string): void {
+            kbMonitor.statusOk = ok;
+            kbMonitor.statusMessage = message;
+        }
+
+        function clampPercent(p: real): int {
+            return Math.max(0, Math.min(100, Math.round(p)));
+        }
 
         // percent is 0..100, the shape SettingsQuickControls and the sidebar
         // slider already speak.
@@ -218,17 +247,28 @@ Singleton {
                 kbMonitor.report(false, Translation.tr("No keyboard backlight device"));
                 return;
             }
-            const p = Math.max(0, Math.min(100, Math.round(percent)));
-            // kbd-backlight clamps against max_brightness itself, and save
-            // feeds the boot service that restores the state after a reboot.
-            kbMonitor.run([
-                "sh", "-c",
-                `sudo -n /usr/local/bin/kbd-backlight set-brightness ${p} && sudo -n /usr/local/bin/kbd-backlight save`
-            ]);
+            kbMonitor.brightness = kbMonitor.clampPercent(percent);
+            kbMonitor.off = false;
+            kbMonitor.schedule();
         }
 
         function setColor(r: int, g: int, b: int): void {
             kbMonitor.setColorHex(kbMonitor.toHex(r, g, b));
+        }
+
+        // Qt.color() in this Qt build hands back an object that carries r/g/b/a
+        // and toString() but *no* isValid, *no* name() and *no* h/s/v -- so the
+        // old `if (!c.isValid)` rejected every colour and `c.name()` threw.
+        // Parsing is done with a regular expression instead; #rgb and #aarrggbb
+        // are accepted and folded onto #rrggbb. Returns "" for anything else.
+        function normalizeHex(value): string {
+            let s = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+            if (s.charAt(0) === "#") s = s.slice(1);
+            if (/^[0-9a-f]{3}$/.test(s))
+                s = s.charAt(0) + s.charAt(0) + s.charAt(1) + s.charAt(1) + s.charAt(2) + s.charAt(2);
+            else if (/^[0-9a-f]{8}$/.test(s)) s = s.slice(2); // #aarrggbb -> rrggbb
+            if (!/^[0-9a-f]{6}$/.test(s)) return "";
+            return "#" + s;
         }
 
         function setColorHex(hex: string): void {
@@ -236,42 +276,104 @@ Singleton {
                 kbMonitor.report(false, Translation.tr("No keyboard backlight device"));
                 return;
             }
-            const c = Qt.color(hex);
-            if (!c.isValid) {
+            const normalized = kbMonitor.normalizeHex(hex);
+            if (normalized === "") {
                 kbMonitor.report(false, Translation.tr("Not a valid colour: ") + hex);
                 return;
             }
-            kbMonitor.color = hex;
-            // kbd-color takes 0-255 channels, scales them to the sysfs 0-4
-            // range and swaps R and B for the hardware's BGR order -- which is
-            // exactly why the raw values must not be written by hand.
-            const r = Math.round(c.r * 255), g = Math.round(c.g * 255), b = Math.round(c.b * 255);
-            kbMonitor.run([
-                "sh", "-c",
-                `sudo -n /usr/local/bin/kbd-color ${r} ${g} ${b} && sudo -n /usr/local/bin/kbd-backlight save`
-            ]);
+            kbMonitor.requestedColor = normalized;
+            kbMonitor.color = normalized;
+            kbMonitor.off = false;
+            kbMonitor.schedule();
         }
 
         // What the wallpaper-follow option feeds it: Appearance.colPrimary is
         // already derived from the wallpaper, so there is nothing to sample.
-        function applyColor(color): void {
-            const c = Qt.color(color);
-            kbMonitor.setColor(kbMonitor.channel(c.r), kbMonitor.channel(c.g), kbMonitor.channel(c.b));
+        // Invalid input is dropped silently -- a wallpaper change must never
+        // paint an error into the page.
+        function applyColor(colour): void {
+            const normalized = kbMonitor.normalizeHex(colour);
+            if (normalized === "") return;
+            kbMonitor.requestedColor = normalized;
+            kbMonitor.color = normalized;
+            kbMonitor.off = false;
+            kbMonitor.schedule();
+        }
+
+        function setMode(mode: string): void {
+            if (!kbMonitor.available) return;
+            kbMonitor.rainbow = mode === "rainbow";
+            kbMonitor.off = false;
+            kbMonitor.schedule();
+        }
+
+        // The panel has no true off, so "Off" is the pure black colour, which
+        // the helper maps onto the darkest state it can hold.
+        function switchOff(): void {
+            kbMonitor.setColorHex("#000000");
+        }
+
+        // The configured Appearance.colors role. Every one of these is a
+        // property of the same object MaterialThemeLoader rewrites, so choosing
+        // among them changes which colour is followed, never which mechanism.
+        function roleColour() {
+            switch (Config.options.light.keyboardColor.role) {
+            case "primaryActive": return Appearance.colors.colPrimaryActive;
+            case "secondary":      return Appearance.colors.colSecondary;
+            case "tertiary":       return Appearance.colors.colTertiary;
+            default:               return Appearance.colors.colPrimary;
+            }
+        }
+
+        // One gate for every role watcher: colour management has to be on and
+        // the keyboard has to be following the wallpaper.
+        function restartFollow(): void {
+            if (!Config.options.light.keyboardColor.followWallpaper) return;
+            followTimer.restart();
+        }
+
+        // A Material colour is chosen to read on a surface, where a lightly
+        // saturated tone looks calm and correct; laid on a keyboard it reads as
+        // white-lit and washed out. The theme's *hue* and *lightness* are kept
+        // exactly -- same role, same signal, same mechanism -- and only
+        // saturation is taken to full, which is what the palette's lower rows
+        // show. This is applied only to the followed colour: a colour picked by
+        // hand from the palette is sent as chosen.
+        function hardwareColour(value): string {
+            const c = Qt.color(value);
+            const r = c.r, g = c.g, b = c.b;
+            const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+            if (mx <= 0) return "#000000";
+            let h = 0;
+            if (d > 0) {
+                if (mx === r) h = ((g - b) / d + 6) % 6;
+                else if (mx === g) h = (b - r) / d + 2;
+                else h = (r - g) / d + 4;
+                h *= 60;
+            }
+            // HSV, full saturation, same value as the theme picked.
+            const out = Qt.hsva(h / 360, 1, mx, 1);
+            const two = x => Math.round(Math.max(0, Math.min(1, x)) * 255)
+                .toString(16).padStart(2, "0");
+            return "#" + two(out.r) + two(out.g) + two(out.b);
+        }
+
+        // The exact colour "match the wallpaper" sends: the configured role,
+        // then rendered for the keyboard.
+        function followColour(): string {
+            return kbMonitor.hardwareColour(kbMonitor.roleColour());
         }
 
         function applyFromConfig(): void {
-            if (!kbMonitor.available || !Config.options.light.keyboardColor.enable) return;
+            if (!kbMonitor.available) return;
+            kbMonitor.configApplied = true;
             if (Config.options.light.keyboardColor.followWallpaper) {
-                kbMonitor.applyColor(Appearance.colors.colPrimary);
+                kbMonitor.applyColor(kbMonitor.followColour());
                 return;
             }
             const stored = Config.options.light.keyboardColor.color;
             if (stored && stored !== "")
                 kbMonitor.setColorHex(stored);
-        }
-
-        function channel(v: real): int {
-            return Math.max(0, Math.min(255, Math.round(v * 255)));
         }
 
         function toHex(r: int, g: int, b: int): string {
@@ -280,69 +382,174 @@ Singleton {
                 .join("");
         }
 
-        function report(ok: bool, message: string): void {
-            kbMonitor.statusOk = ok;
-            kbMonitor.statusMessage = message;
+        // Coalesce: a hue drag and matugen both emit bursts, and every write
+        // costs a sudo spawn plus an EC transaction.
+        function schedule(): void {
+            applyTimer.restart();
         }
 
-        function refresh(): void {
-            kbReadProc.exec([]);
+        function buildKey(): string {
+            // Only what the helper is actually asked for. `off` is display state
+            // read back from probe; it never keys an apply, so a dark colour
+            // cannot turn the next apply into a different command.
+            return [
+                kbMonitor.requestedColor,
+                kbMonitor.brightnessPercent,
+                kbMonitor.rainbow ? "rainbow" : "static"
+            ].join("|");
         }
 
-        function run(cmd): void {
-            applyProc.exec(cmd);
+        function doApply(): void {
+            if (!kbMonitor.available) {
+                kbMonitor.report(false, Translation.tr("No keyboard backlight device"));
+                return;
+            }
+            // exec() stops whatever is already running, so firing it mid-flight
+            // would kill an in-process write and have its signal-driven exit
+            // reported as a failure ("check sudo access"). Wait for it instead;
+            // the timer keeps coming back until the state matches.
+            if (applyProc.running) {
+                applyTimer.restart();
+                return;
+            }
+            const key = kbMonitor.buildKey();
+            if (key === kbMonitor.appliedKey) return;
+            kbMonitor.pendingKey = key;
+            kbMonitor.applying = true;
+            // Arguments go in as an array, never through a shell: a malformed
+            // colour cannot reach sh even if it slipped the validation above.
+            applyProc.exec([
+                "sudo", "-n", kbMonitor.helper, "set",
+                "--color", kbMonitor.requestedColor,
+                "--brightness", String(kbMonitor.brightnessPercent),
+                "--mode", kbMonitor.rainbow ? "rainbow" : "static"
+            ]);
+        }
+
+        function probe(): void {
+            // exec() assigns its argument to `command`, so the whole argv must be
+            // passed here: an empty list starts an empty command, which is why the
+            // panel used to report "no device" even with a working helper.
+            probeProc.exec(["sudo", "-n", kbMonitor.helper, "probe"]);
+        }
+
+        // Applies the state from a successful `set` reply instead of probing
+        // for it again. The driving fields are only taken when no further apply
+        // is queued, so a fast run of clicks cannot be undone by a reply that
+        // describes an earlier one.
+        function adoptApply(data): void {
+            kbMonitor.available = true;
+            if (typeof data.backend === "string") kbMonitor.backend = data.backend;
+            if (typeof data.color === "string") kbMonitor.color = data.color;
+            if (Array.isArray(data.levels)) kbMonitor.levels = data.levels;
+            if (typeof data.off === "boolean") kbMonitor.off = data.off;
+            if (!applyTimer.running) {
+                if (typeof data.mode === "string") kbMonitor.rainbow = data.mode === "rainbow";
+                if (typeof data.brightness === "number")
+                    kbMonitor.brightness = kbMonitor.clampPercent(data.brightness);
+            }
+        }
+
+        function adoptProbe(data): void {
+            kbMonitor.available = data.available !== false;
+            if (!kbMonitor.available) return;
+            kbMonitor.backend = typeof data.backend === "string" ? data.backend : "";
+            // The helper reports the closest colour it could display, which is
+            // what the page must preview -- not the value that was requested.
+            if (typeof data.color === "string") kbMonitor.color = data.color;
+            if (Array.isArray(data.levels)) kbMonitor.levels = data.levels;
+            kbMonitor.off = data.off === true;
+
+            // A probe that lands while an apply is queued describes the state
+            // from *before* that apply. Adopting it flips the control the user
+            // just moved back to its old value, and the queued write then builds
+            // the same key it already has -- so it never runs. That is exactly
+            // what made the rainbow switch look dead, so the driving properties
+            // are only taken from the hardware when nothing is in flight.
+            const idle = !kbMonitor.applying && !applyTimer.running;
+            if (idle) {
+                kbMonitor.rainbow = data.rainbow === true;
+                if (typeof data.brightness === "number")
+                    kbMonitor.brightness = kbMonitor.clampPercent(data.brightness);
+            }
+            // The config may have been ready before the device was: this is the
+            // first moment the stored colour can actually be pushed.
+            if (Config.ready && !kbMonitor.configApplied) kbMonitor.applyFromConfig();
         }
 
         // QtObject has no default property, so every child is a property --
         // the same trick BrightnessMonitor uses for initProc.
 
-        // One probe for the device and its range: without the LED there is
-        // nothing to control, and the page says so instead of pretending.
+        // One probe tells us the backend, the current colour and the stored
+        // brightness; without a device the page says so instead of pretending.
+        // The command is supplied by probe() below.
         readonly property Process probeProc: Process {
-            command: ["sh", "-c",
-                `d="${kbMonitor.ledDir}"; if [ -e "$d/multi_intensity" ]; then printf 'yes %s\n' "$(cat "$d/max_brightness" 2>/dev/null || echo 100)"; else printf 'no 100\n'; fi`]
-            stdout: StdioCollector {
-                onStreamFinished: {
-                    const parts = text.trim().split(/\s+/);
-                    kbMonitor.available = parts[0] === "yes";
-                    const max = parseInt(parts[1]);
-                    kbMonitor.maxBrightness = (!isNaN(max) && max > 0) ? max : 100;
+            stdout: StdioCollector { id: kbProbeOut }
+            stderr: StdioCollector { id: kbProbeErr }
+            onExited: (exitCode) => {
+                if (exitCode !== 0) {
+                    // sudo -n cannot prompt here, so the helper's own message
+                    // (or sudo's) has to be shown verbatim.
+                    const err = kbProbeErr.text.trim();
+                    kbMonitor.available = false;
+                    kbMonitor.report(false, err !== ""
+                        ? err
+                        : Translation.tr("Could not read the keyboard backlight."));
+                    return;
                 }
-            }
-        }
-
-        // brightnessctl cannot be used here: /usr/local/bin/brightnessctl is a
-        // wrapper that forces -d amdgpu_bl1, and there is no kbd_backlight
-        // class anyway. Read the LED directly.
-        readonly property Process kbReadProc: Process {
-            command: ["sh", "-c",
-                `d="${kbMonitor.ledDir}"; printf '%s %s\n' "$(cat "$d/brightness" 2>/dev/null || echo 0)" "$(cat "$d/max_brightness" 2>/dev/null || echo 100)"`]
-            stdout: SplitParser {
-                onRead: data => {
-                    const parts = data.trim().split(/\s+/);
-                    const cur = parseInt(parts[0]);
-                    const max = parseInt(parts[1]);
-                    if (isNaN(cur) || isNaN(max) || max <= 0) return;
-                    kbMonitor.maxBrightness = max;
-                    kbMonitor.brightness = Math.max(0, Math.min(1, cur / max));
+                const text = kbProbeOut.text.trim();
+                if (text === "") return;
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    kbMonitor.report(false, Translation.tr("Unexpected reply from the keyboard helper."));
+                    return;
+                }
+                kbMonitor.adoptProbe(data);
+                if (data.available === false) {
+                    kbMonitor.report(false, data.error || Translation.tr("No keyboard backlight device"));
+                } else if (!kbMonitor.applying) {
+                    kbMonitor.report(true, "");
                 }
             }
         }
 
         readonly property Process applyProc: Process {
-            stderr: StdioCollector { id: applyErr }
+            stdout: StdioCollector { id: kbApplyOut }
+            stderr: StdioCollector { id: kbApplyErr }
             onExited: (exitCode) => {
+                kbMonitor.applying = false;
                 if (exitCode === 0) {
+                    kbMonitor.appliedKey = kbMonitor.pendingKey;
                     kbMonitor.report(true, "");
-                    kbMonitor.refresh();
+                    // The helper's reply already carries the resulting colour,
+                    // levels, brightness and mode, so the old follow-up probe()
+                    // -- a second sudo spawn plus a second EC read after every
+                    // single write -- is dropped. Fall back to it only if the
+                    // reply could not be read.
+                    let data = null;
+                    try {
+                        data = JSON.parse(kbApplyOut.text.trim());
+                    } catch (e) {
+                        data = null;
+                    }
+                    if (data && data.ok === true) kbMonitor.adoptApply(data);
+                    else kbMonitor.probe();
                     return;
                 }
-                // sudo -n cannot prompt here, so the message has to say what
-                // would have to be granted.
-                const err = applyErr.text.trim();
-                kbMonitor.report(false, err !== ""
-                    ? err
-                    : Translation.tr("Could not set the keyboard colour. Check sudo access to /usr/local/bin/kbd-color."));
+                // Prefer the JSON error the helper wrote; fall back to whatever
+                // sudo itself printed when it refused without a password.
+                let detail = kbApplyErr.text.trim();
+                if (detail === "") {
+                    try {
+                        const data = JSON.parse(kbApplyOut.text.trim());
+                        if (data && data.error) detail = data.error;
+                    } catch (e) { /* nothing better to show */ }
+                }
+                kbMonitor.report(false, detail !== ""
+                    ? detail
+                    : Translation.tr("Could not set the keyboard colour. Check sudo access to /usr/local/bin/kbd-rgb."));
             }
         }
 
@@ -363,40 +570,46 @@ Singleton {
             onTriggered: kbMonitor.applyFromConfig()
         }
 
-        readonly property Connections wallpaperColour: Connections {
-            target: Appearance.colors
-            function onColPrimaryChanged() {
-                if (!Config.options.light.keyboardColor.enable) return;
-                if (!Config.options.light.keyboardColor.followWallpaper) return;
-                followTimer.restart();
-            }
+        readonly property Timer applyTimer: Timer {
+            interval: 80
+            onTriggered: kbMonitor.doApply()
         }
 
-        Component.onCompleted: {
-            probeProc.exec([]);
-            kbReadProc.exec([]);
+        // The same mechanism every dynamic appearance element uses:
+        // MaterialThemeLoader watches the generated theme file and rewrites
+        // Appearance.colors, so this listens to the very signal the rest of the
+        // shell already reacts to rather than sampling the wallpaper itself.
+        readonly property Connections wallpaperColour: Connections {
+            target: Appearance.colors
+            function onColPrimaryChanged() { kbMonitor.restartFollow(); }
+            function onColPrimaryActiveChanged() { kbMonitor.restartFollow(); }
+            function onColSecondaryChanged() { kbMonitor.restartFollow(); }
+            function onColTertiaryChanged() { kbMonitor.restartFollow(); }
         }
+
+
+        Component.onCompleted: kbMonitor.probe()
     }
 
     // Exposed so the settings pages and the quick controls can read the level
     // and apply a colour. Nothing else in the shell owns this object.
     readonly property KeyboardBrightnessMonitor kbMonitor: KeyboardBrightnessMonitor {}
 
-    // The named colours the settings UI offers, as hex: kbd-color takes
-    // channels, not names, and one table keeps the Keyboard page swatches and
-    // the quick-control select from drifting apart. "Off" is 0 0 0, which is
-    // what kbd-color's own `off` argument writes.
+    // The named colours the settings UI offers, as hex: one table keeps the
+    // Keyboard page swatches and the quick-control select from drifting apart.
+    // These are the *requested* values; kbd-rgb snaps them to the ten levels
+    // per channel the panel has, and the page previews the snapped result.
     readonly property var keyboardColors: [
-        { value: "#ffffff", displayName: Translation.tr("White") },
-        { value: "#ff5252", displayName: Translation.tr("Red") },
-        { value: "#ff9800", displayName: Translation.tr("Orange") },
-        { value: "#ffd600", displayName: Translation.tr("Yellow") },
-        { value: "#4caf50", displayName: Translation.tr("Green") },
-        { value: "#26c6da", displayName: Translation.tr("Cyan") },
-        { value: "#42a5f5", displayName: Translation.tr("Blue") },
-        { value: "#ab47bc", displayName: Translation.tr("Purple") },
-        { value: "#ec407a", displayName: Translation.tr("Magenta") },
-        { value: "#000000", displayName: Translation.tr("Off") }
+        { value: "#ffffff", color: "#ffffff", displayName: Translation.tr("White") },
+        { value: "#ff5252", color: "#ff5252", displayName: Translation.tr("Red") },
+        { value: "#ff9800", color: "#ff9800", displayName: Translation.tr("Orange") },
+        { value: "#ffd600", color: "#ffd600", displayName: Translation.tr("Yellow") },
+        { value: "#4caf50", color: "#4caf50", displayName: Translation.tr("Green") },
+        { value: "#26c6da", color: "#26c6da", displayName: Translation.tr("Cyan") },
+        { value: "#42a5f5", color: "#42a5f5", displayName: Translation.tr("Blue") },
+        { value: "#ab47bc", color: "#ab47bc", displayName: Translation.tr("Purple") },
+        { value: "#ec407a", color: "#ec407a", displayName: Translation.tr("Magenta") },
+        { value: "#000000", color: "#000000", displayName: Translation.tr("Off") }
     ]
 
     Component {

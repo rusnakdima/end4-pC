@@ -791,9 +791,16 @@ Singleton {
                 // Appearance.colPrimary instead, which matugen already derives
                 // from the wallpaper. Brightness.kbMonitor applies both.
                 property JsonObject keyboardColor: JsonObject {
-                    property bool enable: false
                     property bool followWallpaper: false
                     property string color: "#ffffff"
+                    // Which of Appearance.colors to follow. All of these are
+                    // rewritten by MaterialThemeLoader alongside every other
+                    // dynamic surface, so following one of them keeps the
+                    // keyboard on the same mechanism as the rest of the shell.
+                    // "primaryActive" is the default because plain primary is a
+                    // pale tone meant for a UI surface and reads as washed out
+                    // on a keyboard.
+                    property string role: "primaryActive"
                 }
             }
 

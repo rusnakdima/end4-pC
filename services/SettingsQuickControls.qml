@@ -280,7 +280,6 @@ Singleton {
         // only be attached to a search result whose label the page really
         // shows. There is no control for the colour itself -- the page's
         // swatches are that UI -- so no row is declared for it.
-        "keyboard:Manage keyboard colour": root.optionSwitch("light.keyboardColor.enable"),
         "keyboard:Match the wallpaper colour": root.optionSwitch("light.keyboardColor.followWallpaper"),
         "interface:Hot Corners/Enable": root.optionSwitch("sidebar.cornerOpen.enable"),
         "interface:Hover to trigger": root.optionSwitch("sidebar.cornerOpen.clickless"),
