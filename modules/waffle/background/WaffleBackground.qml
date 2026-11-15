@@ -63,7 +63,8 @@ Variants {
             // visible benefit.
             source: panelRoot.showLiveVideo
                 ? ""
-                : Wallpapers.displayPathFor(panelRoot.effectiveWallpaperPath)
+                : (Wallpapers.videoStillFor(panelRoot.effectiveWallpaperPath)
+                    || Wallpapers.displayPathFor(panelRoot.effectiveWallpaperPath))
             fillMode: Image.PreserveAspectCrop
         }
     }

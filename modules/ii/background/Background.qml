@@ -77,8 +77,15 @@ Variants {
             && (bgRoot.previewingVideo || LiveWallpaper.available)
         property string wallpaperPath: {
             if (!bgRoot.wallpaperIsVideo) return bgRoot.effectiveWallpaperPath;
+            // The frame of the clip that is actually being shown — the
+            // previewed one, or the one just applied. background.thumbnailPath
+            // only exists once switchwall has encoded the proxy, so relying on
+            // it kept the previous wallpaper's poster up for the whole apply
+            // and for the whole preview encode.
+            const still = Wallpapers.videoStillFor(bgRoot.effectiveWallpaperPath);
+            if (still.length > 0) return still;
             if (bgRoot.previewVideoWithoutPlayer)
-                return Wallpapers.videoStillPath || Wallpapers.displayPathFor(bgRoot.effectiveWallpaperPath);
+                return Wallpapers.displayPathFor(bgRoot.effectiveWallpaperPath);
             return Config.options.background.thumbnailPath || Wallpapers.displayPathFor(bgRoot.effectiveWallpaperPath);
         }
         property bool wallpaperSafetyTriggered: {
@@ -273,12 +280,31 @@ Variants {
                 opacity: centeredWallpaper.centeredFullWallpaperOpacity()
                 onStatusChanged: {
                     if (status === Image.Error) {
-                        // A preview still that has not been generated yet:
-                        // show the applied wallpaper rather than a black
-                        // desktop. The still arrives shortly after and the
-                        // next wallpaperPath change swaps it in.
-                        if (bgRoot.previewVideoWithoutPlayer && source !== Config.options.background.wallpaperPath)
-                            source = Config.options.background.wallpaperPath;
+                        // A still that has not been generated yet — the
+                        // previewed clip, or the one that was just applied
+                        // and whose frame is still being cut: show the
+                        // applied wallpaper rather than a black desktop. The
+                        // still arrives shortly after and the next
+                        // wallpaperPath change swaps it in.
+                        const applied = Config.options.background.wallpaperPath;
+                        if (source !== applied
+                            && (bgRoot.previewVideoWithoutPlayer
+                                || bgRoot.effectiveWallpaperPath !== applied)) {
+                            source = applied;
+                            return;
+                        }
+                        // Nothing left to fall back to. Finish the transition
+                        // by hand: with transitionPending still set the
+                        // animation never ran, videoRevealed stayed false for
+                        // good and the live layer was never revealed — the
+                        // wallpaper then looked applied but never played.
+                        if (bgRoot.transitionPending) {
+                            bgRoot.transitionPending = false;
+                            previousWallpaper.source = bgRoot.currentWallpaperSource;
+                            bgRoot.previousWallpaperSource = "";
+                            bgRoot.transitionProgress = 1.0;
+                            bgRoot.videoRevealed = bgRoot.showLiveVideo;
+                        }
                         return;
                     }
                     if (status === Image.Ready && bgRoot.transitionPending) {

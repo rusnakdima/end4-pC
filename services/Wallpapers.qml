@@ -79,7 +79,14 @@ Singleton {
             root.ensureVideoStill(root.previewPath);
         } else {
             LiveWallpaper.stopVideoPreview();
-            root.videoStillPath = "";
+            // Keep a frame that still describes what the desktop shows:
+            // apply() records the new wallpaper in confirmedPath before it
+            // drops the preview, so the adopted preview's frame survives and
+            // the previous poster never flashes back for a frame.
+            if (root.videoStillSource !== root.confirmedPath) {
+                root.videoStillPath = "";
+                root.videoStillSource = "";
+            }
         }
     }
     property string confirmedPath: ""  // Holds confirmed path until config catches up
@@ -105,17 +112,40 @@ Singleton {
     // as switchwall's video poster: a frame a few seconds in, so the
     // preview never starts on a black first frame.
     property string videoStillPath: ""
+    // Which clip videoStillPath belongs to. Without it a still left over
+    // from an earlier preview could be served for a different clip.
+    property string videoStillSource: ""
+
+    // Directories.genericCache is an XDG URL ("file:///home/..."), not a
+    // filesystem path. Handing that to ffmpeg and mkdir made them build a
+    // literal "file:" directory tree in the shell's working directory and
+    // write the frame there, while videoStillPath kept pointing at the URL
+    // form — so the still never existed where the desktop looked for it and
+    // the preview frame could never load.
+    readonly property string cacheRootPath: FileUtils.trimFileProtocol(Directories.genericCache)
 
     function stillPathFor(path) {
         const resolved = FileUtils.trimFileProtocol(`${Qt.resolvedUrl(path)}`);
         const encoded = resolved.split("/").map(part => encodeURIComponent(part)).join("/");
-        return `${Directories.genericCache}/end4-pC/video-stills/${Qt.md5(`file://${encoded}`)}.jpg`;
+        return `${root.cacheRootPath}/end4-pC/video-stills/${Qt.md5(`file://${encoded}`)}.jpg`;
+    }
+
+    // The still of `path`, or "" when it belongs to another clip or is not
+    // generated yet. Surfaces use this instead of videoStillPath directly.
+    function videoStillFor(path) {
+        if (!path || path.length === 0) return "";
+        return root.videoStillSource === path ? root.videoStillPath : "";
     }
 
     function ensureVideoStill(path) {
         const target = root.stillPathFor(path);
+        root.videoStillSource = path;
         if (root.videoStillPath === target) return;
+        // Already cutting this exact frame: adopting a preview that is still
+        // being rendered must not restart ffmpeg for the same file.
+        if (videoStillProc.running && videoStillProc.sourcePath === path) return;
         root.videoStillPath = "";
+        videoStillProc.sourcePath = path;
         videoStillProc.running = false;
         videoStillProc.command = ["bash", "-c",
             `out="$1"; src="$2"; `
@@ -129,9 +159,13 @@ Singleton {
 
     Process {
         id: videoStillProc
+        // Set by ensureVideoStill: a reply from a request that a newer one
+        // replaced must not publish a frame for the wrong clip.
+        property string sourcePath: ""
         stdout: StdioCollector {
             onStreamFinished: {
                 const out = text.trim();
+                if (videoStillProc.sourcePath !== root.videoStillSource) return;
                 root.videoStillPath = out.length > 0 ? out : "";
             }
         }
@@ -152,16 +186,53 @@ Singleton {
 
     function apply(path, darkMode = Appearance.m3colors.darkmode) {
         if (!path || path.length === 0) return;
-        // A preview must never outlive the apply it belongs to: the desktop
-        // reverts to the current wallpaper while switchwall runs.
-        if (root.previewPath.length > 0) root.previewPath = "";
+        // A preview of this exact wallpaper is already on screen — for a clip
+        // the running player is even playing it. Adopting that preview is what
+        // makes applying from the picker seamless: no flash back to the old
+        // wallpaper, and no rebuild of a player that is already on the right
+        // file. switchwall is told which file to expect and verifies it over
+        // the IPC socket before it agrees to keep the player.
+        const keepPlayer = root.previewPath === path
+            && LiveWallpaper.previewPlayerActive
+            && LiveWallpaper.previewPlayfile.length > 0
+            ? LiveWallpaper.previewPlayfile
+            : "";
+        // confirmedPath BEFORE the preview is dropped: effectiveWallpaperPath
+        // reads previewPath first, so clearing it first flipped the desktop
+        // back to the previous wallpaper for a frame — the visible reload.
         root.confirmedPath = path;
-        Quickshell.execDetached([Directories.wallpaperSwitchScriptPath, "--mode", darkMode ? "dark" : "light", "--image", path]);
+        if (root.previewPath.length > 0) {
+            // No restore: either the player is kept (keepPlayer) or switchwall
+            // rebuilds it for the new wallpaper, so handing it the old file
+            // back would be a switch the user sees for nothing.
+            LiveWallpaper.stopVideoPreview(false);
+            root.previewPath = "";
+        }
+        const args = [Directories.wallpaperSwitchScriptPath, "--mode", darkMode ? "dark" : "light", "--image", path];
+        if (keepPlayer.length > 0) args.push("--keep-player", keepPlayer);
+        Quickshell.execDetached(args);
         root.changed()
-        // Applying a clip restarts mpvpaper. The regular 4 s poll can leave
-        // the desktop on the old poster long enough to look like the apply
-        // failed; poll briefly until the new player answers.
+        // Applying a clip normally restarts mpvpaper. The regular 4 s poll can
+        // leave the desktop on the old poster long enough to look like the
+        // apply failed; poll briefly until the new player answers.
         if (Images.isVideoPath(path)) {
+            // switchwall only writes background.wallpaperPath and
+            // background.thumbnailPath once the proxy has been encoded, so the
+            // desktop kept showing the PREVIOUS wallpaper's poster for the
+            // whole encode and the click looked like it did nothing (the
+            // "first time a video is used is broken" symptom: the second
+            // apply finds the proxy cached and is instant).
+            // The new clip's own frame is generated right away.
+            root.ensureVideoStill(path);
+            if (keepPlayer.length === 0) {
+                // The player is about to be killed: stop claiming it is
+                // reachable, or a stale `available` reveals a dead layer
+                // (a black desktop) instead of the poster. An adopted player
+                // is never killed, so it must keep claiming it — hiding it
+                // here would blink the still over a running wallpaper.
+                LiveWallpaper.available = false;
+                LiveWallpaper.paused = false;
+            }
             liveRefreshTimer.tries = 0;
             liveRefreshTimer.restart();
         }
@@ -175,7 +246,11 @@ Singleton {
         property int tries: 0
         onTriggered: {
             LiveWallpaper.refresh();
-            if (++tries >= 6) {
+            // Poll until the new player actually answers. A fixed six tries
+            // (4.5 s) ended just before a slow start finished, leaving the
+            // desktop on the poster for another whole poll interval — which
+            // is what "it is applied but not playing" looked like.
+            if (LiveWallpaper.available || ++tries >= 20) {
                 running = false;
                 tries = 0;
             }
@@ -195,6 +270,10 @@ Singleton {
         }
         onExited: (exitCode, exitStatus) => {
             if (exitCode === 0) {
+                // A folder is not a wallpaper: the preview ends here. For a
+                // file the preview is owned by apply(), which adopts it
+                // instead of reverting, so the desktop does not reload.
+                root.stopPreview();
                 setDirectory(selectProc.filePath);
                 return;
             }
@@ -248,7 +327,7 @@ Singleton {
     Process {
         id: validateDirProc
         property string nicePath: ""
-        function setDirectoryIfValid(path) {
+        function setDirectoryIfValid(path, create = false) {
             let p = String(path ?? "").trim()
             if (p.length === 0) return
             if (p.startsWith("~")) p = `${Quickshell.env("HOME")}${p.slice(1)}`
@@ -256,10 +335,16 @@ Singleton {
             if (/^\/*$/.test(validateDirProc.nicePath)) validateDirProc.nicePath = "/";
             // Pass the path as an argument instead of interpolating it into
             // the shell script: folders with spaces, quotes or $() are valid.
+            // `create` builds the folder first: the picker's shortcut pills
+            // (Random, Homework) point at conventional folders that are not
+            // guaranteed to exist, and without this their click was silently
+            // dropped because the service ignores missing paths.
             validateDirProc.exec([
                 "bash", "-c",
-                'p="$1"; if [ -d "$p" ]; then echo dir; elif [ -f "$p" ]; then echo file; else echo invalid; fi',
-                "_", validateDirProc.nicePath
+                'p="$1"; '
+                + 'if [ "$2" = "create" ]; then mkdir -p "$p" 2>/dev/null || true; fi; '
+                + 'if [ -d "$p" ]; then echo dir; elif [ -f "$p" ]; then echo file; else echo invalid; fi',
+                "_", validateDirProc.nicePath, create ? "create" : "check"
             ])
         }
         stdout: StdioCollector {
@@ -278,8 +363,8 @@ Singleton {
             }
         }
     }
-    function setDirectory(path) {
-        validateDirProc.setDirectoryIfValid(path)
+    function setDirectory(path, create = false) {
+        validateDirProc.setDirectoryIfValid(path, create)
     }
     function navigateUp() {
         folderModel.navigateUp()
@@ -651,6 +736,27 @@ Singleton {
 
     IpcHandler {
         target: "wallpapers"
+
+        // Diagnostics, e.g. after clicking a shortcut tab in the picker:
+        //   qs -c end4-pC ipc call wallpapers status
+        function status(): string {
+            return JSON.stringify({
+                directory: root.effectiveDirectory,
+                files: wallpaperModel.count,
+                searchQuery: root.searchQuery,
+                previewPath: root.previewPath,
+                confirmedPath: root.confirmedPath,
+                videoStillSource: root.videoStillSource,
+                videoStillPath: root.videoStillPath
+            });
+        }
+
+        // Starts exactly what the picker's first click starts, so the
+        // preview -> apply sequence can be exercised without a mouse.
+        //   qs -c end4-pC ipc call wallpapers preview <path>
+        function preview(path: string): void {
+            root.startPreview(path);
+        }
 
         function apply(path: string): void {
             root.apply(path);

@@ -257,6 +257,126 @@ is_video() {
     esac
 }
 
+# One switchwall at a time. The lock is a DIRECTORY, not flock: a locked file
+# descriptor is inherited by every child, and the video supervisor is spawned
+# from this script — it lived for the rest of the session holding the lock, so
+# every later apply queued for the full timeout and a clip only landed on the
+# 4th or 5th click, while the queued runs then applied old videos in turn.
+# mkdir is atomic and children inherit nothing.
+# Hand $1 to the running player and make sure it is not left paused — the
+# same loadfile the picker's preview uses. Returns 0 when a player took it.
+# This is how an apply switches clips without tearing the player down: a
+# kill+restart leaves a ~3 second hole in which the wallpaper is only a still
+# picture, which reads as "applied but not playing".
+player_loadfile() {
+    local want="$1" sock=""
+    command -v python3 >/dev/null 2>&1 || return 1
+    for sock in "${MPV_SOCKET_PREFIX}"*.sock; do
+        [[ -S "$sock" ]] || continue
+        if python3 -c 'import socket, sys, json
+sk = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+sk.settimeout(2)
+try:
+    sk.connect(sys.argv[1])
+except Exception:
+    sys.exit(1)
+sk.sendall((json.dumps({"command": ["loadfile", sys.argv[2], "replace"]}) + chr(10)).encode())
+sk.sendall((json.dumps({"command": ["set_property", "pause", False]}) + chr(10)).encode())
+sk.close()' "$sock" "$want" 2>/dev/null; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+SWITCHWALL_LOCK="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/switchwall.lock.d"
+SWITCHWALL_LOCK_TAKEN=0
+# Colours are serialised separately from the wallpaper/player switch: colour
+# generation is by far the slowest part of a run (a still takes ~16 s), and
+# holding the whole run behind it made the NEXT apply wait for six seconds
+# before it could even start — which is what an image -> video switch paid,
+# with nothing happening on screen the whole time.
+COLORS_LOCK="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/switchwall.colors.lock.d"
+COLORS_LOCK_TAKEN=0
+
+# A run killed mid-way cannot rmdir its directory. Ten minutes is not a live
+# run any more; stat gives second granularity (find's -mmin does not).
+switchwall_lock_is_stale() {
+    local dir="$1" now m
+    now="$(date +%s)"
+    m="$(stat -c %Y "$dir" 2>/dev/null || echo "$now")"
+    [ $(( now - m )) -gt 600 ]
+}
+
+switchwall_release_lock() {
+    if [ "${SWITCHWALL_LOCK_TAKEN:-0}" -eq 1 ]; then
+        rmdir "$SWITCHWALL_LOCK" 2>/dev/null || true
+        SWITCHWALL_LOCK_TAKEN=0
+    fi
+    if [ "${COLORS_LOCK_TAKEN:-0}" -eq 1 ]; then
+        rmdir "$COLORS_LOCK" 2>/dev/null || true
+        COLORS_LOCK_TAKEN=0
+    fi
+    return 0
+}
+
+# $1 = lock directory, $2 = name of the variable to set to 1 once held.
+switchwall_take_lock() {
+    local dir="$1" var="$2" waited=0
+    while ! mkdir "$dir" 2>/dev/null; do
+        if switchwall_lock_is_stale "$dir"; then
+            rm -rf "$dir" 2>/dev/null
+            continue
+        fi
+        waited=$((waited + 1))
+        # Never make the user wait forever: after a minute it is better to
+        # risk two runs than to watch nothing happen.
+        if [ "$waited" -ge 120 ]; then
+            echo "[switchwall] gave up waiting for $dir, proceeding unserialised" >&2
+            return 1
+        fi
+        sleep 0.5
+    done
+    printf -v "$var" '%d' 1
+    trap switchwall_release_lock EXIT
+    return 0
+}
+
+switchwall_acquire_lock() {
+    switchwall_take_lock "$SWITCHWALL_LOCK" SWITCHWALL_LOCK_TAKEN
+}
+
+switchwall_acquire_colors_lock() {
+    switchwall_take_lock "$COLORS_LOCK" COLORS_LOCK_TAKEN
+}
+
+# True when the wallpaper player already plays exactly $1.
+#
+# The picker previews a clip by handing the running player the very file an
+# apply would use. Rebuilding the player for a wallpaper that is already on
+# screen is a visible reload of the desktop for nothing, so the apply keeps
+# it instead — but only after reading the path back over the IPC socket, so a
+# stale "we handed it over" claim can never leave the wrong clip running.
+player_plays() {
+    local want="$1" sock="" reply="" got=""
+    command -v python3 >/dev/null 2>&1 || return 1
+    for sock in "${MPV_SOCKET_PREFIX}"*.sock; do
+        [[ -S "$sock" ]] || continue
+        reply="$(python3 -c 'import socket, sys
+sk = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+sk.settimeout(2)
+try:
+    sk.connect(sys.argv[1])
+    sk.sendall(b"{\"command\":[\"get_property\",\"path\"]}\n")
+    sys.stdout.write(sk.recv(65536).decode())
+except Exception:
+    pass' "$sock" 2>/dev/null | head -n1)"
+        got="$(printf '%s' "$reply" | sed -n 's/.*"data":"\([^"]*\)".*/\1/p')"
+        [[ -n "$got" && "$got" == "$want" ]] && return 0
+    done
+    return 1
+}
+
 # Deploys the video wallpaper supervisor.
 #
 # The supervisor owns the mpvpaper process, the proxy encoding and the
@@ -458,6 +578,28 @@ switch() {
     color="$5"
     colors_only_flag="$6"
     colors_lock_flag="$7"
+    # The file the picker's preview already handed to the running player. When
+    # the player is confirmed to be on it, this apply adopts that player
+    # instead of rebuilding it (keep_player below).
+    keep_player_file="${8:-}"
+
+    # One run at a time, and a clip that is already applied and playing has
+    # nothing to rebuild. The picker fires a second apply while the first is
+    # still encoding a brand-new clip (nothing seemed to happen), and the two
+    # runs then killed and rebuilt each other's player — that is the wallpaper
+    # visibly reapplying a while later.
+    switchwall_acquire_lock
+
+    install_video_wallpaper_supervisor || true
+    if [[ -z "$colors_only_flag" ]] && is_video "$imgpath" \
+        && [[ "$imgpath" == "$(jq -r '.background.wallpaperPath // ""' "$SHELL_CONFIG_FILE" 2>/dev/null)" ]]; then
+        local already=""
+        already="$("$VIDEO_WALLPAPER_SCRIPT" --prefetch "$imgpath" 2>/dev/null)" || already=""
+        if [[ -n "$already" ]] && player_plays "$already"; then
+            echo "[switchwall] $imgpath is already applied and playing; nothing to do"
+            return 0
+        fi
+    fi
 
     aiStylingEnabled=$(jq -r '.background.widgets.clock.cookie.aiStyling' "$SHELL_CONFIG_FILE")
     if [[ "$aiStylingEnabled" == "true" && -z "$colors_only_flag" ]]; then
@@ -497,22 +639,56 @@ switch() {
             && ! compgen -G "${MPV_SOCKET_PREFIX}*.sock" > /dev/null; then
             colors_only_restart=1
         fi
-        if [[ -z "$colors_only_flag" || "$colors_only_restart" -eq 1 ]]; then
-            # Build the proxy BEFORE the current player dies: the old
-            # wallpaper keeps playing while ffmpeg works instead of leaving
-            # a frozen desktop for the whole encode (choosing an uncached
-            # video used to freeze until the proxy finished). Cached
-            # proxies return instantly, so the common case is unchanged.
-            # The deployed copy must be refreshed first: it lives in the
-            # live-only custom/ dir, so checkout changes (like --prefetch)
-            # only reach it through the installer.
-            if is_video "$imgpath"; then
-                install_video_wallpaper_supervisor || true
-                if [[ -x "$VIDEO_WALLPAPER_SCRIPT" ]]; then
-                    "$VIDEO_WALLPAPER_SCRIPT" --prefetch "$imgpath" >/dev/null || true
+
+        # Record the wallpaper BEFORE the player is touched. The shell reads
+        # background.wallpaperPath to decide what the desktop shows, so it must
+        # never lag behind what the player was just handed — and waiting for the
+        # encode used to make the first apply of a brand-new clip look like it
+        # had not been applied at all.
+        if [[ -z "$colors_only_flag" ]]; then
+            set_wallpaper_path "$imgpath"
+        fi
+
+        # What the running player needs, if anything:
+        #   keep     — already on this file (a preview adopted it)
+        #   handoff  — alive but on another file: loadfile, no teardown
+        #   rebuild  — nothing reachable: kill and start, as before
+        # The handoff is what makes an apply instant. Rebuilding mpvpaper
+        # leaves ~3 seconds with no player at all, and that hole is exactly
+        # the "it is applied but not playing" a double-click shows; the
+        # picker's preview already proved loadfile switches clips cleanly.
+        local player_action="rebuild"
+        if [[ -z "$colors_only_flag" ]] && is_video "$imgpath"; then
+            install_video_wallpaper_supervisor || true
+            local want=""
+            want="$("$VIDEO_WALLPAPER_SCRIPT" --prefetch "$imgpath" 2>/dev/null)" || want=""
+            if [[ -n "$want" ]]; then
+                if player_plays "$want"; then
+                    player_action="keep"
+                elif player_loadfile "$want"; then
+                    player_action="handoff"
                 fi
             fi
-            kill_existing_mpvpaper
+        fi
+
+        if [[ -z "$colors_only_flag" || "$colors_only_restart" -eq 1 ]]; then
+            if [[ "$player_action" == "rebuild" ]]; then
+                # Build the proxy BEFORE the current player dies: the old
+                # wallpaper keeps playing while ffmpeg works instead of leaving
+                # a frozen desktop for the whole encode (choosing an uncached
+                # video used to freeze until the proxy finished). Cached
+                # proxies return instantly, so the common case is unchanged.
+                # The deployed copy must be refreshed first: it lives in the
+                # live-only custom/ dir, so checkout changes (like --prefetch)
+                # only reach it through the installer.
+                if is_video "$imgpath"; then
+                    install_video_wallpaper_supervisor || true
+                    if [[ -x "$VIDEO_WALLPAPER_SCRIPT" ]]; then
+                        "$VIDEO_WALLPAPER_SCRIPT" --prefetch "$imgpath" >/dev/null || true
+                    fi
+                fi
+                kill_existing_mpvpaper
+            fi
         fi
 
         if is_video "$imgpath"; then
@@ -544,8 +720,18 @@ switch() {
             fi
 
             if [[ -z "$colors_only_flag" || "$colors_only_restart" -eq 1 ]]; then
-                set_wallpaper_path "$imgpath"
-                start_video_wallpaper "$imgpath"
+                if [[ -n "$colors_only_flag" ]]; then
+                    # A colours-only run that found the player dead still has to
+                    # record the wallpaper it is about to restart; a normal
+                    # apply recorded it before touching the player.
+                    set_wallpaper_path "$imgpath"
+                fi
+                # keep/handoff: the player already has this clip, or was just
+                # handed it, so only the config catches up — no kill, no
+                # restart, no three-second hole with no wallpaper.
+                if [[ "$player_action" == "rebuild" ]]; then
+                    start_video_wallpaper "$imgpath"
+                fi
             fi
 
             thumbnail="$THUMBNAIL_DIR/$(basename "$imgpath").jpg"
@@ -580,6 +766,13 @@ switch() {
             fi
         fi
     fi
+
+    # Phase 1 is done: the wallpaper is recorded, the poster is written and the
+    # player has been switched. Let go of the run lock HERE — colour
+    # generation is the slow part and must not keep the next apply waiting,
+    # while colours themselves stay serialised on their own lock.
+    switchwall_release_lock
+    switchwall_acquire_colors_lock
 
     if [[ -z "$mode_flag" ]]; then
         current_mode=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
@@ -705,6 +898,7 @@ main() {
     colors_lock_flag=""
     explicit_image=""
     start_dir_flag=""
+    keep_player_file=""
 
     get_type_from_config() {
         jq -r '.appearance.palette.type' "$SHELL_CONFIG_FILE" 2>/dev/null || echo "auto"
@@ -789,6 +983,12 @@ main() {
                 ;;
             --start-dir)
                 start_dir_flag="$2"
+                shift 2
+                ;;
+            --keep-player)
+                # The file the preview already gave the player: keep it if it
+                # is still the one playing, instead of rebuilding it.
+                keep_player_file="$2"
                 shift 2
                 ;;
             --noswitch)
@@ -914,7 +1114,7 @@ main() {
         fi
     fi
 
-    switch "$imgpath" "$mode_flag" "$type_flag" "$color_flag" "$color" "$colors_only_flag" "$colors_lock_flag"
+    switch "$imgpath" "$mode_flag" "$type_flag" "$color_flag" "$color" "$colors_only_flag" "$colors_lock_flag" "$keep_player_file"
 }
 
 main "$@"

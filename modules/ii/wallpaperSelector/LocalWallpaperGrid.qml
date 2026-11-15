@@ -628,7 +628,16 @@ Item {
                             // apply already owns this gesture, and a preview
                             // started here would stick after it.
                         } else {
-                            Wallpapers.startPreview(delegateCell.modelData.filePath);
+                            const clicked = delegateCell.modelData.filePath;
+                            // A second click on what is already previewed
+                            // applies it. The preview is what is on screen, so
+                            // confirming it should not need a double-click
+                            // timing window: first click previews, second
+                            // click commits — images and clips alike.
+                            if (Wallpapers.previewPath === clicked)
+                                root.wallpaperSelected(clicked);
+                            else
+                                Wallpapers.startPreview(clicked);
                         }
                     }
                 }
