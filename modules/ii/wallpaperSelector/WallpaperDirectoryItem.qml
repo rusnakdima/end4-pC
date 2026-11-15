@@ -144,6 +144,14 @@ Item {
                         visible: root.previewWanted
                         source: root.previewWanted ? PreviewStream.frameUrl : ""
                         fillMode: Image.PreserveAspectCrop
+                        // Deliberately SYNCHRONOUS. With cache:false an
+                        // asynchronous load renders nothing until the frame
+                        // is ready, so the cell blanked between frames — that
+                        // reads as flicker, not smoothness. A decode of this
+                        // 480px JPEG costs well under a millisecond, so
+                        // loading it inline never stutters the UI, and the
+                        // previous frame stays on screen until the next one
+                        // is decoded.
                         cache: false
                         smooth: true
                         mipmap: false

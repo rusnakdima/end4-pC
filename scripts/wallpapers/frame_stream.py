@@ -21,10 +21,75 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 
 MAX_EDGE = 480
-FPS = 12
+# Matches the wallpaper player's own rate, so the cell does not look slower
+# than the desktop.
+FPS = 30
 QUALITY = 6
+# Two threads: the wallpaper player is decoding the same clip at the same
+# time, and a single-threaded scale+encode could not keep up with it.
+THREADS = 2
+
+# Set by the termination handler. Without it a SIGTERM that lands during the
+# hardware-decoding retry would be swallowed: the handler kills ffmpeg, the
+# loop sees an instant death, restarts the decoder and never exits — the
+# picker would then be unable to stop the stream at all.
+_STOP = False
+
+
+def _cached_proxy(src: str) -> str | None:
+    """The proxy __video_wallpaper.sh would hand the wallpaper player, when it
+    already exists.
+
+    Asking the shell script keeps a single definition of the cache key. This
+    only ever reports a path — it never builds anything, so hovering a clip
+    can never start an encode.
+    """
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "__video_wallpaper.sh")
+    if not os.path.isfile(script):
+        return None
+    try:
+        out = subprocess.run(
+            ["bash", script, "--proxy-path", src],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except Exception:
+        return None
+    path = (out.stdout or "").strip()
+    if path and os.path.isfile(path) and os.path.getsize(path) > 0:
+        return path
+    return None
+
+
+def _build_cmd(ffmpeg: str, src: str, hwaccel: bool) -> list[str]:
+    cmd = [
+        ffmpeg,
+        "-hide_banner",
+        "-nostdin",
+        "-loglevel", "error",
+        "-re",
+        "-stream_loop", "-1",
+    ]
+    if hwaccel:
+        # Decode on the GPU. The wallpaper player is decoding the same clip at
+        # the same time, and two software decodes of a 4K source is what made
+        # the cell preview stutter.
+        cmd += ["-hwaccel", "vaapi"]
+    cmd += [
+        "-i", src,
+        "-an",
+        "-vf", f"scale={MAX_EDGE}:{MAX_EDGE}:force_original_aspect_ratio=decrease",
+        "-r", str(FPS),
+        "-threads", str(THREADS),
+        "-q:v", str(QUALITY),
+        "-f", "mjpeg",
+        "-",
+    ]
+    return cmd
 
 
 def _terminate(proc: subprocess.Popen[bytes]) -> None:
@@ -102,22 +167,15 @@ def main(argv: list[str]) -> int:
         print(f"no such file: {src}", file=sys.stderr)
         return 2
 
-    cmd = [
-        ffmpeg,
-        "-hide_banner",
-        "-nostdin",
-        "-loglevel", "error",
-        "-re",
-        "-stream_loop", "-1",
-        "-i", src,
-        "-an",
-        "-vf", f"scale={MAX_EDGE}:{MAX_EDGE}:force_original_aspect_ratio=decrease",
-        "-r", str(FPS),
-        "-threads", "1",
-        "-q:v", str(QUALITY),
-        "-f", "mjpeg",
-        "-",
-    ]
+    # Decode the small proxy when it already exists. It is what the wallpaper
+    # player uses, it carries a third of the pixels of a 4K original, and it
+    # stops the cell from competing with the wallpaper for the decoder.
+    proxy = _cached_proxy(src)
+    if proxy:
+        src = proxy
+
+    hwaccel = True
+    cmd = _build_cmd(ffmpeg, src, hwaccel)
 
     proc = subprocess.Popen(
         cmd,
@@ -130,6 +188,8 @@ def main(argv: list[str]) -> int:
         return 1
 
     def stop(_signum=None, _frame=None) -> None:
+        global _STOP
+        _STOP = True
         _terminate(proc)
 
     signal.signal(signal.SIGTERM, stop)
@@ -137,10 +197,35 @@ def main(argv: list[str]) -> int:
 
     out = sys.stdout.buffer
     buf = b""
+    retried = False
+    started = time.monotonic()
     try:
         while True:
-            chunk = proc.stdout.read(65536)
+            # read1, not read: read() on a buffered pipe blocks until the full
+            # 64 KB arrive, so frames came out in bursts of two or three —
+            # measured gaps of 253 ms and 22 stalls over 100 ms in six seconds,
+            # which is the freezing seen in the cell. read1 returns as soon as
+            # any bytes are available.
+            chunk = proc.stdout.read1(65536)
             if not chunk:
+                # A decoder that dies before producing a single frame never
+                # worked: if that was VAAPI, retry once in software instead of
+                # leaving the cell without a preview.
+                if hwaccel and not retried and not _STOP and (time.monotonic() - started) < 5:
+                    _terminate(proc)
+                    retried = True
+                    hwaccel = False
+                    proc = subprocess.Popen(
+                        _build_cmd(ffmpeg, src, False),
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL,
+                        stdin=subprocess.DEVNULL,
+                    )
+                    if proc.stdout is None:
+                        _terminate(proc)
+                        return 1
+                    started = time.monotonic()
+                    continue
                 break
             buf += chunk
 
