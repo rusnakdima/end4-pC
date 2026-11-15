@@ -43,14 +43,30 @@ MouseArea {
         return FileUtils.parentDirectory(current).replace(/\/+$/, "");
     }
 
+    // Directories.* are XDG URLs ("file:///home/..."), not filesystem paths.
+    // The probe used to hand them to `[ -d ]` as-is, which only ever matched
+    // the empty "file:" directory tree the shell's mkdir calls leave behind
+    // in its working directory — so it reported that garbage as the live
+    // wallpaper folder and the tab opened Home instead of the clips. It only
+    // worked while the current wallpaper was a video, because that one
+    // candidate is derived from a path that was already cleaned: "partially
+    // worked".
+    function cleanDirCandidate(path) {
+        return FileUtils.trimFileProtocol(String(path ?? "")).replace(/\/+$/, "");
+    }
+
     readonly property var liveWallsCandidates: {
         const list = [];
-        if (root.configuredLiveWallsPath.length > 0) list.push(root.configuredLiveWallsPath);
-        if (root.liveWallsVideoParent.length > 0) list.push(root.liveWallsVideoParent);
-        list.push(`${Directories.videos}/Wallpapers`);
-        list.push(`${Directories.videos}`);
-        list.push(`${Directories.pictures}/Wallpapers`);
-        list.push(`${Directories.home}`);
+        const add = p => {
+            const clean = root.cleanDirCandidate(p);
+            if (clean.length > 0 && !list.includes(clean)) list.push(clean);
+        };
+        add(root.configuredLiveWallsPath);
+        add(root.liveWallsVideoParent);
+        add(`${Directories.videos}/Wallpapers`);
+        add(`${Directories.videos}`);
+        add(`${Directories.pictures}/Wallpapers`);
+        add(`${Directories.home}`);
         return list;
     }
 
@@ -58,25 +74,53 @@ MouseArea {
     // Wallpapers.setDirectory(): the service ignores missing paths, which is
     // what made the tab look dead.
     property string resolvedLiveWallsPath: ""
+    // The probe command waiting to run, and whether a newer request arrived
+    // while one was already in flight.
+    property var pendingProbeCommand: null
+    property bool probeDirty: false
 
     readonly property string liveWallsPath: root.resolvedLiveWallsPath.length > 0
         ? root.resolvedLiveWallsPath
-        : (root.liveWallsVideoParent || root.configuredLiveWallsPath || `${Directories.videos}/Wallpapers`)
+        : (root.liveWallsVideoParent
+            || root.cleanDirCandidate(root.configuredLiveWallsPath)
+            || root.cleanDirCandidate(`${Directories.videos}/Wallpapers`))
 
     function probeLiveWalls() {
-        const candidates = root.liveWallsCandidates.filter(path => path.length > 0);
+        const candidates = root.liveWallsCandidates;
         if (candidates.length === 0) return;
-        liveWallsProbe.command = ["bash", "-c",
+        root.pendingProbeCommand = ["bash", "-c",
             'for d in "$@"; do [ -d "$d" ] && { printf "%s" "$d"; exit 0; }; done',
             "_"].concat(candidates);
-        liveWallsProbe.running = false;
+        // Never restart a probe that is still running: killing it and
+        // starting again within the same tick is dropped, which left
+        // resolvedLiveWallsPath empty and the tab dead on first open.
+        if (liveWallsProbe.running) {
+            root.probeDirty = true;
+            return;
+        }
+        root.startLiveWallsProbe();
+    }
+
+    function startLiveWallsProbe() {
+        if (root.pendingProbeCommand === null) return;
+        liveWallsProbe.command = root.pendingProbeCommand;
         liveWallsProbe.running = true;
     }
 
     Process {
         id: liveWallsProbe
         stdout: StdioCollector {
-            onStreamFinished: root.resolvedLiveWallsPath = text.trim()
+            onStreamFinished: {
+                // Keep the previous answer when a run finds nothing: a
+                // transient failure must not retire a folder that exists.
+                const found = text.trim();
+                if (found.length > 0) root.resolvedLiveWallsPath = found;
+            }
+        }
+        onExited: {
+            if (!root.probeDirty) return;
+            root.probeDirty = false;
+            root.startLiveWallsProbe();
         }
     }
 
@@ -90,9 +134,7 @@ MouseArea {
     property var quickDirs: [
         { icon: "home",       name: "Home   ",       path: `${Directories.home}`,                alwaysVisible: Config.options.wallpaperSelector.showHomePath },
         { icon: "wallpaper",  name: "Wallpapers   ", path: `${Directories.pictures}/Wallpapers`, alwaysVisible: true },
-        { icon: "video_library", name: "Live walls   ", id: "live", path: root.liveWallsPath, alwaysVisible: true },
-        { icon: "imagesmode", name: "Homework   ",   path: `${Directories.pictures}/homework`,   alwaysVisible: Config.options.policies.weeb },
-        { icon: "casino",     name: "Random   ",     path: `${Directories.pictures}/Random`,     alwaysVisible: true },
+        { icon: "video_library", name: "Live walls   ", path: root.liveWallsPath, alwaysVisible: true },
         { 
             icon: "image",     
             name: Config.options.wallpaperSelector.userPath?.trim().length > 0 
@@ -148,11 +190,14 @@ MouseArea {
                     GlobalStates.wallpaperSelectorOpen = false;
                 });
             } else {
-                // Stop preview FIRST so wallpaperPath reverts to the old wallpaper,
-                // then select() sets confirmedPath to the new one — this causes
-                // onWallpaperPathChanged to fire with the real transition animation.
-                if (Config.options.background.enableWallpaperPreview)
-                    Wallpapers.stopPreview();
+                // No revert to the old wallpaper first. apply() records the
+                // new path before it drops the preview, so a wallpaper that
+                // is already on screen as a preview stays there: applying it
+                // no longer flashes back to the previous wallpaper and
+                // reloads the new one, which is what stopping the preview
+                // here used to do. apply() ends the preview itself (and
+                // restores the player when the previewed file is not the one
+                // being applied).
                 Wallpapers.select(filePath, root.useDarkMode);
             }
         }
@@ -366,12 +411,17 @@ MouseArea {
                                         colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
                                         colRippleToggled: Appearance.colors.colSecondaryContainerActive
                                         onClicked: {
-                                            if (modelData.id === "live") {
-                                                if (root.resolvedLiveWallsPath.length === 0) return;
-                                                Wallpapers.setDirectory(root.resolvedLiveWallsPath);
-                                                return;
-                                            }
-                                            Wallpapers.setDirectory(modelData.path);
+                                            // create = true: a shortcut pill
+                                            // can point at a conventional
+                                            // folder that does not exist yet,
+                                            // and the service otherwise
+                                            // ignores missing paths — which
+                                            // swallowed the click and made
+                                            // the pill look broken.
+                                            // modelData.path already carries
+                                            // the probed live-walls folder
+                                            // when there is one.
+                                            Wallpapers.setDirectory(modelData.path, true);
                                         }
                                         contentItem: RowLayout {
                                             anchors.fill: parent
@@ -966,11 +1016,22 @@ MouseArea {
         }
     }
 
+    // closeAfterSelection is driven by apply(), which a double-click reaches
+    // on its SECOND press. Closing the panel there made the trailing release
+    // land on whatever is behind it — the click escaped the picker. Hold the
+    // close for slightly longer than a click so the gesture finishes inside
+    // the panel.
+    Timer {
+        id: closeAfterSelectTimer
+        interval: 350
+        onTriggered: GlobalStates.wallpaperSelectorOpen = false
+    }
+
     Connections {
         target: Wallpapers
         function onChanged() {
             if (Config.options.wallpaperSelector.closeAfterSelection)
-                GlobalStates.wallpaperSelectorOpen = false;
+                closeAfterSelectTimer.restart();
         }
     }
 }

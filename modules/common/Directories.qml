@@ -68,10 +68,14 @@ Singleton {
         Quickshell.execDetached(["bash", "-c", `rm -rf '${booruPreviews}'; mkdir -p '${booruPreviews}'`])
         Quickshell.execDetached(["bash", "-c", `rm -rf '${latexOutput}'; mkdir -p '${latexOutput}'`])
         Quickshell.execDetached(["bash", "-c", `rm -rf '${cliphistDecode}'; mkdir -p '${cliphistDecode}'`])
-        Quickshell.execDetached(["mkdir", "-p", `${aiChats}`])
+        Quickshell.execDetached(["mkdir", "-p", `${FileUtils.trimFileProtocol(aiChats)}`])
         Quickshell.execDetached(["mkdir", "-p", `${userActions}`])
-        Quickshell.execDetached(["mkdir", "-p", `${Directories.state}/user`])
-        Quickshell.execDetached(["mkdir", "-p", `${eqStateDir}`])
+        // Directories.state is an XDG URL ("file:///home/..."), not a path:
+        // mkdir built a literal "file:" tree in the shell's working directory
+        // instead of the real folder, and that tree is also what the live
+        // walls folder probe used to match.
+        Quickshell.execDetached(["mkdir", "-p", `${FileUtils.trimFileProtocol(`${Directories.state}/user`)}`])
+        Quickshell.execDetached(["mkdir", "-p", `${FileUtils.trimFileProtocol(eqStateDir)}`])
         Quickshell.execDetached(["rm", "-rf", `${tempImages}`])
     }
 }
