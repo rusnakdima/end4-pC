@@ -48,7 +48,7 @@ Rectangle {
                 left: parent.left
                 right: parent.right
             }
-            icon: "tune"
+            headerIcon: "tune"
             title: Translation.tr("Sliders")
             collapsed: root.collapsed
             // The header only reports the tap; the state is written here so

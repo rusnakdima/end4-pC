@@ -40,7 +40,7 @@ Rectangle {
             right: parent.right
             margins: 5
         }
-        icon: "notifications"
+        headerIcon: "notifications"
         title: Translation.tr("Notifications")
         collapsed: root.collapsed
         // Write straight back into the caller's binding source; the header

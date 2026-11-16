@@ -24,7 +24,10 @@ RippleButton {
     id: root
 
     required property string title
-    property string icon: ""
+    // NOT `icon`: Button already owns an `icon` group property and marks it
+    // final, so redeclaring it fails at engine load ("Cannot override FINAL
+    // property") - a failure qmllint does not report.
+    property string headerIcon: ""
     property string trailingText: ""
     property bool collapsed: false
 
@@ -44,8 +47,8 @@ RippleButton {
             spacing: 8
 
             MaterialSymbol {
-                visible: root.icon.length > 0
-                text: root.icon
+                visible: root.headerIcon.length > 0
+                text: root.headerIcon
                 iconSize: Appearance.font.pixelSize.larger
                 color: Appearance.colors.colOnLayer1
             }
