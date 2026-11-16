@@ -453,8 +453,20 @@ Item {
     Component {
         id: quickTogglesSection
         Item {
-            implicitHeight: (classicLoader.item?.implicitHeight ?? 0)
-                + (androidLoader.item?.implicitHeight ?? 0)
+            id: togglesSection
+
+            // Spoiler for the toggle grid, same idea as the two cards. This
+            // section is never the column's fillKey, so - unlike the
+            // notifications card, whose expanded height comes from the
+            // filler slot - its own implicitHeight carries the header in
+            // both states and takes a step when it collapses; the slot
+            // Behavior in ReorderableColumn smooths that step and slides
+            // the sections below it.
+            readonly property bool collapsed: Persistent.states.sidebar.quickToggles.collapsed
+            implicitHeight: header.implicitHeight
+                + (togglesSection.collapsed ? 0
+                    : 4 + (classicLoader.item?.implicitHeight ?? 0)
+                        + (androidLoader.item?.implicitHeight ?? 0))
 
             Rectangle {
                 anchors.fill: parent
@@ -469,18 +481,40 @@ Item {
                 }
             }
 
-            Loader {
-                id: classicLoader
+            CollapsibleSectionHeader {
+                id: header
                 anchors.left: parent.left
                 anchors.right: parent.right
+                headerIcon: "toggle_on"
+                title: Translation.tr("Quick toggles")
+                collapsed: togglesSection.collapsed
+                // The header reports the tap; the state is written here so
+                // the Persistent binding is never broken by the child.
+                onCollapseToggled: Persistent.states.sidebar.quickToggles.collapsed = !Persistent.states.sidebar.quickToggles.collapsed
+            }
+
+            Loader {
+                id: classicLoader
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                    top: header.bottom
+                    topMargin: 4
+                }
+                visible: !togglesSection.collapsed
                 active: Config.options.sidebar.quickToggles.style === "classic"
                 sourceComponent: ClassicQuickPanel {}
             }
 
             Loader {
                 id: androidLoader
-                anchors.left: parent.left
-                anchors.right: parent.right
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                    top: header.bottom
+                    topMargin: 4
+                }
+                visible: !togglesSection.collapsed
                 active: Config.options.sidebar.quickToggles.style === "android"
                 sourceComponent: AndroidQuickPanel {
                     editMode: root.editMode && root.editTab === "toggles"

@@ -125,6 +125,9 @@ Singleton {
                 property JsonObject sliders: JsonObject {
                     property bool collapsed: false
                 }
+                property JsonObject quickToggles: JsonObject {
+                    property bool collapsed: false
+                }
             }
 
             property JsonObject booru: JsonObject {
