@@ -64,4 +64,43 @@ TestCase {
         compare(KeyCombos.keyEventToCombo(undefined), "");
         compare(KeyCombos.keyEventToCombo(null), "");
     }
+
+    function test_display_label_reads_like_words() {
+        compare(KeyCombos.displayLabel("SUPER"), "Super");
+        compare(KeyCombos.displayLabel("CTRL"), "Ctrl");
+        compare(KeyCombos.displayLabel("SHIFT"), "Shift");
+        compare(KeyCombos.displayLabel("ALT"), "Alt");
+        compare(KeyCombos.displayLabel("Return"), "Enter");
+        compare(KeyCombos.displayLabel("Escape"), "Esc");
+        compare(KeyCombos.displayLabel("BackSpace"), "Backspace");
+        compare(KeyCombos.displayLabel("space"), "Space");
+        compare(KeyCombos.displayLabel("Page_Up"), "Page Up");
+    }
+
+    function test_display_label_shows_punctuation_as_the_character() {
+        compare(KeyCombos.displayLabel("Slash"), "/");
+        compare(KeyCombos.displayLabel("Period"), ".");
+        compare(KeyCombos.displayLabel("Comma"), ",");
+        compare(KeyCombos.displayLabel("BracketLeft"), "[");
+        // A backslash must survive as one character.
+        compare(KeyCombos.displayLabel("Backslash"), "\\");
+    }
+
+    function test_display_label_keeps_unknown_tokens() {
+        // Media keys, mouse buttons and function keys are not remapped.
+        compare(KeyCombos.displayLabel("XF86AudioPlay"), "XF86AudioPlay");
+        compare(KeyCombos.displayLabel("mouse:274"), "mouse:274");
+        compare(KeyCombos.displayLabel("F5"), "F5");
+        compare(KeyCombos.displayLabel("K"), "K");
+        compare(KeyCombos.displayLabel(""), "");
+        compare(KeyCombos.displayLabel(undefined), "");
+        compare(KeyCombos.displayLabel(null), "");
+    }
+
+    function test_display_parts_splits_a_combo() {
+        compare(KeyCombos.displayParts("CTRL + SUPER + K").join("|"), "Ctrl|Super|K");
+        compare(KeyCombos.displayParts("SUPER + Return").join("|"), "Super|Enter");
+        compare(KeyCombos.displayParts("").length, 0);
+        compare(KeyCombos.displayParts(undefined).length, 0);
+    }
 }

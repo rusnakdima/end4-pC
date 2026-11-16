@@ -54,6 +54,69 @@ function keyNames() {
     return names;
 }
 
+// Human-readable words for the parts of a key combination. The Hyprland
+// tokens are what the config files speak; these are what the settings form
+// and the shortcut rows show, so "CTRL + SUPER + Return" reads as
+// "Ctrl + Super + Enter".
+var displayLabels = {
+    "SUPER": "Super",
+    "CTRL": "Ctrl",
+    "SHIFT": "Shift",
+    "ALT": "Alt",
+    "META": "Meta",
+    "Return": "Enter",
+    "Enter": "Enter",
+    "Escape": "Esc",
+    "BackSpace": "Backspace",
+    "Backspace": "Backspace",
+    "space": "Space",
+    "Tab": "Tab",
+    "Delete": "Del",
+    "Insert": "Ins",
+    "Home": "Home",
+    "End": "End",
+    "Page_Up": "Page Up",
+    "Page_Down": "Page Down",
+    "Left": "Left",
+    "Up": "Up",
+    "Right": "Right",
+    "Down": "Down",
+    "Print": "PrtSc",
+    "Pause": "Pause",
+    "Caps_Lock": "Caps Lock",
+    "Num_Lock": "Num Lock",
+    "Scroll_Lock": "Scroll Lock",
+    "Menu": "Menu",
+    // Punctuation keys are shown as the character they type.
+    "Slash": "/",
+    "Backslash": "\\",
+    "Semicolon": ";",
+    "Apostrophe": "'",
+    "Comma": ",",
+    "Period": ".",
+    "Minus": "-",
+    "Equal": "=",
+    "BracketLeft": "[",
+    "BracketRight": "]"
+};
+
+// The readable word for one part of a combination. Unknown tokens (media
+// keys, mouse buttons, function keys) come back unchanged, so nothing is
+// ever shown as an empty string.
+function displayLabel(part) {
+    const key = String(part ?? "");
+    if (key === "") return "";
+    return displayLabels[key] ?? key;
+}
+
+// The readable parts of "CTRL + SUPER + K" -> ["Ctrl", "Super", "K"].
+// Split on the same separator the combos are written with.
+function displayParts(combo) {
+    const text = String(combo ?? "");
+    if (text === "") return [];
+    return text.split(" + ").map(displayLabel);
+}
+
 // Converts a key event into a Hyprland key combination ("SUPER + ALT + V").
 // Returns "" when the key has no name Hyprland would understand, so the
 // caller can ignore the press.

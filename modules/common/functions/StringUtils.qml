@@ -335,4 +335,24 @@ Singleton {
     function keyEventToCombo(event) {
         return KeyCombos.keyEventToCombo(event);
     }
+
+    /**
+     * The readable word for one part of a key combination: "CTRL" -> "Ctrl",
+     * "Return" -> "Enter". Unknown tokens come back unchanged.
+     * @param { string } part
+     * @returns { string }
+     */
+    function keyLabel(part) {
+        return KeyCombos.displayLabel(part);
+    }
+
+    /**
+     * The readable parts of a combination: "CTRL + SUPER + K" ->
+     * ["Ctrl", "Super", "K"], for the key caps of the settings page.
+     * @param { string } combo
+     * @returns { Array<string> }
+     */
+    function keyLabels(combo) {
+        return KeyCombos.displayParts(combo);
+    }
 }

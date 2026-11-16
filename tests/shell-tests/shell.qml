@@ -50,6 +50,7 @@ ShellRoot {
         "tst_thumbnail_image.qml", "tst_persistent.qml",
         "tst_directories.qml", "tst_window_mode.qml",
         "tst_app_window_rules.qml", "tst_bind_overrides.qml",
+        "tst_managed_keybinds.qml",
         "tst_keybinds.qml", "tst_xkbrules.qml",
         "tst_collapsible_section_header.qml",
         "tst_ConfigMultiSelect.qml",

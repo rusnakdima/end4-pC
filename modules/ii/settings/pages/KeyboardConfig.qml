@@ -273,13 +273,23 @@ ContentPage {
     // window forwards the press here as well; returning true means the
     // combination was taken and the event must not travel on.
     function handleCapturedKey(event) {
-        if (page.capturing === "") return false;
+        if (page.capturing === "") {
+            // Escape closes the form first; only the next press closes the
+            // panel, so one key never throws away the draft.
+            if (page.formOpen && event.key === Qt.Key_Escape) {
+                page.closeForm();
+                return true;
+            }
+            return false;
+        }
 
         if (event.key === Qt.Key_Escape) {
+            const formCapture = page.capturing === "form";
             // Cancel the capture, but let the press travel on: the panel
-            // closes on Escape as well.
+            // closes on Escape as well. The form capture only cancels
+            // itself — the draft below is still open.
             page.stopCapture();
-            return false;
+            return formCapture;
         }
 
         const combo = CF.StringUtils.keyEventToCombo(event);
@@ -290,9 +300,132 @@ ContentPage {
             return false;
         }
 
+        if (page.capturing === "form") {
+            // The form takes the combination instead of writing an
+            // override: it belongs to the draft until Save.
+            page.formCombo = combo;
+            page.formError = "";
+            page.stopCapture();
+            return true;
+        }
+
         HyprlandBindOverrides.setOverride(page.capturing, combo);
         page.stopCapture();
         return true;
+    }
+
+    // ------------------------------------------------------
+    // Keybind manager form
+    // ------------------------------------------------------
+    // The draft of the create/edit form. It lives on the page, not inside
+    // the section, because the capture handler above needs it and because
+    // the form itself only exists while formOpen is true: the Loader
+    // destroys it on close, so every open starts from these values with
+    // fresh field bindings.
+    property bool formOpen: false
+    property string formMode: "create"
+    property string formEditId: ""
+    // The combo the entry is written with in the file. It differs from
+    // formCombo while an override moves the bind, and it is what the
+    // entry's own id in the conflict index is built from.
+    property string formOriginalCombo: ""
+    property string formName: ""
+    property string formCategory: ""
+    property string formCommand: ""
+    property string formCombo: ""
+    property string formError: ""
+
+    function openCreateForm() {
+        page.stopCapture();
+        page.formMode = "create";
+        page.formEditId = "";
+        page.formOriginalCombo = "";
+        page.formName = "";
+        page.formCategory = "";
+        page.formCommand = "";
+        page.formCombo = "";
+        page.formError = "";
+        page.formOpen = true;
+    }
+
+    function openEditForm(entry) {
+        page.stopCapture();
+        page.formMode = "edit";
+        page.formEditId = entry.id;
+        page.formOriginalCombo = entry.combo;
+        page.formName = entry.name;
+        page.formCategory = entry.category;
+        page.formCommand = entry.command;
+        // Show what the bind does right now: an override written through
+        // the other-bind rows moves it, and the form must not display a key
+        // the compositor does not actually listen for.
+        page.formCombo = HyprlandBindOverrides.comboFor(
+            "bind_" + entry.combo.replace(/[^A-Za-z0-9_]/g, "_"), entry.combo);
+        page.formError = "";
+        page.formOpen = true;
+    }
+
+    function closeForm() {
+        page.stopCapture();
+        page.formOpen = false;
+        page.formError = "";
+    }
+
+    // The id of the entry itself in HyprlandKeybinds' conflict index, so
+    // the status line does not report the bind as its own conflict. The id
+    // is built from the file combo, the same way a plain bind row builds it.
+    function formSelfId() {
+        if (page.formMode !== "edit" || page.formOriginalCombo === "") return "";
+        return "custom\u0000bind_" + page.formOriginalCombo.replace(/[^A-Za-z0-9_]/g, "_");
+    }
+
+    // Validation and service failures are codes, not sentences: the code
+    // stays testable and this is the one place that translates them.
+    function formErrorMessage(code) {
+        switch (code) {
+        case "empty-name": return Translation.tr("Give the keybind a name.");
+        case "quote-name": return Translation.tr("The name cannot contain a double quote.");
+        case "newline-name": return Translation.tr("The name must be on one line.");
+        case "empty-command": return Translation.tr("Enter an app or command to run.");
+        case "newline-command": return Translation.tr("The command must be on one line.");
+        case "newline-category": return Translation.tr("The category must be on one line.");
+        case "empty-combo": return Translation.tr("Press a key combination first.");
+        case "not-loaded": return Translation.tr("The keybind file has not loaded yet. Try again.");
+        case "not-found": return Translation.tr("That keybind is no longer in the file.");
+        default: return Translation.tr("The keybind could not be saved.");
+        }
+    }
+
+    function saveForm() {
+        const entry = {
+            name: page.formName.trim(),
+            category: page.formCategory.trim(),
+            command: page.formCommand.trim(),
+            combo: page.formCombo
+        };
+        const error = ManagedKeybinds.validate(entry);
+        if (error !== "") {
+            page.formError = page.formErrorMessage(error);
+            return;
+        }
+        const result = page.formMode === "edit"
+            ? ManagedKeybinds.update(page.formEditId, entry)
+            : ManagedKeybinds.create(entry);
+        if (!result.ok) {
+            page.formError = page.formErrorMessage(result.error);
+            return;
+        }
+        page.closeForm();
+    }
+
+    function deleteFormEntry() {
+        if (page.formMode !== "edit") return;
+        const result = ManagedKeybinds.remove(page.formEditId);
+        if (!result.ok) {
+            page.formError = page.formErrorMessage(result.error);
+            return;
+        }
+        page.closeForm();
     }
 
     Keys.onPressed: (event) => {
@@ -501,6 +634,64 @@ ContentPage {
                     Layout.fillWidth: true
                     spacing: 20
 
+                    ContentSection {
+                        icon: "edit_note"
+                        title: Translation.tr("Keybind manager")
+                        hint: Translation.tr("New keybinds are written to ~/.config/hypr/custom/keybinds.lua and show up in the cheatsheet after a reload.")
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 12
+
+                            // The form replaces the button and the list while
+                            // it is open. The Loader destroys it on close, so
+                            // every open starts from the draft with fresh field
+                            // bindings — a typed-in TextField drops its binding
+                            // and a surviving instance would show stale text.
+                            Loader {
+                                Layout.fillWidth: true
+                                active: page.formOpen
+                                sourceComponent: Component {
+                                    KeybindForm {
+                                        Layout.fillWidth: true
+                                    }
+                                }
+                            }
+
+                            RippleButton {
+                                visible: !page.formOpen
+                                Layout.fillWidth: false
+                                Layout.alignment: Qt.AlignLeft
+                                buttonText: Translation.tr("New keybind")
+                                buttonRadius: Appearance.rounding.full
+                                colBackground: Appearance.colors.colPrimaryContainer
+                                colBackgroundHover: Appearance.colors.colPrimaryContainerHover
+                                onClicked: page.openCreateForm()
+                            }
+
+                            StyledText {
+                                Layout.fillWidth: true
+                                visible: !page.formOpen && ManagedKeybinds.editableEntries.length === 0
+                                text: Translation.tr("No keybinds created yet. Press New keybind to add one.")
+                                font.pixelSize: Appearance.font.pixelSize.normal
+                                color: Appearance.colors.colSubtext
+                                wrapMode: Text.Wrap
+                            }
+
+                            ColumnLayout {
+                                visible: !page.formOpen
+                                Layout.fillWidth: true
+                                spacing: 2
+                                Repeater {
+                                    model: ManagedKeybinds.editableEntries
+                                    delegate: ManagedRow {
+                                        required property var modelData
+                                        entry: modelData
+                                    }
+                                }
+                            }
+                        }
+                    }
                     ContentSection {
                         icon: "keyboard"
                         title: Translation.tr("Shell shortcuts")
@@ -835,6 +1026,410 @@ ContentPage {
                         HyprlandBindOverrides.clearOverride(otherBindRow.overrideId);
                         page.stopCapture();
                     }
+                }
+            }
+        }
+    }
+
+    // A keybind the panel owns: name, group, the keys as word caps and the
+    // conflict line, with edit and delete at the right. Edit fills the form
+    // above; the caps are clickable for the same thing.
+    component ManagedRow: Rectangle {
+        id: managedRow
+        required property var entry
+
+        readonly property string fileCombo: entry.combo
+        readonly property string overrideId: "bind_" + managedRow.fileCombo.replace(/[^A-Za-z0-9_]/g, "_")
+        // What the bind does right now: another row's override may have
+        // moved it off the combo written in the file.
+        readonly property string combo: HyprlandBindOverrides.comboFor(managedRow.overrideId, managedRow.fileCombo)
+        // The id the conflict index gives a plain bind in the custom file,
+        // so the row never reports itself as a conflict.
+        readonly property var repeats: HyprlandKeybinds.repeatUsers(
+            managedRow.combo, "custom\u0000" + managedRow.overrideId)
+
+        Layout.fillWidth: true
+        implicitHeight: managedRowLayout.implicitHeight + 24
+        color: Appearance.colors.colLayer1
+        radius: Appearance.rounding.normal
+
+        RowLayout {
+            id: managedRowLayout
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 12
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 2
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: managedRow.entry.name
+                    font.pixelSize: Appearance.font.pixelSize.normal
+                    color: Appearance.colors.colOnLayer1
+                    elide: Text.ElideRight
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    visible: managedRow.entry.category !== ""
+                    text: managedRow.entry.category
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    color: Appearance.colors.colSubtext
+                    elide: Text.ElideRight
+                }
+
+                // Yellow under the row: who else is on this combination.
+                StyledText {
+                    Layout.fillWidth: true
+                    visible: managedRow.repeats.length > 0
+                    text: page.repeatSentence(managedRow.repeats)
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    color: page.conflictColor
+                    wrapMode: Text.Wrap
+                }
+            }
+
+            // The keys as word caps; clicking them edits the keybind.
+            Item {
+                implicitWidth: managedCapsRow.implicitWidth
+                implicitHeight: managedCapsRow.implicitHeight
+
+                Row {
+                    id: managedCapsRow
+                    spacing: 4
+
+                    Repeater {
+                        model: CF.StringUtils.keyLabels(managedRow.combo)
+                        delegate: KeyboardKey {
+                            required property var modelData
+                            key: modelData
+                            pixelSize: Appearance.font.pixelSize.smaller
+                        }
+                    }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -6
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: page.openEditForm(managedRow.entry)
+                }
+            }
+
+            // A visible edit affordance, the same one the other rows have.
+            Item {
+                implicitWidth: 20
+                implicitHeight: 20
+
+                MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "edit"
+                    iconSize: Appearance.font.pixelSize.normal
+                    color: Appearance.colors.colSubtext
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -6
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: page.openEditForm(managedRow.entry)
+                }
+            }
+
+            // Delete removes the line from custom/keybinds.lua and reloads.
+            Item {
+                implicitWidth: 20
+                implicitHeight: 20
+
+                MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "delete"
+                    iconSize: Appearance.font.pixelSize.normal
+                    color: Appearance.colors.colError
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -6
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: ManagedKeybinds.remove(managedRow.entry.id)
+                }
+            }
+        }
+    }
+
+    // The create/edit form for one managed keybind. It lives inside the
+    // section's Loader, so closing the form destroys it: every open starts
+    // from the draft with fresh field bindings — a typed-in TextField drops
+    // its binding, and a surviving instance would show stale text.
+    component KeybindForm: Rectangle {
+        id: form
+
+        // Who else holds the keys in the draft. The entry being edited is
+        // left out through its file combo, so it never reports itself.
+        readonly property var repeats: page.formCombo === ""
+            ? [] : HyprlandKeybinds.repeatUsers(page.formCombo, page.formSelfId())
+
+        // One desktop entry's argv as a shell command: parts that could be
+        // misread are single-quoted, everything else passes through so the
+        // usual case stays readable.
+        function appCommand(argv) {
+            return argv
+                .filter(part => part !== "" && !/^%[a-zA-Z]$/.test(part))
+                .map(part => /^[\w@%+=:,.\/~-]+$/.test(part)
+                    ? part
+                    : "'" + CF.StringUtils.shellSingleQuoteEscape(part) + "'")
+                .join(" ");
+        }
+
+        // The apps the picker offers, sorted by name, behind a neutral
+        // "pick" row that keeps the combo from claiming a selection the
+        // command field does not have.
+        readonly property var appOptions: {
+            const apps = AppSearch.list
+                .map(app => ({ displayName: app.name, value: form.appCommand(app.command ?? []) }))
+                .filter(app => app.displayName !== "" && app.value !== "");
+            apps.sort((a, b) => a.displayName.localeCompare(b.displayName));
+            return [{ displayName: Translation.tr("Pick an app"), value: "" }].concat(apps);
+        }
+
+        Layout.fillWidth: true
+        implicitHeight: formColumn.implicitHeight + 24
+        color: Appearance.colors.colLayer1
+        radius: Appearance.rounding.normal
+
+        ColumnLayout {
+            id: formColumn
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 10
+
+            StyledText {
+                Layout.fillWidth: true
+                text: page.formMode === "edit"
+                    ? Translation.tr("Edit keybind")
+                    : Translation.tr("New keybind")
+                font.pixelSize: Appearance.font.pixelSize.title
+                color: Appearance.colors.colOnLayer1
+            }
+
+            // ---- Name ----
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 4
+
+                MaterialTextField {
+                    Layout.fillWidth: true
+                    placeholderText: Translation.tr("Name")
+                    text: page.formName
+                    onTextChanged: page.formName = text
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: Translation.tr("How the keybind is described in the cheatsheet and in this list.")
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    color: Appearance.colors.colSubtext
+                    wrapMode: Text.Wrap
+                }
+            }
+
+            // ---- Category ----
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 4
+
+                MaterialTextField {
+                    id: categoryField
+                    Layout.fillWidth: true
+                    placeholderText: Translation.tr("Category")
+                    text: page.formCategory
+                    onTextChanged: page.formCategory = text
+                }
+
+                // Existing groups as one-tap chips; picking one fills the
+                // field above, a typed name simply joins the list next time.
+                ConfigSelectionArray {
+                    Layout.fillWidth: true
+                    options: HyprlandKeybinds.categories.map(category => ({
+                        displayName: category === "" ? Translation.tr("Uncategorized") : category,
+                        value: category
+                    }))
+                    currentValue: page.formCategory
+                    onSelected: newValue => categoryField.text = newValue
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: Translation.tr("Groups the keybind in the cheatsheet, for example Apps. Pick a group above or type a new name.")
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    color: Appearance.colors.colSubtext
+                    wrapMode: Text.Wrap
+                }
+            }
+
+            // ---- App or command ----
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 4
+
+                MaterialTextField {
+                    id: commandField
+                    Layout.fillWidth: true
+                    placeholderText: Translation.tr("App or command")
+                    text: page.formCommand
+                    onTextChanged: page.formCommand = text
+                }
+
+                ConfigComboBox {
+                    Layout.fillWidth: true
+                    buttonIcon: "apps"
+                    text: Translation.tr("App")
+                    searchable: true
+                    model: form.appOptions
+                    currentValue: page.formCommand
+                    onSelected: newValue => {
+                        if (newValue !== "") commandField.text = newValue;
+                    }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: Translation.tr("The program that runs when the keys are pressed, for example kitty or xdg-open ~/Documents.")
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    color: Appearance.colors.colSubtext
+                    wrapMode: Text.Wrap
+                }
+            }
+
+            // ---- Keys ----
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 4
+
+                Rectangle {
+                    id: keysBox
+                    Layout.fillWidth: true
+                    implicitHeight: keysBoxColumn.implicitHeight + 24
+                    color: Appearance.colors.colLayer2
+                    radius: Appearance.rounding.normal
+                    border.width: page.capturing === "form" ? 1 : 0
+                    border.color: Appearance.colors.colPrimary
+
+                    ColumnLayout {
+                        id: keysBoxColumn
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 6
+
+                        Row {
+                            spacing: 4
+                            visible: page.formCombo !== "" && page.capturing !== "form"
+
+                            Repeater {
+                                model: CF.StringUtils.keyLabels(page.formCombo)
+                                delegate: KeyboardKey {
+                                    required property var modelData
+                                    key: modelData
+                                    pixelSize: Appearance.font.pixelSize.smaller
+                                }
+                            }
+                        }
+
+                        StyledText {
+                            visible: page.formCombo === "" || page.capturing === "form"
+                            text: Translation.tr("Press a key combination...")
+                            font.pixelSize: Appearance.font.pixelSize.normal
+                            color: page.capturing === "form"
+                                ? Appearance.colors.colPrimary
+                                : Appearance.colors.colSubtext
+                        }
+
+                        // Green light: the draft combination is free.
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 4
+                            visible: page.formCombo !== "" && page.capturing !== "form"
+                                && form.repeats.length === 0
+
+                            MaterialSymbol {
+                                text: "check_circle"
+                                iconSize: Appearance.font.pixelSize.smaller
+                                color: Appearance.colors.colPrimary
+                            }
+
+                            StyledText {
+                                text: Translation.tr("Available")
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                color: Appearance.colors.colPrimary
+                            }
+                        }
+
+                        // Yellow: the same combination is bound elsewhere.
+                        StyledText {
+                            Layout.fillWidth: true
+                            visible: page.formCombo !== "" && page.capturing !== "form"
+                                && form.repeats.length > 0
+                            text: page.repeatSentence(form.repeats)
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            color: page.conflictColor
+                            wrapMode: Text.Wrap
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: page.startCapture("form")
+                    }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: Translation.tr("Click the box, then press the key combination you want, for example Super + Ctrl + K.")
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    color: Appearance.colors.colSubtext
+                    wrapMode: Text.Wrap
+                }
+            }
+
+            // Validation and save failures, verbatim from the store codes.
+            NoticeBox {
+                Layout.fillWidth: true
+                visible: page.formError !== ""
+                materialIcon: "error"
+                text: page.formError
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                spacing: 8
+
+                DialogButton {
+                    visible: page.formMode === "edit"
+                    buttonText: Translation.tr("Delete")
+                    colText: Appearance.colors.colError
+                    onClicked: page.deleteFormEntry()
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                }
+
+                DialogButton {
+                    buttonText: Translation.tr("Cancel")
+                    onClicked: page.closeForm()
+                }
+
+                DialogButton {
+                    buttonText: Translation.tr("Save")
+                    colBackground: Appearance.colors.colPrimaryContainer
+                    colBackgroundHover: Appearance.colors.colPrimaryContainerHover
+                    colText: Appearance.colors.colOnPrimaryContainer
+                    onClicked: page.saveForm()
                 }
             }
         }
