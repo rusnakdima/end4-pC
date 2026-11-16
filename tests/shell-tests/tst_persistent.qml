@@ -58,6 +58,11 @@ TestCase {
         compare(typeof Persistent.states.ai.model, "string");
         compare(typeof Persistent.states.ai.temperature, "number");
         compare(typeof Persistent.states.cheatsheet.tabIndex, "number");
+        // The right sidebar's two spoilers: booleans, present in the schema,
+        // defaulting to expanded. A misspelled key here would silently read
+        // undefined and break the cards' collapsed bindings at runtime.
+        compare(typeof Persistent.states.sidebar.notifications.collapsed, "boolean");
+        compare(typeof Persistent.states.sidebar.sliders.collapsed, "boolean");
     }
 
     function test_a_value_round_trips_through_the_store() {

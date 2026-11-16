@@ -163,7 +163,13 @@ Item {
             itemSpacing: sidebarPadding
             order: root.sectionOrder
             editMode: root.editMode && root.editTab === "layout"
-            fillKey: "notifications"
+            // The notifications card is the filler that absorbs the leftover
+            // column height, but only while it is expanded: a collapsed card
+            // is just a header row, and the fill would stretch it back out
+            // into a header floating in an empty glass card. With no filler
+            // at all the sections take their natural heights and the freed
+            // space shows as plain sidebar background below the column.
+            fillKey: Persistent.states.sidebar.notifications.collapsed ? "" : "notifications"
             fillMinHeight: 120
             onReordered: newOrder => Config.options.sidebar.sectionOrder = newOrder
             componentForKey: key => root.sectionComponents[key] ?? null

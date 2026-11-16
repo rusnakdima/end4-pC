@@ -16,6 +16,15 @@ Item {
     property string fillKey: ""
     property real fillMinHeight: 60
 
+    // Slot heights are live bindings on each section's reported
+    // implicitHeight, so they change in one frame whenever a section
+    // collapses, a section appears, or the fill section's share of the
+    // leftover space shifts. Animating those steps keeps the column from
+    // snapping. Armed a moment after construction instead of from the
+    // start, so opening the sidebar still shows the sections at full size
+    // rather than watching them grow in from zero.
+    property bool animateSlotHeights: false
+
     signal reordered(var newOrder)
     property var componentForKey: function(key) { return null }
     property var isKeyActive: function(key) { return true }
@@ -32,11 +41,20 @@ Item {
         interval: 320
     }
 
+    Timer {
+        id: slotAnimationArmTimer
+        interval: 300
+        onTriggered: root.animateSlotHeights = true
+    }
+
     onOrderChanged: {
         if (root.draggingKey === "") root.workingOrder = root.order.slice()
         root.syncKeys()
     }
-    Component.onCompleted: root.syncKeys()
+    Component.onCompleted: {
+        root.syncKeys()
+        slotAnimationArmTimer.start()
+    }
 
     function syncKeys() {
         const signature = root.order.slice().sort().join("|")
@@ -119,6 +137,20 @@ Item {
             visible: height > 0
             y: slot.dragging ? slot.dragY : slot.baseY
             z: slot.dragging ? 100 : 0
+
+            // One motion source for the whole column: a section's height
+            // step (a spoiler collapsing, the media card appearing, the
+            // fill section's share shifting) animates here, and because y
+            // is recomputed from these heights every frame the sections
+            // below slide with it instead of jumping.
+            Behavior on height {
+                enabled: root.animateSlotHeights && !slot.dragging
+                NumberAnimation {
+                    duration: Appearance.animation.elementMove.duration
+                    easing.type: Appearance.animation.elementMove.type
+                    easing.bezierCurve: Appearance.animation.elementMove.bezierCurve
+                }
+            }
 
             Behavior on y {
                 enabled: root.animateMoves && !slot.dragging

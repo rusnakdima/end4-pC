@@ -27,6 +27,12 @@ Rectangle {
     property real verticalPadding: 4
     property real horizontalPadding: 12
 
+    // Spoiler state, stored with the sidebar's other view state (see
+    // Persistent.states.sidebar.notifications). A Column ignores invisible
+    // children, so hiding the four sliders collapses contentItem - and with
+    // it this card's implicitHeight - down to the header row alone.
+    readonly property bool collapsed: Persistent.states.sidebar.sliders.collapsed
+
     Column {
         id: contentItem
         anchors {
@@ -37,12 +43,25 @@ Rectangle {
             bottomMargin: root.verticalPadding
         }
 
+        CollapsibleSectionHeader {
+            anchors {
+                left: parent.left
+                right: parent.right
+            }
+            icon: "tune"
+            title: Translation.tr("Sliders")
+            collapsed: root.collapsed
+            // The header only reports the tap; the state is written here so
+            // the Persistent binding is never broken by the child.
+            onCollapseToggled: Persistent.states.sidebar.sliders.collapsed = !Persistent.states.sidebar.sliders.collapsed
+        }
+
         Loader {
             anchors {
                 left: parent.left
                 right: parent.right
             }
-            visible: active
+            visible: active && !root.collapsed
             active: Config.options.sidebar.quickSliders.showBrightness
             sourceComponent: QuickSlider {
                 materialSymbol: "brightness_medium"
@@ -70,7 +89,7 @@ Rectangle {
 
         Loader {
             anchors { left: parent.left; right: parent.right }
-            visible: active
+            visible: active && !root.collapsed
             active: Config.options.sidebar.quickSliders.showVolume
             sourceComponent: QuickSlider {
                 materialSymbol: "volume_up"
@@ -84,7 +103,7 @@ Rectangle {
 
         Loader {
             anchors { left: parent.left; right: parent.right }
-            visible: active
+            visible: active && !root.collapsed
             active: Config.options.sidebar.quickSliders.showMic
             sourceComponent: QuickSlider {
                 materialSymbol: "mic"
@@ -101,7 +120,7 @@ Rectangle {
                 left: parent.left
                 right: parent.right
             }
-            visible: active
+            visible: active && !root.collapsed
             // Hidden without the device as well as without the flag: the level
             // lives in sysfs, and there is nothing to slide when it is absent.
             active: Config.options.sidebar.quickSliders.showKeyboardBrightness && Brightness.kbMonitor.available

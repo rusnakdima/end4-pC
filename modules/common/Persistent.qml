@@ -114,6 +114,17 @@ Singleton {
                     property bool collapsed: false
                     property int tab: 0
                 }
+
+                // Spoiler state for the two collapsible right-sidebar cards.
+                // Both default to expanded so a fresh session looks exactly
+                // like it did before the spoilers existed; the first toggle is
+                // what persists. Same store, same reasoning as bottomGroup.
+                property JsonObject notifications: JsonObject {
+                    property bool collapsed: false
+                }
+                property JsonObject sliders: JsonObject {
+                    property bool collapsed: false
+                }
             }
 
             property JsonObject booru: JsonObject {
