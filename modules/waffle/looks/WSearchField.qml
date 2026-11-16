@@ -22,7 +22,7 @@ Item {
 
     signal accepted()
 
-    implicitHeight: 32
+    implicitHeight: 44
     Layout.fillWidth: true
 
     Rectangle {
@@ -45,16 +45,16 @@ Item {
             spacing: 8
 
             WAppIcon {
-                Layout.leftMargin: 14
+                Layout.leftMargin: 16
                 iconName: "system-search"
                 separateLightDark: true
-                implicitSize: 18
+                implicitSize: 20
             }
 
             Item {
                 id: fieldBox
                 Layout.fillWidth: true
-                implicitHeight: 24
+                implicitHeight: 30
 
                 WTextInput {
                     id: field
@@ -83,6 +83,7 @@ Item {
                         verticalCenter: parent.verticalCenter
                     }
                     elide: Text.ElideRight
+                    font.pixelSize: Looks.font.pixelSize.large
                     color: Looks.colors.accentUnfocused
                     visible: field.text.length === 0
                 }
@@ -90,21 +91,21 @@ Item {
 
             WBorderlessButton {
                 objectName: "clearButton"
-                implicitHeight: 24
-                implicitWidth: 24
+                implicitHeight: 28
+                implicitWidth: 28
                 visible: field.text.length > 0
                 onClicked: field.text = ""
 
                 contentItem: FluentIcon {
                     icon: "dismiss"
-                    implicitSize: 14
+                    implicitSize: 16
                 }
             }
 
             // Keeps the right edge where it is when the clear button comes
             // and goes, so the field does not jump.
             Item {
-                width: 14
+                width: 16
             }
         }
     }

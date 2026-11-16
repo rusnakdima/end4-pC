@@ -36,13 +36,24 @@ TestCase {
         }
     }
 
-    function clearButton() {
-        const children = testCase.field.children;
+    // The bar is an Item wrapping a RowLayout, so the clear button sits two
+    // levels down; walk a couple of levels rather than pinning the tree.
+    function findClear(node, depth) {
+        const children = node.children;
         for (let i = 0; i < children.length; ++i) {
             if (children[i].objectName === "clearButton")
                 return children[i];
+            if (depth > 0) {
+                const found = findClear(children[i], depth - 1);
+                if (found !== null)
+                    return found;
+            }
         }
         return null;
+    }
+
+    function clearButton() {
+        return findClear(testCase.field, 3);
     }
 
     function test_text_round_trips_through_the_alias() {

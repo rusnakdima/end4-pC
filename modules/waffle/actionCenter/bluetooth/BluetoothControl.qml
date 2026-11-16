@@ -80,20 +80,22 @@ Item {
                 WSearchField {
                     id: searchField
                     Layout.fillWidth: true
+                    // Bleeds to the body edge, like the progress row above.
+                    Layout.leftMargin: -4
+                    Layout.rightMargin: -4
                     placeholderText: Translation.tr("Search devices")
                 }
 
-                StyledListView {
+                ListView {
                     id: listView
                     visible: root.visibleNetworks.length > 0
                     Layout.fillHeight: true
                     Layout.fillWidth: true
-                    animateAppearance: false
 
-                    contentHeight: contentLayout.implicitHeight
-                    contentWidth: width
                     clip: true
                     spacing: 4
+
+                    TouchpadScrollArea { flickable: listView }
 
                     model: ScriptModel {
                         values: root.visibleNetworks

@@ -40,7 +40,8 @@ WindowDialog {
         Layout.leftMargin: -Appearance.rounding.large
         Layout.rightMargin: -Appearance.rounding.large
     }
-    StyledListView {
+    ListView {
+        id: devicesView
         visible: root.visibleNetworks.length > 0
         Layout.fillHeight: true
         Layout.fillWidth: true
@@ -51,18 +52,17 @@ WindowDialog {
 
         clip: true
         spacing: 0
-        animateAppearance: false
 
         model: ScriptModel {
             values: root.visibleNetworks
         }
+
+        TouchpadScrollArea { flickable: devicesView }
+
         delegate: BluetoothDeviceItem {
             required property BluetoothDevice modelData
             device: modelData
-            anchors {
-                left: parent?.left
-                right: parent?.right
-            }
+            width: ListView.view.width
         }
     }
     StyledText {
