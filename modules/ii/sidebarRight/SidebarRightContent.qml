@@ -463,7 +463,11 @@ Item {
             // Behavior in ReorderableColumn smooths that step and slides
             // the sections below it.
             readonly property bool collapsed: Persistent.states.sidebar.quickToggles.collapsed
-            implicitHeight: header.implicitHeight
+            // 4 px above the header + the header + 4 px below it: a collapsed
+            // row measures 48 px, the same as a collapsed sliders card.
+            // Expanding adds the gap the panel needs under the header and the
+            // panel's own height.
+            implicitHeight: 8 + header.implicitHeight
                 + (togglesSection.collapsed ? 0
                     : 4 + (classicLoader.item?.implicitHeight ?? 0)
                         + (androidLoader.item?.implicitHeight ?? 0))
@@ -471,7 +475,14 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 radius: Appearance.rounding.normal
-                color: Config.options.background.widgets.glass.enable ? Appearance.colors.colLayer1 : "transparent"
+                // Painted unconditionally, exactly like the sliders and
+                // notification cards. It used to be conditional on the glass
+                // setting, which with glass off left this spoiler header
+                // floating on the bare sidebar while the panel below drew its
+                // own card - the one row that did not match the other two.
+                // The panels now stay transparent so there is still only one
+                // card (they used to be the card).
+                color: Appearance.colors.colLayer1
 
                 WindowGlass {
                     anchors.fill: parent
@@ -483,8 +494,16 @@ Item {
 
             CollapsibleSectionHeader {
                 id: header
-                anchors.left: parent.left
-                anchors.right: parent.right
+                anchors {
+                    top: parent.top
+                    left: parent.left
+                    right: parent.right
+                    topMargin: 4
+                    // Same 12 px inset as the sliders card, so the icon and
+                    // label line up with that header.
+                    leftMargin: 12
+                    rightMargin: 12
+                }
                 headerIcon: "toggle_on"
                 title: Translation.tr("Quick toggles")
                 collapsed: togglesSection.collapsed

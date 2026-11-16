@@ -18,7 +18,9 @@ AbstractQuickPanel {
         id: buttonGroup
         spacing: 5
         padding: 5
-        color: Config.options.background.widgets.glass.enable ? "transparent" : Appearance.colors.colLayer1
+        // The section above paints the card (the sliders and notification
+        // cards do the same), so the panel must not paint a second one.
+        color: "transparent"
 
         NetworkToggle {
             altAction: () => {

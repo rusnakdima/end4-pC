@@ -14,6 +14,10 @@ AbstractQuickPanel {
     property bool editMode: false
     Layout.fillWidth: true
 
+    // The section above paints the card (like the sliders and notification
+    // cards do); the panel must not paint a second one on top of it.
+    color: "transparent"
+
     visible: root.editMode || root.toggles.length > 0
 
     implicitHeight: (editMode ? contentItem.implicitHeight : usedRows.implicitHeight) + root.padding * 2
