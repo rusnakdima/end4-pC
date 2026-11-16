@@ -161,4 +161,64 @@ TestCase {
     function test_split_markdown_blocks_of_an_empty_string_is_empty() {
         verify(StringUtils.splitMarkdownBlocks("").length === 0);
     }
+
+    /**
+     * The search field of the Wi-Fi and Bluetooth windows narrows their
+     * lists with this, so the empty query, the case folding, the token
+     * rules and the order are all part of the contract.
+     */
+    function test_filter_by_query_returns_everything_for_an_empty_query() {
+        const items = [{ ssid: "Home" }, { ssid: "Office" }];
+        // An untouched field costs nothing: the same list comes back.
+        verify(StringUtils.filterByQuery(items, "", ["ssid"]) === items);
+        compare(StringUtils.filterByQuery(items, "   ", ["ssid"]).length, 2);
+        compare(StringUtils.filterByQuery(items, null, ["ssid"]).length, 2);
+    }
+
+    function test_filter_by_query_matches_any_field_case_insensitively() {
+        const items = [{ ssid: "Home-5G", security: "WPA2" }, { ssid: "Office" }];
+        const matched = StringUtils.filterByQuery(items, "home-5g", ["ssid"]);
+        compare(matched.length, 1);
+        compare(matched[0].ssid, "Home-5G");
+        compare(StringUtils.filterByQuery(items, "HOME", ["ssid"]).length, 1);
+        // The keys are OR-ed: any one of them may carry the token.
+        compare(StringUtils.filterByQuery(items, "wpa2", ["ssid", "security"]).length, 1);
+    }
+
+    function test_filter_by_query_requires_every_token_to_match() {
+        const items = [{ ssid: "Home", security: "WPA2" }, { ssid: "Office", security: "" }];
+        // The tokens may match different keys of the same entry.
+        compare(StringUtils.filterByQuery(items, "home wpa2", ["ssid", "security"]).length, 1);
+        compare(StringUtils.filterByQuery(items, "office wpa2", ["ssid", "security"]).length, 0);
+        compare(StringUtils.filterByQuery(items, "home office", ["ssid", "security"]).length, 0);
+    }
+
+    function test_filter_by_query_preserves_the_input_order() {
+        const items = [{ ssid: "net-a" }, { ssid: "other" }, { ssid: "net-b" }, { ssid: "net-c" }];
+        const matched = StringUtils.filterByQuery(items, "net", ["ssid"]);
+        compare(matched.length, 3);
+        compare(matched[0].ssid, "net-a");
+        compare(matched[1].ssid, "net-b");
+        compare(matched[2].ssid, "net-c");
+    }
+
+    function test_filter_by_query_skips_missing_and_null_entries() {
+        const items = [null, { ssid: "Home" }, { other: "value" }, undefined];
+        const matched = StringUtils.filterByQuery(items, "home", ["ssid"]);
+        compare(matched.length, 1);
+        compare(matched[0].ssid, "Home");
+        // A missing key reads as an empty string, it never throws.
+        compare(StringUtils.filterByQuery(items, "", ["ssid"]).length, 4);
+        // Non-string fields are coerced before the comparison.
+        const strength = [{ ssid: "Home", strength: 42 }];
+        compare(StringUtils.filterByQuery(strength, "42", ["strength"]).length, 1);
+        compare(StringUtils.filterByQuery(strength, "4", ["strength"]).length, 1);
+        compare(StringUtils.filterByQuery(strength, "seven", ["strength"]).length, 0);
+    }
+
+    function test_filter_by_query_of_nothing_is_empty() {
+        compare(StringUtils.filterByQuery([], "home", ["ssid"]).length, 0);
+        compare(StringUtils.filterByQuery(null, "home", ["ssid"]).length, 0);
+        compare(StringUtils.filterByQuery(undefined, "", ["ssid"]).length, 0);
+    }
 }

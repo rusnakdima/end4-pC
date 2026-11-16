@@ -16,6 +16,10 @@ import qs.modules.waffle.actionCenter
 Item {
     id: root
 
+    // The list the user sees: the service list narrowed by the search
+    // field, in the service's own order (connected devices first).
+    readonly property var visibleNetworks: StringUtils.filterByQuery(BluetoothStatus.friendlyDeviceList, searchField.text, ["name"])
+
     Component.onCompleted: {
         if (Bluetooth.defaultAdapter.enabled) Bluetooth.defaultAdapter.discovering = true;
     }
@@ -73,8 +77,15 @@ Item {
                     }
                 }
 
+                WSearchField {
+                    id: searchField
+                    Layout.fillWidth: true
+                    placeholderText: Translation.tr("Search devices")
+                }
+
                 StyledListView {
                     id: listView
+                    visible: root.visibleNetworks.length > 0
                     Layout.fillHeight: true
                     Layout.fillWidth: true
                     animateAppearance: false
@@ -85,13 +96,23 @@ Item {
                     spacing: 4
 
                     model: ScriptModel {
-                        values: BluetoothStatus.friendlyDeviceList
+                        values: root.visibleNetworks
                     }
                     delegate: BluetoothDeviceItem {
                         required property BluetoothDevice modelData
                         device: modelData
                         width: ListView.view.width
                     }
+                }
+                WText {
+                    // Only a query can be empty of matches: with no query
+                    // an empty list keeps the look it has today.
+                    visible: searchField.text.length > 0 && root.visibleNetworks.length === 0
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Looks.colors.subfg
+                    text: Translation.tr("No devices match your search")
                 }
             }
         }

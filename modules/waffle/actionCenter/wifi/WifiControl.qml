@@ -15,6 +15,10 @@ import qs.modules.waffle.actionCenter
 Item {
     id: root
 
+    // The list the user sees: the service list narrowed by the search
+    // field, in the service's own order (the connected network first).
+    readonly property var visibleNetworks: StringUtils.filterByQuery(Network.friendlyWifiNetworks, searchField.text, ["ssid"])
+
     Component.onCompleted: {
         Network.rescanWifi();
     }
@@ -63,8 +67,15 @@ Item {
                     }
                 }
 
+                WSearchField {
+                    id: searchField
+                    Layout.fillWidth: true
+                    placeholderText: Translation.tr("Search networks")
+                }
+
                 StyledListView {
                     id: listView
+                    visible: root.visibleNetworks.length > 0
                     Layout.fillHeight: true
                     Layout.fillWidth: true
                     animateAppearance: false
@@ -75,13 +86,23 @@ Item {
                     spacing: 4
 
                     model: ScriptModel {
-                        values: Network.friendlyWifiNetworks
+                        values: root.visibleNetworks
                     }
                     delegate: WWifiNetworkItem {
                         required property WifiAccessPoint modelData
                         wifiNetwork: modelData
                         width: ListView.view.width
                     }
+                }
+                WText {
+                    // Only a query can be empty of matches: with no query
+                    // an empty list keeps the look it has today.
+                    visible: searchField.text.length > 0 && root.visibleNetworks.length === 0
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Looks.colors.subfg
+                    text: Translation.tr("No networks match your search")
                 }
             }
         }

@@ -2,6 +2,7 @@ import qs
 import qs.services
 import qs.services.network
 import qs.modules.common
+import qs.modules.common.functions
 import qs.modules.common.widgets
 import QtQuick
 import QtQuick.Layouts
@@ -9,11 +10,21 @@ import Quickshell
 
 WindowDialog {
     id: root
+    // The list the user sees: the service list narrowed by the search
+    // field, in the service's own order (the connected network first).
+    readonly property var visibleNetworks: StringUtils.filterByQuery(Network.friendlyWifiNetworks, searchField.text, ["ssid"])
     backgroundHeight: 600
 
     WindowDialogTitle {
         text: Translation.tr("Connect to Wi-Fi")
     }
+
+    DialogSearchField {
+        id: searchField
+        Layout.fillWidth: true
+        placeholderText: Translation.tr("Search networks")
+    }
+
     WindowDialogSeparator {
         visible: !Network.wifiScanning
     }
@@ -27,6 +38,7 @@ WindowDialog {
     }
     ListView {
         id: networksView
+        visible: root.visibleNetworks.length > 0
         Layout.fillHeight: true
         Layout.fillWidth: true
         Layout.topMargin: -15
@@ -38,7 +50,7 @@ WindowDialog {
         spacing: 0
 
         model: ScriptModel {
-            values: Network.friendlyWifiNetworks
+            values: root.visibleNetworks
         }
 
         TouchpadScrollArea { flickable: networksView }
@@ -48,6 +60,16 @@ WindowDialog {
             wifiNetwork: modelData
             width: ListView.view.width
         }
+    }
+    StyledText {
+        // Only a query can be empty of matches: with no query an empty
+        // list keeps the look it has today.
+        visible: searchField.text.length > 0 && root.visibleNetworks.length === 0
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        horizontalAlignment: Text.AlignHCenter
+        color: Appearance.colors.colSubtext
+        text: Translation.tr("No networks match your search")
     }
     WindowDialogSeparator {}
     WindowDialogButtonRow {

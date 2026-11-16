@@ -52,7 +52,8 @@ ShellRoot {
         "tst_app_window_rules.qml", "tst_bind_overrides.qml",
         "tst_keybinds.qml", "tst_xkbrules.qml",
         "tst_collapsible_section_header.qml",
-        "tst_ConfigMultiSelect.qml"
+        "tst_ConfigMultiSelect.qml",
+        "tst_dialog_search_field.qml"
     ]
 
     property int doneCount: 0

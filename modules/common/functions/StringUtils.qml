@@ -260,6 +260,29 @@ Singleton {
     }
 
     /**
+     * Keeps the entries whose fields contain every whitespace separated
+     * token of the query, ignoring case. An empty query keeps the list
+     * exactly as it came, in its original order.
+     * @param { Array<any> | null } items
+     * @param { string | null } query
+     * @param { string[] } keys
+     * @returns { Array<any> }
+     */
+    function filterByQuery(items, query, keys) {
+        if (items === null || items === undefined)
+            return [];
+        const text = String(query ?? "").trim().toLowerCase();
+        if (text === "")
+            return items;
+        const tokens = text.split(/\s+/);
+        return Array.from(items).filter(item => {
+            if (item === null || item === undefined)
+                return false;
+            return tokens.every(token => keys.some(key => String(item[key] ?? "").toLowerCase().includes(token)));
+        });
+    }
+
+    /**
      * Removes the given prefix from the string if present.
      * @param { string } str
      * @param { string } prefix

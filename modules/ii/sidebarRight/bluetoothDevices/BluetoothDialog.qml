@@ -14,11 +14,21 @@ import Quickshell.Wayland
 
 WindowDialog {
     id: root
+    // The list the user sees: the service list narrowed by the search
+    // field, in the service's own order (connected devices first).
+    readonly property var visibleNetworks: StringUtils.filterByQuery(BluetoothStatus.friendlyDeviceList, searchField.text, ["name"])
     backgroundHeight: 600
 
     WindowDialogTitle {
         text: Translation.tr("Bluetooth devices")
     }
+
+    DialogSearchField {
+        id: searchField
+        Layout.fillWidth: true
+        placeholderText: Translation.tr("Search devices")
+    }
+
     WindowDialogSeparator {
         visible: !(Bluetooth.defaultAdapter?.discovering ?? false)
     }
@@ -31,6 +41,7 @@ WindowDialog {
         Layout.rightMargin: -Appearance.rounding.large
     }
     StyledListView {
+        visible: root.visibleNetworks.length > 0
         Layout.fillHeight: true
         Layout.fillWidth: true
         Layout.topMargin: -15
@@ -43,7 +54,7 @@ WindowDialog {
         animateAppearance: false
 
         model: ScriptModel {
-            values: BluetoothStatus.friendlyDeviceList
+            values: root.visibleNetworks
         }
         delegate: BluetoothDeviceItem {
             required property BluetoothDevice modelData
@@ -53,6 +64,16 @@ WindowDialog {
                 right: parent?.right
             }
         }
+    }
+    StyledText {
+        // Only a query can be empty of matches: with no query an empty
+        // list keeps the look it has today.
+        visible: searchField.text.length > 0 && root.visibleNetworks.length === 0
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        horizontalAlignment: Text.AlignHCenter
+        color: Appearance.colors.colSubtext
+        text: Translation.tr("No devices match your search")
     }
     WindowDialogSeparator {}
     WindowDialogButtonRow {
