@@ -12,6 +12,15 @@ export LOGNAME=@USER@
 export DBUS_SESSION_BUS_ADDRESS=unix:path=@RUNTIME@/bus
 export HYPRLAND_INSTANCE_SIGNATURE="$(ls -t @RUNTIME@/hypr 2>/dev/null | head -n1)"
 
+VNC_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/end4-pC/vnc.conf"
+if [ -f "$VNC_CONF" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$VNC_CONF"
+    set +a
+fi
+VNC_THEME_BLANK_WALLPAPER="${VNC_THEME_BLANK_WALLPAPER:-1}"
+
 BASE=@HOME@/.config/hypr/custom/scripts
 LOG="$BASE/vnc-theme-hooks.log"
 PHYS="$BASE/vnc-physical/__video_wallpaper.sh"
@@ -114,7 +123,9 @@ case "$MODE" in
     start)
         log "VNC connected: stopping physical live wallpaper"
         stop_physical_wallpaper
-        blank_static_wallpaper
+        if [ "${VNC_THEME_BLANK_WALLPAPER:-1}" = "1" ]; then
+            blank_static_wallpaper
+        fi
         ;;
     stop)
         log "VNC disconnected: restoring physical wallpaper"

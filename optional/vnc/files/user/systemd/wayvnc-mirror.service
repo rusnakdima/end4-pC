@@ -7,7 +7,7 @@ PartOf=graphical-session.target
 Environment=XDG_RUNTIME_DIR=@RUNTIME@
 Environment=WAYLAND_DISPLAY=@WAYLAND_DISPLAY@
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=@RUNTIME@/bus
-ExecStart=/usr/bin/wayvnc -C %h/.config/wayvnc/mirror.conf -a -r -f 30 -S @RUNTIME@/wayvncctl-mirror
+ExecStart=@HOME@/.config/hypr/custom/scripts/wayvnc-mirror-run
 Restart=on-failure
 RestartSec=5
 

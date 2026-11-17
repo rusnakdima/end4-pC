@@ -92,6 +92,8 @@ rm -f \
     "$TARGET_HOME/.config/systemd/user/sunshine-remote.service" \
     "$TARGET_HOME/.config/hypr/custom/scripts/vnc-theme-hooks.sh" \
     "$TARGET_HOME/.config/hypr/custom/scripts/vnc-theme-watch" \
+    "$TARGET_HOME/.config/hypr/custom/scripts/wayvnc-mirror-run" \
+    "$TARGET_HOME/.local/bin/end4pc-vnc" \
     "$TARGET_HOME/.config/sunshine/sunshine-remote.conf" \
     "$TARGET_HOME/.config/pipewire/pipewire.conf.d/50-hypr-remote.conf"
 

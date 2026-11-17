@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -u
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/end4-pC/vnc.conf"
+if [[ -f "$CONFIG" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$CONFIG"
+    set +a
+fi
+
+args=(
+    -C "$HOME/.config/wayvnc/mirror.conf"
+    -a -r -f 30
+    -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/wayvncctl-mirror"
+)
+[[ "${VNC_MIRROR_INPUT:-1}" == "1" ]] || args+=(-d)
+exec /usr/bin/wayvnc "${args[@]}"

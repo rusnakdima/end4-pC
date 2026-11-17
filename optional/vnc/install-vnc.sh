@@ -266,6 +266,12 @@ install_rendered() {
     rm -f "$tmp"
 }
 
+install_vnc_cli() {
+    $ROOT install -d -o "$TARGET_USER" -g "$TARGET_GROUP" "$TARGET_HOME/.local/bin"
+    $ROOT install -m 755 -o "$TARGET_USER" -g "$TARGET_GROUP" \
+        "$MOD_DIR/bin/end4pc-vnc" "$TARGET_HOME/.local/bin/end4pc-vnc"
+}
+
 # ---------------------------------------------------------------------------
 # Mirror-only mode: expose the current physical session, no VKMS/system setup.
 # ---------------------------------------------------------------------------
@@ -285,6 +291,9 @@ if [[ "$VNC_MODE" == "mirror" ]]; then
         "$TARGET_HOME/.config/wayvnc/mirror.conf" 644 user
     install_rendered "$FILES/user/systemd/wayvnc-mirror.service" \
         "$TARGET_HOME/.config/systemd/user/wayvnc-mirror.service" 644 user
+    install_rendered "$FILES/user/scripts/wayvnc-mirror-run" \
+        "$TARGET_HOME/.config/hypr/custom/scripts/wayvnc-mirror-run" 755 user
+    install_vnc_cli
 
     if [[ -d "$TARGET_HOME/.config/quickshell/end4-pC" ]]; then
         install_rendered "$FILES/user/scripts/vnc-theme-hooks.sh" \
@@ -421,6 +430,9 @@ install_rendered "$FILES/user/scripts/vnc-theme-watch" \
     "$TARGET_HOME/.config/hypr/custom/scripts/vnc-theme-watch" 755 user
 install_rendered "$FILES/user/systemd/wayvnc-mirror.service" \
     "$TARGET_HOME/.config/systemd/user/wayvnc-mirror.service" 644 user
+install_rendered "$FILES/user/scripts/wayvnc-mirror-run" \
+    "$TARGET_HOME/.config/hypr/custom/scripts/wayvnc-mirror-run" 755 user
+install_vnc_cli
 install_rendered "$FILES/user/systemd/wayvnc-remote.service" \
     "$TARGET_HOME/.config/systemd/user/wayvnc-remote.service" 644 user
 install_rendered "$FILES/user/systemd/vnc-theme-hooks.service" \

@@ -106,6 +106,28 @@ For a laptop or a machine that only needs the physical session:
 VNC_MODE=mirror VNC_AUDIO=none VNC_AUTOLOGIN=0 ./optional/vnc/install-vnc.sh
 ```
 
+## Runtime CLI and settings
+
+The installer adds `~/.local/bin/end4pc-vnc`:
+
+```bash
+end4pc-vnc status
+end4pc-vnc status --json
+end4pc-vnc get mirror_input
+end4pc-vnc set mirror_input 0     # view-only physical mirror
+end4pc-vnc set mirror_input 1     # interactive physical mirror
+end4pc-vnc set theme_lock 1
+end4pc-vnc set blank_wallpaper 1
+end4pc-vnc restart
+```
+
+Only runtime-safe keys can be changed this way. Structural changes (mode,
+ports, GPU, autologin, audio) require re-running `install-vnc.sh` so the
+generated units and system files are rebuilt consistently.
+
+The end4-pC Settings app has a **VNC** page backed by this CLI. It shows the
+detected endpoints and provides the three runtime toggles.
+
 ## Audio
 
 After install:

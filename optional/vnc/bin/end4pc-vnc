@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+# end4pc-vnc — status and safe runtime controls for the optional VNC module.
+set -u
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/end4-pC/vnc.conf"
+COMMAND="${1:-status}"
+
+load_config() {
+    if [[ -f "$CONFIG" ]]; then
+        set -a
+        # shellcheck disable=SC1090
+        . "$CONFIG"
+        set +a
+    fi
+}
+
+svc_user_active() {
+    systemctl --user is-active --quiet "$1" 2>/dev/null && printf 'true' || printf 'false'
+}
+svc_user_enabled() {
+    systemctl --user is-enabled --quiet "$1" 2>/dev/null && printf 'true' || printf 'false'
+}
+svc_system_active() {
+    systemctl is-active --quiet "$1" 2>/dev/null && printf 'true' || printf 'false'
+}
+svc_system_enabled() {
+    systemctl is-enabled --quiet "$1" 2>/dev/null && printf 'true' || printf 'false'
+}
+
+load_config
+VNC_MODE="${VNC_MODE:-full}"
+VNC_MIRROR_PORT="${VNC_MIRROR_PORT:-5901}"
+VNC_HIDDEN_PORT="${VNC_HIDDEN_PORT:-5902}"
+VNC_MIRROR_INPUT="${VNC_MIRROR_INPUT:-1}"
+VNC_THEME_LOCK="${VNC_THEME_LOCK:-1}"
+VNC_THEME_BLANK_WALLPAPER="${VNC_THEME_BLANK_WALLPAPER:-1}"
+VNC_BIND_ADDR="${VNC_BIND_ADDR:-$(tailscale ip -4 2>/dev/null | head -n1 || true)}"
+VNC_BIND_ADDR="${VNC_BIND_ADDR:-127.0.0.1}"
+
+case "${VNC_MIRROR_INPUT}" in 0|1) ;; *) VNC_MIRROR_INPUT=1 ;; esac
+case "${VNC_THEME_LOCK}" in 0|1) ;; *) VNC_THEME_LOCK=1 ;; esac
+case "${VNC_THEME_BLANK_WALLPAPER}" in 0|1) ;; *) VNC_THEME_BLANK_WALLPAPER=1 ;; esac
+
+status_json() {
+    local installed=false
+    [[ -f "$CONFIG" ]] && installed=true
+    jq -n \
+        --arg host "$(hostname -s 2>/dev/null || hostname)" \
+        --arg user "$(id -un)" \
+        --arg mode "$VNC_MODE" \
+        --arg bind "$VNC_BIND_ADDR" \
+        --arg mirror_port "$VNC_MIRROR_PORT" \
+        --arg hidden_port "$VNC_HIDDEN_PORT" \
+        --arg mirror_input "$VNC_MIRROR_INPUT" \
+        --arg theme_lock "$VNC_THEME_LOCK" \
+        --arg blank_wallpaper "$VNC_THEME_BLANK_WALLPAPER" \
+        --argjson installed "$installed" \
+        --argjson mirror_active "$(svc_user_active wayvnc-mirror.service)" \
+        --argjson mirror_enabled "$(svc_user_enabled wayvnc-mirror.service)" \
+        --argjson hidden_active "$(svc_system_active hyprland-hidden.service)" \
+        --argjson hidden_enabled "$(svc_system_enabled hyprland-hidden.service)" \
+        --argjson remote_active "$(svc_user_active wayvnc-remote.service)" \
+        --argjson hooks_active "$(svc_user_active vnc-theme-hooks.service)" \
+        --argjson sunshine_active "$(svc_user_active sunshine-remote.service)" \
+        '{
+            host: $host,
+            user: $user,
+            installed: $installed,
+            mode: $mode,
+            bind: $bind,
+            mirror_port: ($mirror_port | tonumber? // $mirror_port),
+            hidden_port: ($hidden_port | tonumber? // $hidden_port),
+            mirror_input: ($mirror_input | tonumber),
+            theme_lock: ($theme_lock | tonumber),
+            blank_wallpaper: ($blank_wallpaper | tonumber),
+            endpoints: {
+                mirror: ("vnc://" + $bind + ":" + $mirror_port),
+                hidden: ("vnc://" + $bind + ":" + $hidden_port)
+            },
+            services: {
+                mirror: { active: $mirror_active, enabled: $mirror_enabled },
+                hidden: { active: $hidden_active, enabled: $hidden_enabled },
+                remote_vnc: { active: $remote_active },
+                theme_hooks: { active: $hooks_active },
+                sunshine: { active: $sunshine_active }
+            }
+        }'
+}
+
+status_human() {
+    echo "VNC mode:       $VNC_MODE"
+    echo "Config:         $CONFIG"
+    echo "Physical:       vnc://$VNC_BIND_ADDR:$VNC_MIRROR_PORT  (interactive=$VNC_MIRROR_INPUT)"
+    echo "Hidden:         vnc://$VNC_BIND_ADDR:$VNC_HIDDEN_PORT"
+    echo "Theme lock:     $VNC_THEME_LOCK"
+    echo "Blank wallpaper: $VNC_THEME_BLANK_WALLPAPER"
+    echo "Mirror service: $(svc_user_active wayvnc-mirror.service) active / $(svc_user_enabled wayvnc-mirror.service) enabled"
+    echo "Hidden service: $(svc_system_active hyprland-hidden.service) active / $(svc_system_enabled hyprland-hidden.service) enabled"
+    echo "Hooks service:  $(svc_user_active vnc-theme-hooks.service) active"
+}
+
+get_key() {
+    case "${1:-}" in
+        mirror_input) printf '%s\n' "$VNC_MIRROR_INPUT" ;;
+        theme_lock) printf '%s\n' "$VNC_THEME_LOCK" ;;
+        blank_wallpaper) printf '%s\n' "$VNC_THEME_BLANK_WALLPAPER" ;;
+        mode) printf '%s\n' "$VNC_MODE" ;;
+        bind) printf '%s\n' "$VNC_BIND_ADDR" ;;
+        mirror_port) printf '%s\n' "$VNC_MIRROR_PORT" ;;
+        hidden_port) printf '%s\n' "$VNC_HIDDEN_PORT" ;;
+        *) echo "unknown key: ${1:-}" >&2; return 2 ;;
+    esac
+}
+
+write_key() {
+    local key="$1" value="$2" dir
+    dir=$(dirname "$CONFIG")
+    mkdir -p "$dir"
+    touch "$CONFIG"
+    if grep -q "^${key}=" "$CONFIG"; then
+        sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$CONFIG"
+    else
+        printf '%s="%s"\n' "$key" "$value" >>"$CONFIG"
+    fi
+}
+
+set_key() {
+    local key="${1:-}" value="${2:-}" cfgkey
+    case "$key" in
+        mirror_input|theme_lock|blank_wallpaper) ;;
+        *) echo "refusing to change structural key '$key' at runtime; edit $CONFIG and reconfigure" >&2; return 2 ;;
+    esac
+    case "$value" in 0|1) ;; *) echo "value must be 0 or 1" >&2; return 2 ;; esac
+    case "$key" in
+        mirror_input) cfgkey=VNC_MIRROR_INPUT ;;
+        theme_lock) cfgkey=VNC_THEME_LOCK ;;
+        blank_wallpaper) cfgkey=VNC_THEME_BLANK_WALLPAPER ;;
+    esac
+    write_key "$cfgkey" "$value"
+    case "$key" in
+        mirror_input) systemctl --user try-restart wayvnc-mirror.service 2>/dev/null || true ;;
+        theme_lock|blank_wallpaper) systemctl --user try-restart vnc-theme-hooks.service 2>/dev/null || true ;;
+    esac
+    printf 'set %s=%s\n' "$key" "$value"
+}
+
+case "$COMMAND" in
+    status)
+        if [[ "${2:-}" == "--json" ]]; then status_json; else status_human; fi
+        ;;
+    get) get_key "${2:-}" ;;
+    set) set_key "${2:-}" "${3:-}" ;;
+    restart)
+        systemctl --user restart wayvnc-mirror.service vnc-theme-hooks.service 2>/dev/null || true
+        echo "restarted VNC user services"
+        ;;
+    reconfigure)
+        echo "Run the installer to change mode, ports, GPU, autologin, or audio:"
+        echo "  ./optional/vnc/install-vnc.sh   # from the end4-pC checkout"
+        ;;
+    help|-h|--help)
+        cat <<HELP
+Usage: end4pc-vnc <command> [args]
+
+Commands:
+  status [--json]       Show detected status and service state
+  get <key>             mirror_input|theme_lock|blank_wallpaper|mode|bind|mirror_port|hidden_port
+  set <key> <0|1>       mirror_input|theme_lock|blank_wallpaper
+  restart               Restart the VNC user services
+  reconfigure           Print installer instructions for structural changes
+
+Config: $CONFIG
+HELP
+        ;;
+    *)
+        echo "unknown command: $COMMAND" >&2
+        exit 2
+        ;;
+esac
