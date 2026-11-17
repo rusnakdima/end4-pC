@@ -128,7 +128,6 @@ MouseArea {
     onLiveWallsCandidatesChanged: root.probeLiveWalls()
     Component.onDestruction: {
         Wallpapers.stopPreview();
-        PreviewStream.clear();
     }
 
     property var quickDirs: [
@@ -1010,7 +1009,6 @@ MouseArea {
             } else if (!GlobalStates.wallpaperSelectorOpen) {
                 sortMenuPopup.open = false;
                 Wallpapers.stopPreview();
-                PreviewStream.clear();
                 WallhavenSearch.clearQuery();
             }
         }

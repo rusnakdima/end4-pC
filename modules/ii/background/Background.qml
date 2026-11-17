@@ -73,8 +73,9 @@ Variants {
             && !LiveWallpaper.previewPlayerActive
             && !LiveWallpaper.queryInFlight
         readonly property bool showLiveVideo: bgRoot.wallpaperIsVideo
-            && !bgRoot.previewVideoWithoutPlayer
-            && (bgRoot.previewingVideo || LiveWallpaper.available)
+            && (Config.options.background.inShellVideo
+                || (!bgRoot.previewVideoWithoutPlayer
+                    && (bgRoot.previewingVideo || LiveWallpaper.available)))
         property string wallpaperPath: {
             if (!bgRoot.wallpaperIsVideo) return bgRoot.effectiveWallpaperPath;
             // The frame of the clip that is actually being shown — the
@@ -93,6 +94,27 @@ Variants {
             const sensitiveWallpaper = (CF.StringUtils.stringListContainsSubstring(wallpaperPath.toLowerCase(), Config.options.workSafety.triggerCondition.fileKeywords));
             const sensitiveNetwork = (CF.StringUtils.stringListContainsSubstring(Network.networkName.toLowerCase(), Config.options.workSafety.triggerCondition.networkNameKeywords));
             return enabled && sensitiveWallpaper && sensitiveNetwork;
+        }
+
+        // The decoded desktop clip only covers the screen once it really has
+        // a frame; until then the still/poster stays up. In the external
+        // mpvpaper mode there is no in-shell item, so the old reveal decision
+        // is enough.
+        readonly property bool videoVisible: bgRoot.wallpaperIsVideo
+            && bgRoot.videoRevealed
+            && (Config.options.background.inShellVideo
+                ? (!bgRoot.wallpaperSafetyTriggered
+                    && !bgRoot.hiddenForFullscreen
+                    && !centeredWallpaper.centeredHidesFullWallpaper
+                    && desktopVideo.videoReady)
+                : true)
+        property bool lockStreamHeld: false
+
+        function refreshDesktopVideo() {
+            if (!bgRoot.wallpaperIsVideo || bgRoot.wallpaperSafetyTriggered) return;
+            // Keep a poster ready for the moment the clip is paused, hidden or
+            // still loading, and for the settings previews.
+            Wallpapers.ensureVideoStill(bgRoot.effectiveWallpaperPath);
         }
 
         property bool shouldBlur: (GlobalStates.screenLocked && Config.options.lock.blur.enable)
@@ -149,7 +171,11 @@ Variants {
                     : bgRoot.wallpaperAnimation
             }
             bgRoot.videoRevealed = bgRoot.showLiveVideo
+            bgRoot.refreshDesktopVideo()
         }
+
+        onEffectiveWallpaperPathChanged: bgRoot.refreshDesktopVideo()
+        onWallpaperSafetyTriggeredChanged: bgRoot.refreshDesktopVideo()
 
         onWallpaperPathChanged: {
             bgRoot.videoRevealed = false
@@ -235,10 +261,19 @@ Variants {
         // The reveal decision depends on live player state: re-make it when
         // the poll flips (player back after an apply) or a preview query
         // answers — otherwise the desktop could stay on the poster forever.
+        // In-shell video has no external player; its visibility is driven by
+        // desktopVideo.videoReady instead, and flipping videoRevealed here
+        // would skip the still transition.
         Connections {
             target: LiveWallpaper
-            function onAvailableChanged() { bgRoot.videoRevealed = bgRoot.showLiveVideo }
-            function onPreviewPlayerActiveChanged() { bgRoot.videoRevealed = bgRoot.showLiveVideo }
+            function onAvailableChanged() {
+                if (!Config.options.background.inShellVideo)
+                    bgRoot.videoRevealed = bgRoot.showLiveVideo
+            }
+            function onPreviewPlayerActiveChanged() {
+                if (!Config.options.background.inShellVideo)
+                    bgRoot.videoRevealed = bgRoot.showLiveVideo
+            }
         }
 
         Item {
@@ -260,8 +295,8 @@ Variants {
                 mipmap: true
                 smooth: true
                 layer.enabled: true
-                visible: !bgRoot.videoRevealed
-                opacity: bgRoot.videoRevealed ? 0 : 1
+                visible: !bgRoot.videoVisible
+                opacity: bgRoot.videoVisible ? 0 : 1
             }
 
             StyledImage {
@@ -274,7 +309,7 @@ Variants {
                 mipmap: true
                 asynchronous: true
                 layer.enabled: bgRoot.wallpaperIsVideo ? false : true
-                visible: !blurLoader.active && !bgRoot.videoRevealed
+                visible: !blurLoader.active && !bgRoot.videoVisible
                     && (bgRoot.wallpaperAnimation === "" || bgRoot.transitionProgress >= 1.0)
                     && !centeredWallpaper.centeredHidesFullWallpaper
                 opacity: centeredWallpaper.centeredFullWallpaperOpacity()
@@ -313,6 +348,29 @@ Variants {
                         transitionAnim.restart()
                     }
                 }
+            }
+
+            WallpaperMedia {
+                id: desktopVideo
+                anchors.fill: parent
+                // Present from the moment the reveal happens, even before the
+                // first frame: the still stays on top of it until videoReady.
+                visible: Config.options.background.inShellVideo
+                    && bgRoot.wallpaperIsVideo
+                    && bgRoot.videoRevealed
+                    && !bgRoot.wallpaperSafetyTriggered
+                    && !bgRoot.hiddenForFullscreen
+                    && !centeredWallpaper.centeredHidesFullWallpaper
+                source: Config.options.background.inShellVideo ? bgRoot.effectiveWallpaperPath : ""
+                // Follow the clock of the clip that is actually on the
+                // desktop; the lock screen uses its own unless both modes
+                // share the same file.
+                syncGroup: !Config.options.background.inShellVideo
+                    ? ""
+                    : (GlobalStates.screenLocked && !WallpaperVideo.lockSharesDesktop ? "lock" : "desktop")
+                showStill: false
+                fillMode: Image.PreserveAspectCrop
+                playing: !LiveWallpaper.paused
             }
 
             ShaderEffect {

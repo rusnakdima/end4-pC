@@ -22,7 +22,8 @@ ContentPage {
     // The preview must be usable before the wallpaper decodes. The image is
     // already asynchronous; this flag only decides when the expensive glass
     // blur may be built.
-    readonly property bool wallpaperReady: wallpaperImg.status === Image.Ready
+    readonly property bool wallpaperReady: wallpaperMedia.imageStatus === Image.Ready
+        || wallpaperMedia.videoReady
     property bool glassReady: false
 
     onWallpaperReadyChanged: {
@@ -424,18 +425,23 @@ ContentPage {
                 color: Appearance.colors.colLayer2
                 clip: true
 
-                StyledImage {
-                    id: wallpaperImg
+                WallpaperMedia {
+                    id: wallpaperMedia
                     anchors.fill: parent
-                    sourceSize.height: 1080
+                    // Raw path: the still is decoded at a capped size and a
+                    // video wallpaper plays here as well as on the desktop.
+                    source: Config.options.background.wallpaperPath
+                    syncGroup: Config.options.background.inShellVideo
+                        && WallpaperVideo.desktopRawSource === Config.options.background.wallpaperPath
+                        ? "desktop"
+                        : ""
+                    playing: !LiveWallpaper.paused
+                    stillSourceSize.height: 1080
                     fillMode: Image.PreserveAspectCrop
-                    source: /\.(mp4|webm|mkv|avi|mov)$/i.test(Config.options.background.wallpaperPath)
-                        ? Config.options.background.thumbnailPath
-                        : Config.options.background.wallpaperPath
                     // Reopening Settings must not decode the same wallpaper
                     // again. The status binding above still resets the blur
                     // when the path changes.
-                    cache: true
+                    cacheStill: true
                     layer.enabled: true
                     layer.effect: OpacityMask {
                         maskSource: Rectangle {
@@ -446,11 +452,11 @@ ContentPage {
                     }
                 }
 
-                // Stills only in settings. Live video stays on the desktop and
-                // in the picker's transient hover preview.
+                // The samples below only ever blur the still, so moving video
+                // frames do not re-run six FastBlur passes each frame.
                 GlassCard {
                     id: bottomBar
-                    backdrop: wallpaperImg
+                    backdrop: wallpaperMedia.stillItem
                     blurEnabled: page.glassReady
                     height: 64
                     anchors {
@@ -493,7 +499,7 @@ ContentPage {
                                 iconText: "position_bottom_right"
                                 popupId: "barPosition"
                                 popupHost: page
-                                backdrop: wallpaperImg
+                                backdrop: wallpaperMedia.stillItem
                                 popupTitle: Translation.tr("Bar position")
                                 options: [
                                     { displayName: Translation.tr("Top"), icon: "arrow_upward", value: 0 },
@@ -511,7 +517,7 @@ ContentPage {
                                 iconText: "settop_component"
                                 popupId: "barStyle"
                                 popupHost: page
-                                backdrop: wallpaperImg
+                                backdrop: wallpaperMedia.stillItem
                                 popupTitle: Translation.tr("Bar style")
                                 options: [
                                     { displayName: Translation.tr("Hug"), icon: "line_curve", value: 0 },
@@ -531,7 +537,7 @@ ContentPage {
                                 iconText: "tab_group"
                                 popupId: "groupStyle"
                                 popupHost: page
-                                backdrop: wallpaperImg
+                                backdrop: wallpaperMedia.stillItem
                                 popupTitle: Translation.tr("Group style")
                                 options: [
                                     { displayName: Translation.tr("None"), icon: "block", value: "transparent" },
@@ -548,7 +554,7 @@ ContentPage {
                                 iconText: "rounded_corner"
                                 popupId: "screenCorner"
                                 popupHost: page
-                                backdrop: wallpaperImg
+                                backdrop: wallpaperMedia.stillItem
                                 popupTitle: Translation.tr("Screen round corner")
                                 options: [
                                     { displayName: Translation.tr("No"), icon: "close", value: 0 },
@@ -602,7 +608,7 @@ ContentPage {
                             popupId: "schemes"
                             popupHost: page
                             popupXOffset: (isMinimal ? -30 : -40) - (namedMode ? 68 : 0)
-                            backdrop: wallpaperImg
+                            backdrop: wallpaperMedia.stillItem
                             popupTitle: Translation.tr("Color scheme")
                             readonly property bool namedMode: ColorSchemes.current !== ""
                             options: namedMode ? [{ displayName: "Material", icon: "auto_awesome", value: "" }].concat(

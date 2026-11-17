@@ -538,6 +538,11 @@ Singleton {
                 }
                 property list<string> screenList: [] 
                 property string wallpaperPath: ""
+                // Videos are decoded by the shell (WallpaperMedia) instead of
+                // by a separate mpvpaper process, so the applied clip can play
+                // on the desktop, in the banner and in the settings previews
+                // from the same source.
+                property bool inShellVideo: true
                 property bool centeredWallpaper: false
                 property string centeredWallpaperShape: "Cookie7Sided"
                 property int centeredWallpaperSize: 400

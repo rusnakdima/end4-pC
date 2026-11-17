@@ -192,7 +192,8 @@ Singleton {
         // wallpaper, and no rebuild of a player that is already on the right
         // file. switchwall is told which file to expect and verifies it over
         // the IPC socket before it agrees to keep the player.
-        const keepPlayer = root.previewPath === path
+        const keepPlayer = !Config.options.background.inShellVideo
+            && root.previewPath === path
             && LiveWallpaper.previewPlayerActive
             && LiveWallpaper.previewPlayfile.length > 0
             ? LiveWallpaper.previewPlayfile
@@ -212,9 +213,6 @@ Singleton {
         if (keepPlayer.length > 0) args.push("--keep-player", keepPlayer);
         Quickshell.execDetached(args);
         root.changed()
-        // Applying a clip normally restarts mpvpaper. The regular 4 s poll can
-        // leave the desktop on the old poster long enough to look like the
-        // apply failed; poll briefly until the new player answers.
         if (Images.isVideoPath(path)) {
             // switchwall only writes background.wallpaperPath and
             // background.thumbnailPath once the proxy has been encoded, so the
@@ -224,17 +222,24 @@ Singleton {
             // apply finds the proxy cached and is instant).
             // The new clip's own frame is generated right away.
             root.ensureVideoStill(path);
-            if (keepPlayer.length === 0) {
-                // The player is about to be killed: stop claiming it is
-                // reachable, or a stale `available` reveals a dead layer
-                // (a black desktop) instead of the poster. An adopted player
-                // is never killed, so it must keep claiming it — hiding it
-                // here would blink the still over a running wallpaper.
-                LiveWallpaper.available = false;
-                LiveWallpaper.paused = false;
+            if (!Config.options.background.inShellVideo) {
+                // Applying a clip normally restarts mpvpaper. The regular 4 s
+                // poll can leave the desktop on the old poster long enough to
+                // look like the apply failed; poll briefly until the new
+                // player answers.
+                if (keepPlayer.length === 0) {
+                    // The player is about to be killed: stop claiming it is
+                    // reachable, or a stale `available` reveals a dead layer
+                    // (a black desktop) instead of the poster. An adopted
+                    // player is never killed, so it must keep claiming it —
+                    // hiding it here would blink the still over a running
+                    // wallpaper.
+                    LiveWallpaper.mpvAvailable = false;
+                    LiveWallpaper.paused = false;
+                }
+                liveRefreshTimer.tries = 0;
+                liveRefreshTimer.restart();
             }
-            liveRefreshTimer.tries = 0;
-            liveRefreshTimer.restart();
         }
     }
 
@@ -250,7 +255,7 @@ Singleton {
             // (4.5 s) ended just before a slow start finished, leaving the
             // desktop on the poster for another whole poll interval — which
             // is what "it is applied but not playing" looked like.
-            if (LiveWallpaper.available || ++tries >= 20) {
+            if (LiveWallpaper.mpvAvailable || ++tries >= 20) {
                 running = false;
                 tries = 0;
             }
@@ -768,6 +773,13 @@ Singleton {
 
         function setSortMode(mode: string): void {
             root.setSortMode(mode);
+        }
+
+        // Full config reload. Used after adding a new singleton file, which
+        // the running scanner does not pick up until the engine restarts.
+        //   qs -c end4-pC ipc call wallpapers reloadShell
+        function reloadShell(): void {
+            Quickshell.reload(true);
         }
 
         function moveWallpaper(fromIndex: int, toIndex: int): void {

@@ -23,8 +23,14 @@ Singleton {
     readonly property string socketPrefix:
         `${Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/1000"}/mpvpaper-`
 
-    // A live wallpaper is running and reachable
-    property bool available: false
+    // A live wallpaper is running and reachable. In in-shell mode the shell
+    // is the player, so this means "a clip is configured or being previewed".
+    readonly property bool inShell: Config.options?.background?.inShellVideo ?? true
+    readonly property bool available: root.inShell
+        ? (root.previewing || root.configuredIsVideo())
+        : root.mpvAvailable
+    // mpvpaper's own reachability, kept for the external-player mode.
+    property bool mpvAvailable: false
     // What we last asked for
     property bool paused: false
 
@@ -68,6 +74,26 @@ sk.close()`
     // be running when that one is a clip.
     function configuredIsVideo() {
         return Images.isVideoPath(String(Config.options?.background?.wallpaperPath ?? ""));
+    }
+
+    // In-shell mode has no mpvpaper. Stop a player left over from the old
+    // setup (or from before this option was enabled) instead of letting it
+    // decode the same clip behind the shell's copy.
+    function stopExternalPlayer() {
+        root.mpvAvailable = false;
+        root.paused = false;
+        Quickshell.execDetached([Directories.videoWallpaperScriptPath, "--stop"]);
+    }
+
+    onInShellChanged: {
+        if (root.inShell) root.stopExternalPlayer();
+    }
+
+    Connections {
+        target: Config
+        function onReadyChanged() {
+            if (Config.ready && root.inShell) root.stopExternalPlayer();
+        }
     }
 
     function startPlayerForPreview(path) {
@@ -130,6 +156,7 @@ sk.close()`
 
     function setPaused(value) {
         root.paused = value;
+        if (root.inShell) return;
         root.sendCommand(`{"command":["set_property","pause",${value}]}`);
     }
 
@@ -182,6 +209,14 @@ sk.close()`
 
     function startVideoPreview(path) {
         if (!path) return;
+        // In-shell: the desktop video follows Wallpapers.previewPath, so there
+        // is no player to hand the file to. Track the preview only, for the
+        // toggle/bar state.
+        if (root.inShell) {
+            root.previewing = true;
+            root.pendingPreviewPath = path;
+            return;
+        }
         if (root.queryInFlight) {
             // The player will be switched as soon as the query answers;
             // only the latest request matters.
@@ -205,6 +240,15 @@ sk.close()`
     // record, so handing it the old one back would only undo what the user
     // just confirmed (and switchwall keeps that player in this case).
     function stopVideoPreview(restore = true) {
+        if (root.inShell) {
+            // Nothing was spawned; the desktop simply returns to the applied
+            // wallpaper when previewPath is cleared.
+            root.previewing = false;
+            root.pendingPreviewPath = "";
+            root.previewPlayerActive = false;
+            root.previewPlayfile = "";
+            return;
+        }
         if (!root.previewing) return;
         root.previewing = false;
         root.pendingPreviewPath = "";
@@ -387,7 +431,9 @@ sk.close()`
     // leave the button lying about what is playing.
     Process {
         id: pollProc
-        running: true
+        // In in-shell mode there is no socket to read; `available` comes from
+        // the configured wallpaper instead.
+        running: !root.inShell
         command: ["bash", "-c",
             `for s in ${root.socketPrefix}*.sock; do [ -S "$s" ] || continue; `
             + `python3 -c '${root.pyQuery}' "$s" '{"command":["get_property","pause"]}' 2>/dev/null | head -1; exit 0; done`]
@@ -395,13 +441,13 @@ sk.close()`
             onStreamFinished: {
                 const line = text.trim();
                 if (line === "") {
-                    root.available = false;
+                    root.mpvAvailable = false;
                     return;
                 }
                 try {
                     const reply = JSON.parse(line);
-                    root.available = reply.error === "success";
-                    if (root.available) {
+                    root.mpvAvailable = reply.error === "success";
+                    if (root.mpvAvailable) {
                         root.paused = reply.data === true;
                         // A player this preview started has come up. It was
                         // started on the previewed clip, so the preview owns
@@ -419,14 +465,14 @@ sk.close()`
                         }
                     }
                 } catch (e) {
-                    root.available = false;
+                    root.mpvAvailable = false;
                 }
             }
         }
     }
 
     Timer {
-        running: true
+        running: !root.inShell
         repeat: true
         interval: 4000
         onTriggered: pollProc.running = true

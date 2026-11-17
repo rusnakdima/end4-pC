@@ -225,7 +225,11 @@ Item {
         Component {
             id: bannerComponent
             Item {
-                implicitHeight: 180
+                // The banner keeps the source aspect ratio: the height is
+                // derived from the panel width instead of cropping the picture
+                // into a fixed 120px strip. A 16:9 wallpaper therefore gets a
+                // 16:9 banner, and a 4:3 one gets a 4:3 banner.
+                implicitHeight: wallpaperRect.height + 2 * sysRect.inset
                 implicitWidth: parent?.width ?? 0
 
                 Rectangle {
@@ -243,16 +247,9 @@ Item {
 
                     Rectangle {
                         id: wallpaperRect
-                        property bool panning: false
-                        property real dragDX: 0
-                        property real dragDY: 0
-                        readonly property real aspect: bannerImage.implicitHeight > 0 ? bannerImage.implicitWidth / bannerImage.implicitHeight : 1
-                        readonly property real coverWidth: aspect > width / height ? height * aspect : width
-                        readonly property real coverHeight: aspect > width / height ? height : width / aspect
-                        readonly property real overflowX: Math.max(0, coverWidth - width)
-                        readonly property real overflowY: Math.max(0, coverHeight - height)
-                        readonly property real focusX: overflowX > 0 ? Math.max(0, Math.min(1, Config.options.sidebar.bannerFocusX - dragDX / overflowX)) : 0.5
-                        readonly property real focusY: overflowY > 0 ? Math.max(0, Math.min(1, Config.options.sidebar.bannerFocusY - dragDY / overflowY)) : 0.5
+                        readonly property real aspect: bannerMedia.imageAspectRatio > 0
+                            ? bannerMedia.imageAspectRatio
+                            : (bannerMedia.isVideo ? 16 / 9 : 16 / 9)
 
                         anchors {
                             top: parent.top
@@ -262,7 +259,8 @@ Item {
                             leftMargin: sysRect.inset
                             rightMargin: sysRect.inset
                         }
-                        height: 120
+                        // Full source height, no vertical crop.
+                        height: width / aspect
                         radius: Math.max(0, sysRect.radius - sysRect.inset)
                         color: "transparent"
 
@@ -277,88 +275,36 @@ Item {
                                 }
                             }
 
-                            StyledImage {
-                                id: bannerImage
-                                x: -wallpaperRect.overflowX * wallpaperRect.focusX
-                                y: -wallpaperRect.overflowY * wallpaperRect.focusY
-                                width: wallpaperRect.coverWidth
-                                height: wallpaperRect.coverHeight
-                                fillMode: Image.PreserveAspectCrop
-                                source: Config.options.sidebar.bannerImage !== "" 
-                                    ? Config.options.sidebar.bannerImage 
-                                    : Wallpapers.displayPathFor(Config.options.background.wallpaperPath)
-                                cache: true
+                            WallpaperMedia {
+                                id: bannerMedia
+                                anchors.fill: parent
+                                // The container already has the source's aspect
+                                // ratio, so Fit is exact; nothing is cropped.
+                                fillMode: Image.PreserveAspectFit
+                                // Raw path: an image is shown directly, a clip plays.
+                                source: Config.options.sidebar.bannerImage !== ""
+                                    ? Config.options.sidebar.bannerImage
+                                    : Config.options.background.wallpaperPath
+                                // Follow the desktop's playback clock: the
+                                // banner shows the same part of the clip as the
+                                // desktop and the settings preview.
+                                syncGroup: Config.options.background.inShellVideo
+                                    && Config.options.sidebar.bannerImage === ""
+                                    && WallpaperVideo.desktopRawSource === Config.options.background.wallpaperPath
+                                    ? "desktop"
+                                    : ""
+                                playing: !LiveWallpaper.paused
+                                stillSourceSize: Qt.size(wallpaperRect.width * 2, wallpaperRect.height * 2)
+                                cacheStill: true
                                 antialiasing: true
-                                sourceSize.width: wallpaperRect.width * 2
-                                sourceSize.height: wallpaperRect.height * 2
                             }
 
-                            // Banner shows the still. Live video stays on the
-                            // desktop and in the picker hover preview.
-                        }
-
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: wallpaperRect.radius
-                            color: ColorUtils.transparentize(Appearance.colors.colPrimary, 0.8)
-                            border.width: 2
-                            border.color: Appearance.colors.colPrimary
-                            opacity: wallpaperRect.panning ? 1 : 0
-                            visible: opacity > 0
-
-                            Behavior on opacity {
-                                animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-                            }
-
-                            Rectangle {
-                                anchors.centerIn: parent
-                                width: 44
-                                height: 44
-                                radius: height / 2
-                                color: Appearance.colors.colPrimary
-
-                                MaterialSymbol {
-                                    anchors.centerIn: parent
-                                    text: "open_with"
-                                    iconSize: 24
-                                    color: Appearance.colors.colOnPrimary
-                                }
-                            }
                         }
 
                         MouseArea {
-                            property real lastX: 0
-                            property real lastY: 0
                             anchors.fill: parent
-                            cursorShape: wallpaperRect.panning ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+                            cursorShape: Qt.PointingHandCursor
                             acceptedButtons: Qt.LeftButton | Qt.RightButton
-                            onPressed: mouse => {
-                                lastX = mouse.x
-                                lastY = mouse.y
-                            }
-                            onPressAndHold: mouse => {
-                                if (mouse.button === Qt.LeftButton) wallpaperRect.panning = true
-                            }
-                            onPositionChanged: mouse => {
-                                if (!wallpaperRect.panning) return
-                                wallpaperRect.dragDX += mouse.x - lastX
-                                wallpaperRect.dragDY += mouse.y - lastY
-                                lastX = mouse.x
-                                lastY = mouse.y
-                            }
-                            onReleased: {
-                                if (!wallpaperRect.panning) return
-                                Config.options.sidebar.bannerFocusX = wallpaperRect.focusX
-                                Config.options.sidebar.bannerFocusY = wallpaperRect.focusY
-                                wallpaperRect.dragDX = 0
-                                wallpaperRect.dragDY = 0
-                                wallpaperRect.panning = false
-                            }
-                            onCanceled: {
-                                wallpaperRect.dragDX = 0
-                                wallpaperRect.dragDY = 0
-                                wallpaperRect.panning = false
-                            }
                             onClicked: (event) => {
                                 if (event.button === Qt.LeftButton) {
                                     fileChooser.running = true
@@ -372,12 +318,36 @@ Item {
                         }
                     }
 
-                    Column {
+                    Item {
+                        // The profile and the quick actions sit on top of the
+                        // picture now, so they get a glass strip that samples
+                        // the poster/video underneath instead of a flat colour.
+                        id: bannerFooter
                         anchors {
                             left: parent.left
+                            right: parent.right
                             bottom: parent.bottom
+                        }
+                        height: 88
+
+                        FrostedGlass {
+                            anchors.fill: parent
+                            blurSource: bannerMedia
+                            topLeftRadius: 0
+                            topRightRadius: 0
+                            bottomLeftRadius: sysRect.radius
+                            bottomRightRadius: sysRect.radius
+                            tint: Appearance.colors.colLayer1
+                            tintOpacity: 0.42
+                        }
+                    }
+
+                    Column {
+                        anchors {
+                            left: bannerFooter.left
+                            bottom: bannerFooter.bottom
                             leftMargin: sysRect.inset + 8
-                            bottomMargin: 8
+                            bottomMargin: 6
                         }
                         spacing: 1
 
@@ -403,9 +373,9 @@ Item {
 
                     ButtonGroup {
                         anchors {
-                            right: parent.right
-                            bottom: parent.bottom
-                            margins: 4
+                            right: bannerFooter.right
+                            verticalCenter: bannerFooter.verticalCenter
+                            margins: 8
                         }
                         color: "transparent"
                         padding: 4

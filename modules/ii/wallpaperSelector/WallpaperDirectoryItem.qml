@@ -18,13 +18,30 @@ Item {
     // Set by the grid: this is the cell the pointer or the keyboard selection
     // is on, so exactly one cell plays at a time.
     property bool playSelected: false
-    // The cell shows the shared stream whenever it owns the current path; this
-    // does not depend on the hover highlight, which can lag behind the path.
-    readonly property bool previewWanted: root.isVideoSource
-        && PreviewStream.path === root.videoPath
-        && PreviewStream.ready
-    readonly property int previewImageStatus: previewImage.status
-    readonly property bool previewImageVisible: previewImage.visible
+    // Held arrow keys and a pointer sweeping across the grid change the
+    // selection many times per second. Starting a decoder for every cell on
+    // the way would churn through MediaPlayers and stutter the settling one,
+    // so a cell only starts playing once the selection has stayed on it for a
+    // moment.
+    property bool playSettled: false
+
+    onPlaySelectedChanged: {
+        if (root.playSelected) {
+            playDelay.restart();
+        } else {
+            playDelay.stop();
+            root.playSettled = false;
+        }
+    }
+    Component.onCompleted: {
+        if (root.playSelected) playDelay.restart();
+    }
+
+    Timer {
+        id: playDelay
+        interval: 90
+        onTriggered: root.playSettled = root.playSelected
+    }
 
     // The colors of the cell. The shell theme provides the defaults, the
     // grid overrides them for the selected and the hovered cells.
@@ -135,26 +152,25 @@ Item {
                         }
                     }
 
-                    // Only the selected or hovered cell shows the shared
-                    // preview stream. The still underneath stays visible and
-                    // is the fallback when the stream is not ready.
-                    Image {
-                        id: previewImage
+                    // Only the selected or hovered cell plays. The Loader keeps
+                    // a single Video alive, so browsing the grid never runs
+                    // more than one decoder; the thumbnail underneath stays
+                    // visible until the first frame arrives and is the
+                    // fallback when the clip cannot be opened. QtMultimedia
+                    // decodes the clip directly -- the old ffmpeg -> base64 ->
+                    // Image pipeline capped this at a few frames per second.
+                    Loader {
                         anchors.fill: parent
-                        visible: root.previewWanted
-                        source: root.previewWanted ? PreviewStream.frameUrl : ""
-                        fillMode: Image.PreserveAspectCrop
-                        // Deliberately SYNCHRONOUS. With cache:false an
-                        // asynchronous load renders nothing until the frame
-                        // is ready, so the cell blanked between frames — that
-                        // reads as flicker, not smoothness. A decode of this
-                        // 480px JPEG costs well under a millisecond, so
-                        // loading it inline never stutters the UI, and the
-                        // previous frame stays on screen until the next one
-                        // is decoded.
-                        cache: false
-                        smooth: true
-                        mipmap: false
+                        active: root.playSettled && root.isVideoSource
+
+                        sourceComponent: WallpaperMedia {
+                            anchors.fill: parent
+                            source: root.videoPath
+                            useProxy: false
+                            showStill: false
+                            playing: root.playSettled
+                            fillMode: Image.PreserveAspectCrop
+                        }
                     }
                 }
 

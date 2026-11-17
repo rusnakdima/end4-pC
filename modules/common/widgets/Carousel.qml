@@ -108,6 +108,11 @@ Item {
                     property var modelData: itemRoot.modelData
                     property real fixedWidth: root.width * root.largeItemWidthRatio
                     property real fixedHeight: listView.height
+                    property int itemIndex: itemRoot.index
+                    // The focused card is the hovered one, or the selected one
+                    // when nothing is hovered. Delegates that play video use
+                    // this so exactly one clip decodes.
+                    property int focusedIndex: root.focusedIndex
                 }
 
                 Rectangle { // later I'll see if I remove it

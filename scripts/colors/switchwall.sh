@@ -12,6 +12,15 @@ SHELL_CONFIG_FILE="$XDG_CONFIG_HOME/illogical-impulse/config.json"
 MATUGEN_DIR="$XDG_CONFIG_HOME/matugen"
 terminalscheme="$SCRIPT_DIR/terminal/scheme-base.json"
 
+# When the shell decodes the video wallpaper itself, switchwall must not start
+# mpvpaper (or leave a supervisor that respawns it). It still builds the proxy
+# and the poster; the shell plays the proxy. Default true keeps a fresh config
+# and the installer in the in-shell path.
+IN_SHELL_VIDEO="true"
+if [ -f "$SHELL_CONFIG_FILE" ]; then
+    IN_SHELL_VIDEO=$(jq -r '.background.inShellVideo // true' "$SHELL_CONFIG_FILE" 2>/dev/null || echo true)
+fi
+
 # shellcheck source=../lib/config.sh
 source "$SCRIPT_DIR/../lib/config.sh"
 
@@ -489,6 +498,11 @@ CONFIG_FILE="\${XDG_CONFIG_HOME:-\$HOME/.config}/illogical-impulse/config.json"
 wallpaper=""
 if [[ -f "\$CONFIG_FILE" ]]; then
     wallpaper=\$(jq -r '.background.wallpaperPath // ""' "\$CONFIG_FILE" 2>/dev/null)
+    # The shell decodes video wallpapers itself in this mode; starting
+    # mpvpaper here would race the shell and double-decode every clip.
+    if [[ "\$(jq -r '.background.inShellVideo // true' "\$CONFIG_FILE" 2>/dev/null)" == "true" ]]; then
+        exit 0
+    fi
 fi
 
 if [[ -z "\$wallpaper" || ! -f "\$wallpaper" ]]; then
@@ -590,8 +604,17 @@ switch() {
     # visibly reapplying a while later.
     switchwall_acquire_lock
 
-    install_video_wallpaper_supervisor || true
-    if [[ -z "$colors_only_flag" ]] && is_video "$imgpath" \
+    # In-shell mode: the shell owns the video. Stop any player/supervisor left
+    # over from the old setup before touching the wallpaper, then never start a
+    # new one below.
+    if [[ "$IN_SHELL_VIDEO" == "true" ]]; then
+        "$VIDEO_WALLPAPER_SCRIPT" --stop >/dev/null 2>&1 || true
+    fi
+
+    if [[ "$IN_SHELL_VIDEO" != "true" ]]; then
+        install_video_wallpaper_supervisor || true
+    fi
+    if [[ "$IN_SHELL_VIDEO" != "true" && -z "$colors_only_flag" ]] && is_video "$imgpath" \
         && [[ "$imgpath" == "$(jq -r '.background.wallpaperPath // ""' "$SHELL_CONFIG_FILE" 2>/dev/null)" ]]; then
         local already=""
         already="$("$VIDEO_WALLPAPER_SCRIPT" --prefetch "$imgpath" 2>/dev/null)" || already=""
@@ -635,7 +658,7 @@ switch() {
         # still brought back up, so a crashed wallpaper never stays black
         # after a colour regeneration.
         colors_only_restart=0
-        if [[ -n "$colors_only_flag" ]] && is_video "$imgpath" \
+        if [[ "$IN_SHELL_VIDEO" != "true" && -n "$colors_only_flag" ]] && is_video "$imgpath" \
             && ! compgen -G "${MPV_SOCKET_PREFIX}*.sock" > /dev/null; then
             colors_only_restart=1
         fi
@@ -658,7 +681,7 @@ switch() {
         # the "it is applied but not playing" a double-click shows; the
         # picker's preview already proved loadfile switches clips cleanly.
         local player_action="rebuild"
-        if [[ -z "$colors_only_flag" ]] && is_video "$imgpath"; then
+        if [[ "$IN_SHELL_VIDEO" != "true" && -z "$colors_only_flag" ]] && is_video "$imgpath"; then
             install_video_wallpaper_supervisor || true
             local want=""
             want="$("$VIDEO_WALLPAPER_SCRIPT" --prefetch "$imgpath" 2>/dev/null)" || want=""
@@ -682,12 +705,16 @@ switch() {
                 # live-only custom/ dir, so checkout changes (like --prefetch)
                 # only reach it through the installer.
                 if is_video "$imgpath"; then
-                    install_video_wallpaper_supervisor || true
+                    if [[ "$IN_SHELL_VIDEO" != "true" ]]; then
+                        install_video_wallpaper_supervisor || true
+                    fi
                     if [[ -x "$VIDEO_WALLPAPER_SCRIPT" ]]; then
                         "$VIDEO_WALLPAPER_SCRIPT" --prefetch "$imgpath" >/dev/null || true
                     fi
                 fi
-                kill_existing_mpvpaper
+                if [[ "$IN_SHELL_VIDEO" != "true" ]]; then
+                    kill_existing_mpvpaper
+                fi
             fi
         fi
 
@@ -695,7 +722,7 @@ switch() {
             mkdir -p "$THUMBNAIL_DIR"
 
             missing_deps=()
-            if ! command -v mpvpaper &> /dev/null; then
+            if [[ "$IN_SHELL_VIDEO" != "true" ]] && ! command -v mpvpaper &> /dev/null; then
                 missing_deps+=("mpvpaper")
             fi
             if ! command -v ffmpeg &> /dev/null; then
@@ -712,7 +739,9 @@ switch() {
                     "Missing dependencies: ${missing_deps[*]}")
                 if [[ "$action" == "install_arch" ]]; then
                     kitty -1 sudo pacman -S "${missing_deps[*]}"
-                    if command -v mpvpaper &>/dev/null && command -v ffmpeg &>/dev/null; then
+                    if [[ "$IN_SHELL_VIDEO" == "true" ]] && command -v ffmpeg &>/dev/null; then
+                        notify-send 'Wallpaper switcher' 'Alright, try again!' -a "Wallpaper switcher"
+                    elif command -v mpvpaper &>/dev/null && command -v ffmpeg &>/dev/null; then
                         notify-send 'Wallpaper switcher' 'Alright, try again!' -a "Wallpaper switcher"
                     fi
                 fi
@@ -728,8 +757,9 @@ switch() {
                 fi
                 # keep/handoff: the player already has this clip, or was just
                 # handed it, so only the config catches up — no kill, no
-                # restart, no three-second hole with no wallpaper.
-                if [[ "$player_action" == "rebuild" ]]; then
+                # restart, no three-second hole with no wallpaper. In-shell
+                # mode never starts a player at all.
+                if [[ "$IN_SHELL_VIDEO" != "true" && "$player_action" == "rebuild" ]]; then
                     start_video_wallpaper "$imgpath"
                 fi
             fi

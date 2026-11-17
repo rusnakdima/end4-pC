@@ -4,7 +4,6 @@ import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
-import qs.modules.common.functions
 import Quickshell.Hyprland
 
 
@@ -12,15 +11,9 @@ ContentPage {
     id: page
     forceWidth: true
 
-    function displayPathFor(path) {
-        return /\.(mp4|webm|mkv|avi|mov)$/i.test(path)
-            ? Config.options.background.thumbnailPath
-            : path
-    }
-
-    // Carousel's default delegate only ever shows a thumbnail, so a video
-    // wallpaper sat frozen here. Keep the thumbnail -- it is still the still,
-    // and it is what sizes the card -- and lay the player over it.
+    // The carousel delegate shows the wallpaper through one WallpaperMedia
+    // instance: an image is drawn as the still, and a clip plays on the
+    // focused card instead of sitting frozen on its thumbnail.
     Component {
         id: wallpaperDelegate
 
@@ -32,18 +25,33 @@ ContentPage {
             readonly property var rawPath: parent?.modelData ?? ""
             readonly property real fixedWidth: parent?.fixedWidth ?? width
             readonly property real fixedHeight: parent?.fixedHeight ?? height
+            // The Carousel's delegate item is the Loader's grandparent.
+            readonly property int cardIndex: parent?.itemIndex ?? -1
 
-            ThumbnailImage {
-                anchors.fill: parent
-                sourcePath: FileUtils.trimFileProtocol(page.displayPathFor(card.rawPath))
-                thumbnailSizeName: (sourceSize.width > 512 || sourceSize.height > 512) ? "xx-large" : "x-large"
-                fillMode: Image.PreserveAspectCrop
-                sourceSize.width: card.fixedWidth * 1.5
-                sourceSize.height: card.fixedHeight * 1.5
+            // Desktop and lock cards follow the clock of their own wallpaper,
+            // so a preview opened now starts at the same part of the clip as
+            // the desktop. When both modes use the same file the lock card
+            // follows the desktop clock too.
+            readonly property string syncGroup: {
+                if (!Config.options.background.inShellVideo) return "";
+                if (card.cardIndex === 1) {
+                    if (WallpaperVideo.lockSharesDesktop)
+                        return WallpaperVideo.desktopRawSource === card.rawPath ? "desktop" : "";
+                    return WallpaperVideo.lockRawSource === card.rawPath ? "lock" : "";
+                }
+                return WallpaperVideo.desktopRawSource === card.rawPath ? "desktop" : "";
             }
 
-            // Stills only in settings. Live video stays on the desktop and in
-            // the picker's transient hover preview.
+            WallpaperMedia {
+                anchors.fill: parent
+                // Raw path: the still is capped to the card size and the clip
+                // itself plays through the shared clock.
+                source: card.rawPath
+                syncGroup: card.syncGroup
+                playing: !LiveWallpaper.paused
+                stillSourceSize: Qt.size(card.fixedWidth * 1.5, card.fixedHeight * 1.5)
+                fillMode: Image.PreserveAspectCrop
+            }
         }
     }
 
@@ -80,9 +88,9 @@ ContentPage {
                         largeItemWidthRatio: 0.5
                         mediumItemWidthRatio: 0.485
                         itemSpacing: 8
-                        // Raw paths, not displayPathFor: the delegate needs the
-                        // clip itself to play it, and resolves the thumbnail
-                        // for the still the same way displayPathFor did.
+                        // Raw paths: the delegate needs the clip itself to play
+                        // it, and WallpaperMedia resolves the still for a clip
+                        // when it is not focused.
                         model: [
                             Config.options.background.wallpaperPath,
                             Config.options.background.lockWall !== ""
