@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import qs
+import qs.services
 import qs.modules.common
 import qs.modules.common.models
 import qs.modules.common.widgets
@@ -129,6 +130,34 @@ Item {
                     root.player.volume = value;
             }
         }
+    }
+
+    StyledText {
+        id: trackTitle
+        x: root.textX
+        y: root.pad
+        width: root.textWidth
+        font.pixelSize: Appearance.font.pixelSize.large
+        color: root.blendedColors.colOnLayer0
+        elide: Text.ElideRight
+        text: StringUtils.cleanMusicTitle(root.player?.trackTitle) || Translation.tr("Unknown Title")
+        animateChange: true
+        animationDistanceX: 6
+        animationDistanceY: 0
+    }
+
+    StyledText {
+        id: trackArtist
+        x: root.textX
+        y: trackTitle.y + trackTitle.implicitHeight + 2
+        width: root.textWidth
+        font.pixelSize: Appearance.font.pixelSize.smaller
+        color: root.blendedColors.colSubtext
+        elide: Text.ElideRight
+        text: root.player?.trackArtist || Translation.tr("Unknown Artist")
+        animateChange: true
+        animationDistanceX: 6
+        animationDistanceY: 0
     }
 
     StyledText {
