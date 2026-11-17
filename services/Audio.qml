@@ -76,6 +76,23 @@ Singleton {
     readonly property list<var> outputDevices: root.devices(true)
     readonly property list<var> inputDevices: root.devices(false)
 
+    // PwNode for a pactl device *name*, so a row that only knows the pactl
+    // name (DeviceRow) can still attach a PwNodePeakMonitor. Matched by
+    // node.name first (the pulse name and the pipewire name are the same
+    // string), then by friendly name as a fallback. Returns null when the
+    // device has no node yet — callers hide their meter then.
+    function deviceNodeByName(name, isSink) {
+        if (!name) return null;
+        const list = isSink ? root.outputDevices : root.inputDevices;
+        for (const node of list) {
+            if (String(node.name) === name) return node;
+        }
+        for (const node of list) {
+            if (root.friendlyDeviceName(node) === name) return node;
+        }
+        return null;
+    }
+
     // Signals
     signal sinkProtectionTriggered(string reason);
 

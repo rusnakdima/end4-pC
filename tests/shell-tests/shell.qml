@@ -54,7 +54,8 @@ ShellRoot {
         "tst_keybinds.qml", "tst_xkbrules.qml",
         "tst_collapsible_section_header.qml",
         "tst_ConfigMultiSelect.qml",
-        "tst_dialog_search_field.qml"
+        "tst_dialog_search_field.qml",
+        "tst_VolumeLevelMeter.qml"
     ]
 
     property int doneCount: 0

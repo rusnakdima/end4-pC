@@ -24,6 +24,14 @@ RowLayout {
         objects: [root.node]
     }
 
+    // Live signal level for the meter. Binds the node only while the row is
+    // on screen, so a closed panel keeps no capture streams running.
+    PwNodePeakMonitor {
+        id: peakMonitor
+        node: root.node
+        enabled: root.visible
+    }
+
     WPanelIconButton {
         id: iconButton
         iconName: WIcons.audioAppIcon(root.node)
@@ -47,11 +55,23 @@ RowLayout {
         }
     }
 
-    WSlider {
+    ColumnLayout {
         Layout.fillWidth: true
         Layout.rightMargin: 10
-        value: root.node?.audio.volume ?? 0
-        onMoved: root.node.audio.volume = value
+        spacing: 2
+
+        WSlider {
+            Layout.fillWidth: true
+            value: root.node?.audio.volume ?? 0
+            onMoved: root.node.audio.volume = value
+        }
+
+        // Level meter under the slider (pavucontrol convention)
+        VolumeLevelMeter {
+            Layout.fillWidth: true
+            peak: peakMonitor.peak
+            muted: root.node?.audio.muted ?? false
+        }
     }
 
     StreamDeviceSelector {
