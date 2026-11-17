@@ -156,24 +156,32 @@ Item {
         border.color: ColorUtils.transparentize(Appearance.colors.colLayer0Border, 0.8) 
         radius: Appearance.rounding.screenRounding - Appearance.sizes.hyprlandGapsOut + 5
 
-        ReorderableColumn {
-            id: sectionColumn
+        // The sections keep their own heights (the notification card has a
+        // fixed one), so on a short screen the column can be taller than the
+        // panel. A Flickable gives it a scroll of its own instead of letting
+        // the last cards spill past the rounded background; the touchpad
+        // handler and a thin scrollbar come with StyledFlickable.
+        StyledFlickable {
+            id: sectionScroll
             anchors.fill: parent
             anchors.margins: sidebarPadding
-            itemSpacing: sidebarPadding
-            order: root.sectionOrder
-            editMode: root.editMode && root.editTab === "layout"
-            // The notifications card is the filler that absorbs the leftover
-            // column height, but only while it is expanded: a collapsed card
-            // is just a header row, and the fill would stretch it back out
-            // into a header floating in an empty glass card. With no filler
-            // at all the sections take their natural heights and the freed
-            // space shows as plain sidebar background below the column.
-            fillKey: Persistent.states.sidebar.notifications.collapsed ? "" : "notifications"
-            fillMinHeight: 120
-            onReordered: newOrder => Config.options.sidebar.sectionOrder = newOrder
-            componentForKey: key => root.sectionComponents[key] ?? null
-            isKeyActive: key => root.sectionActive(key)
+            contentWidth: width
+            contentHeight: sectionColumn.implicitHeight
+            clip: true
+
+            ReorderableColumn {
+                id: sectionColumn
+                // At least the viewport, so a column shorter than the panel
+                // still starts at the top and any fill slot keeps working.
+                width: sectionScroll.width
+                height: Math.max(sectionScroll.height, sectionColumn.implicitHeight)
+                itemSpacing: sidebarPadding
+                order: root.sectionOrder
+                editMode: root.editMode && root.editTab === "layout"
+                onReordered: newOrder => Config.options.sidebar.sectionOrder = newOrder
+                componentForKey: key => root.sectionComponents[key] ?? null
+                isKeyActive: key => root.sectionActive(key)
+            }
         }
     }
 
@@ -456,12 +464,10 @@ Item {
             id: togglesSection
 
             // Spoiler for the toggle grid, same idea as the two cards. This
-            // section is never the column's fillKey, so - unlike the
-            // notifications card, whose expanded height comes from the
-            // filler slot - its own implicitHeight carries the header in
-            // both states and takes a step when it collapses; the slot
-            // Behavior in ReorderableColumn smooths that step and slides
-            // the sections below it.
+            // section is never a fill slot: its own implicitHeight carries
+            // the header in both states and takes a step when it collapses;
+            // the slot Behavior in ReorderableColumn smooths that step and
+            // slides the sections below it.
             readonly property bool collapsed: Persistent.states.sidebar.quickToggles.collapsed
             // 4 px above the header + the header + 4 px below it: a collapsed
             // row measures 48 px, the same as a collapsed sliders card.

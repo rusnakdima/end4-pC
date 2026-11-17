@@ -36,9 +36,11 @@ WindowDialog {
         Layout.leftMargin: -Appearance.rounding.large
         Layout.rightMargin: -Appearance.rounding.large
     }
-    ListView {
-        id: networksView
-        visible: root.visibleNetworks.length > 0
+    // The list viewport. The dialog keeps a fixed height, so this zone always
+    // reserves the same space between the search bar and the footer: an empty
+    // result draws its message inside the zone instead of collapsing the
+    // content and leaving the search block alone in the panel.
+    Item {
         Layout.fillHeight: true
         Layout.fillWidth: true
         Layout.topMargin: -15
@@ -46,30 +48,36 @@ WindowDialog {
         Layout.leftMargin: -Appearance.rounding.large
         Layout.rightMargin: -Appearance.rounding.large
 
-        clip: true
-        spacing: 0
+        ListView {
+            id: networksView
+            anchors.fill: parent
 
-        model: ScriptModel {
-            values: root.visibleNetworks
+            clip: true
+            spacing: 0
+
+            model: ScriptModel {
+                values: root.visibleNetworks
+            }
+
+            TouchpadScrollArea { flickable: networksView }
+
+            delegate: WifiNetworkItem {
+                required property WifiAccessPoint modelData
+                wifiNetwork: modelData
+                width: ListView.view.width
+            }
         }
 
-        TouchpadScrollArea { flickable: networksView }
-
-        delegate: WifiNetworkItem {
-            required property WifiAccessPoint modelData
-            wifiNetwork: modelData
-            width: ListView.view.width
+        StyledText {
+            // Without a query an empty list leaves the zone blank, as before;
+            // a query always gets an explanation in the same zone.
+            visible: searchField.text.length > 0 && root.visibleNetworks.length === 0
+            anchors.centerIn: parent
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            color: Appearance.colors.colSubtext
+            text: Translation.tr("No networks match your search")
         }
-    }
-    StyledText {
-        // Only a query can be empty of matches: with no query an empty
-        // list keeps the look it has today.
-        visible: searchField.text.length > 0 && root.visibleNetworks.length === 0
-        Layout.fillWidth: true
-        Layout.fillHeight: true
-        horizontalAlignment: Text.AlignHCenter
-        color: Appearance.colors.colSubtext
-        text: Translation.tr("No networks match your search")
     }
     WindowDialogSeparator {}
     WindowDialogButtonRow {

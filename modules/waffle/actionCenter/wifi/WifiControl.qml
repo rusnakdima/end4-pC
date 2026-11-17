@@ -73,35 +73,41 @@ Item {
                     placeholderText: Translation.tr("Search networks")
                 }
 
-                ListView {
-                    id: listView
-                    visible: root.visibleNetworks.length > 0
-                    Layout.fillHeight: true
-                    Layout.fillWidth: true
-
-                    clip: true
-                    spacing: 4
-
-                    TouchpadScrollArea { flickable: listView }
-
-                    model: ScriptModel {
-                        values: root.visibleNetworks
-                    }
-                    delegate: WWifiNetworkItem {
-                        required property WifiAccessPoint modelData
-                        wifiNetwork: modelData
-                        width: ListView.view.width
-                    }
-                }
-                WText {
-                    // Only a query can be empty of matches: with no query
-                    // an empty list keeps the look it has today.
-                    visible: searchField.text.length > 0 && root.visibleNetworks.length === 0
+                // The list viewport: the body has a fixed height, so this
+                // zone keeps the search field in place and gives an empty
+                // result the same space as a full list.
+                Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    horizontalAlignment: Text.AlignHCenter
-                    color: Looks.colors.subfg
-                    text: Translation.tr("No networks match your search")
+
+                    ListView {
+                        id: listView
+                        anchors.fill: parent
+
+                        clip: true
+                        spacing: 4
+
+                        TouchpadScrollArea { flickable: listView }
+
+                        model: ScriptModel {
+                            values: root.visibleNetworks
+                        }
+                        delegate: WWifiNetworkItem {
+                            required property WifiAccessPoint modelData
+                            wifiNetwork: modelData
+                            width: ListView.view.width
+                        }
+                    }
+                    WText {
+                        // Only a query has an explanation to show; without
+                        // one an empty list leaves the zone blank.
+                        visible: searchField.text.length > 0 && root.visibleNetworks.length === 0
+                        anchors.centerIn: parent
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        color: Looks.colors.subfg
+                        text: Translation.tr("No networks match your search")
+                    }
                 }
             }
         }

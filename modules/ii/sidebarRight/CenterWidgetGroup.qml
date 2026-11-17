@@ -27,14 +27,14 @@ Rectangle {
 
     // Spoiler state, stored with the sidebar's other view state
     // (Persistent.states.sidebar.bottomGroup.collapsed is the precedent).
-    // While this is collapsed the card is no longer ReorderableColumn's
-    // fillKey, so it has to report a real height of its own - it used to
-    // report 0 and get away with it only because the filler is always shown
-    // regardless of its natural height. Header + the 5 px margin above and
-    // below it is the whole card when collapsed; when expanded the column
-    // stretches the card to the leftover space and this number is unused.
+    // Unlike the other cards this one used to be ReorderableColumn's fill
+    // slot, stretching with the leftover panel height. It now keeps a size
+    // of its own - header + margins when collapsed, one fixed card when
+    // expanded - so the notification area no longer changes height with the
+    // screen, and the sidebar scrolls when the sections do not fit.
     readonly property bool collapsed: Persistent.states.sidebar.notifications.collapsed
-    implicitHeight: header.implicitHeight + 10
+    property int expandedHeight: 320
+    implicitHeight: collapsed ? header.implicitHeight + 10 : expandedHeight
 
     CollapsibleSectionHeader {
         id: header

@@ -16,6 +16,21 @@ Item {
     property string fillKey: ""
     property real fillMinHeight: 60
 
+    // Height of the sections as their delegates measured them, in slot
+    // order. A scroll container binds contentHeight to this and gives the
+    // column the same height, so the sections keep their own sizes and the
+    // column overflows (and scrolls) instead of being squeezed or clipped.
+    // It is computed from naturalHeight, never from effectiveHeight, so
+    // binding the column's height to it cannot feed back into a fill slot.
+    readonly property real contentHeight: {
+        const keys = root.shownKeys()
+        let total = Math.max(0, keys.length - 1) * root.itemSpacing
+        for (let i = 0; i < keys.length; i++)
+            total += root.naturalHeight(keys[i])
+        return total
+    }
+    implicitHeight: contentHeight
+
     // Slot heights are live bindings on each section's reported
     // implicitHeight, so they change in one frame whenever a section
     // collapses, a section appears, or the fill section's share of the

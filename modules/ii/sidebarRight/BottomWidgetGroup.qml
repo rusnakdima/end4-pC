@@ -23,10 +23,19 @@ Rectangle {
     border.width: 1
     border.color: ColorUtils.transparentize(Appearance.colors.colOutlineVariant, 0.55)
     clip: true
-    implicitHeight: collapsed ? collapsedBottomWidgetGroupRow.implicitHeight : 350
+
+    // Same spoiler card as the toggles, sliders and notifications sections:
+    // a CollapsibleSectionHeader carries the collapse state, and the card
+    // reports a real height in both states instead of the tab row drawing
+    // its own arrow. Expanded keeps the old content height (the calendar
+    // grid needs its six week rows) plus the header and its margins.
+    readonly property bool collapsed: Persistent.states.sidebar.bottomGroup.collapsed
+    readonly property int expandedHeight: 400
+    implicitHeight: collapsed ? header.implicitHeight + 10 : expandedHeight
     property int selectedTab: Persistent.states.sidebar.bottomGroup.tab
     property int previousIndex: -1
-    property bool collapsed: Persistent.states.sidebar.bottomGroup.collapsed
+    readonly property var currentTabData: root.tabs[root.selectedTab] ?? root.tabs[0]
+    readonly property int remainingTasks: Todo.list.filter(task => !task.done).length
     property var tabs: [
         {
             "type": "calendar",
@@ -56,107 +65,57 @@ Rectangle {
         }
     }
 
-    function setCollapsed(state) {
-        Persistent.states.sidebar.bottomGroup.collapsed = state;
-        if (collapsed) {
-            bottomWidgetGroupRow.opacity = 0;
-        } else {
-            collapsedBottomWidgetGroupRow.opacity = 0;
-        }
-        collapseCleanFadeTimer.start();
-    }
-
-    Timer {
-        id: collapseCleanFadeTimer
-        interval: Appearance.animation.elementMove.duration / 2
-        repeat: false
-        onTriggered: {
-            if (collapsed)
-                collapsedBottomWidgetGroupRow.opacity = 1;
-            else
-                bottomWidgetGroupRow.opacity = 1;
-        }
-    }
-
     Keys.onPressed: event => {
         if ((event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) && event.modifiers === Qt.ControlModifier) {
             if (event.key === Qt.Key_PageDown) {
                 root.selectedTab = Math.min(root.selectedTab + 1, root.tabs.length - 1);
-            } else if (event.key === Qt.Key_PageUp) {
+            } else {
                 root.selectedTab = Math.max(root.selectedTab - 1, 0);
             }
             event.accepted = true;
         }
     }
 
-    // The thing when collapsed
-    RowLayout {
-        id: collapsedBottomWidgetGroupRow
-        opacity: collapsed ? 1 : 0
-        visible: opacity > 0
-        Behavior on opacity {
-            NumberAnimation {
-                id: collapsedBottomWidgetGroupRowFade
-                duration: Appearance.animation.elementMove.duration / 2
-                easing.type: Appearance.animation.elementMove.type
-                easing.bezierCurve: Appearance.animation.elementMove.bezierCurve
-            }
+    CollapsibleSectionHeader {
+        id: header
+        anchors {
+            top: parent.top
+            left: parent.left
+            right: parent.right
+            margins: 5
         }
-
-        spacing: 15
-
-        CalendarHeaderButton {
-            Layout.margins: 10
-            Layout.rightMargin: 0
-            forceCircle: true
-            glass: true
-            downAction: () => {
-                root.setCollapsed(false);
-            }
-            contentItem: MaterialSymbol {
-                text: "keyboard_arrow_up"
-                iconSize: Appearance.font.pixelSize.larger
-                horizontalAlignment: Text.AlignHCenter
-                color: Appearance.colors.colOnLayer1
-            }
-        }
-
-        StyledText {
-            property int remainingTasks: Todo.list.filter(task => !task.done).length
-            Layout.margins: 10
-            Layout.leftMargin: 0
-            // text: `${DateTime.collapsedCalendarFormat}   •   ${remainingTasks} task${remainingTasks > 1 ? "s" : ""}`
-            text: Translation.tr("%1   •   %2 tasks").arg(DateTime.collapsedCalendarFormat).arg(remainingTasks)
-            font.pixelSize: Appearance.font.pixelSize.large
-            color: Appearance.colors.colOnLayer1
-        }
+        // The card hosts three tabs, so the header names the one on screen;
+        // the readout keeps the date and the open task count the old
+        // collapsed row used to show, in both states.
+        headerIcon: root.currentTabData.icon
+        title: root.currentTabData.name
+        trailingText: Translation.tr("%1   •   %2 tasks").arg(DateTime.collapsedCalendarFormat).arg(root.remainingTasks)
+        collapsed: root.collapsed
+        onCollapseToggled: Persistent.states.sidebar.bottomGroup.collapsed = !Persistent.states.sidebar.bottomGroup.collapsed
     }
 
-    // The thing when expanded
     RowLayout {
         id: bottomWidgetGroupRow
 
-        opacity: collapsed ? 0 : 1
-        visible: opacity > 0
-        Behavior on opacity {
-            NumberAnimation {
-                id: bottomWidgetGroupRowFade
-                duration: Appearance.animation.elementMove.duration / 2
-                easing.type: Appearance.animation.elementMove.type
-                easing.bezierCurve: Appearance.animation.elementMove.bezierCurve
-            }
+        visible: !root.collapsed
+        anchors {
+            top: header.bottom
+            left: parent.left
+            right: parent.right
+            bottom: parent.bottom
+            topMargin: 5
+            leftMargin: 5
+            rightMargin: 5
+            bottomMargin: 5
         }
-
-        anchors.fill: parent
-        // implicitHeight: tabStack.implicitHeight
         spacing: 20
 
         // Navigation rail
         Item {
             Layout.fillHeight: true
             Layout.fillWidth: false
-            Layout.leftMargin: 10
-            Layout.topMargin: 10
+            Layout.leftMargin: 5
+            Layout.topMargin: 5
             implicitWidth: tabBar.implicitWidth
             // Navigation rail buttons
             NavigationRailTabArray {
@@ -182,28 +141,12 @@ Rectangle {
                     }
                 }
             }
-            // Collapse button
-            CalendarHeaderButton {
-                anchors.left: parent.left
-                anchors.top: parent.top
-                forceCircle: true
-                downAction: () => {
-                    root.setCollapsed(true);
-                }
-                contentItem: MaterialSymbol {
-                    text: "keyboard_arrow_down"
-                    iconSize: Appearance.font.pixelSize.larger
-                    horizontalAlignment: Text.AlignHCenter
-                    color: Appearance.colors.colOnLayer1
-                }
-            }
         }
 
         // Content area
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            // implicitHeight: tabStack.implicitHeight
 
             Loader {
                 id: tabStack
@@ -211,17 +154,19 @@ Rectangle {
                 anchors.bottomMargin: -anchors.topMargin
 
                 Component.onCompleted: {
-                    tabStack.source = root.tabs[root.selectedTab].widget;
+                    tabStack.source = root.currentTabData.widget;
                 }
 
                 Connections {
                     target: root
                     function onSelectedTabChanged() {
-                        if (root.currentTab > root.previousIndex)
+                        // previousIndex is updated when the switch animation
+                        // finishes, so it still holds the tab left behind.
+                        if (root.selectedTab > root.previousIndex)
                             tabSwitchBehavior.animation.down = true;
-                        else if (root.currentTab < root.previousIndex)
+                        else if (root.selectedTab < root.previousIndex)
                             tabSwitchBehavior.animation.down = false;
-                        tabStack.source = root.tabs[root.selectedTab].widget;
+                        tabStack.source = root.currentTabData.widget;
                     }
                 }
 
