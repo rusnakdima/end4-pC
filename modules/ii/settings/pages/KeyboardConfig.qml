@@ -659,8 +659,17 @@ ContentPage {
                             // every open starts from the draft with fresh field
                             // bindings — a typed-in TextField drops its binding
                             // and a surviving instance would show stale text.
+                            //
+                            // preferredHeight is pinned to the live item on
+                            // purpose: after the item is destroyed the Loader
+                            // keeps its last height (measured: 660 px of empty
+                            // slab with active=false), which is exactly the
+                            // leftover space after Cancel/Save.
                             Loader {
                                 Layout.fillWidth: true
+                                Layout.preferredHeight:
+                                    (active && item !== null && item !== undefined)
+                                        ? item.implicitHeight : 0
                                 active: page.formOpen
                                 sourceComponent: Component {
                                     KeybindForm {
