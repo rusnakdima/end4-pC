@@ -303,6 +303,7 @@ ContentPage {
         if (page.capturing === "form") {
             // The form takes the combination instead of writing an
             // override: it belongs to the draft until Save.
+            console.log("[kbd] form capture: " + combo);
             page.formCombo = combo;
             page.formError = "";
             page.stopCapture();
@@ -325,6 +326,8 @@ ContentPage {
     property bool formOpen: false
     property string formMode: "create"
     property string formEditId: ""
+    onFormOpenChanged: console.log("[kbd] formOpen=" + formOpen
+        + " mode=" + formMode + " capturing=" + JSON.stringify(capturing))
     // The combo the entry is written with in the file. It differs from
     // formCombo while an override moves the bind, and it is what the
     // entry's own id in the conflict index is built from.
@@ -403,8 +406,14 @@ ContentPage {
             command: page.formCommand.trim(),
             combo: page.formCombo
         };
+        console.log("[kbd] saveForm mode=" + page.formMode
+            + " name=" + JSON.stringify(entry.name)
+            + " combo=" + JSON.stringify(entry.combo)
+            + " command=" + JSON.stringify(entry.command)
+            + " category=" + JSON.stringify(entry.category));
         const error = ManagedKeybinds.validate(entry);
         if (error !== "") {
+            console.error("[kbd] saveForm validate: " + error);
             page.formError = page.formErrorMessage(error);
             return;
         }
@@ -412,9 +421,11 @@ ContentPage {
             ? ManagedKeybinds.update(page.formEditId, entry)
             : ManagedKeybinds.create(entry);
         if (!result.ok) {
+            console.error("[kbd] saveForm service: " + result.error);
             page.formError = page.formErrorMessage(result.error);
             return;
         }
+        console.log("[kbd] saveForm ok, closing");
         page.closeForm();
     }
 

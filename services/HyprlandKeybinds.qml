@@ -33,13 +33,18 @@ Singleton {
     })
 
     // The categories of the keybind list. The first entry is the empty one,
-    // which holds the binds that sit above the first section marker.
+    // which holds the binds that sit above the first section marker. The
+    // tree nests (Window, Workspace, Session, Apps sit one level down in
+    // the theme's keybinds.lua), so the walk is recursive — otherwise the
+    // form's chips offer less than the list itself shows.
     readonly property var categories: {
         const names = [""];
-        for (const section of (root.keybinds.children ?? [])) {
+        const collect = section => {
             const name = section?.name ?? "";
             if (name !== "" && !names.includes(name)) names.push(name);
-        }
+            for (const child of (section?.children ?? [])) collect(child);
+        };
+        for (const section of (root.keybinds.children ?? [])) collect(section);
         return names;
     }
 

@@ -64,6 +64,9 @@ Singleton {
         onLoadFailed: error => {
             // No file yet: the managed block starts empty, which is the
             // normal state before the first keybind is created.
+            console.log("[kbd] loadFailed path=" + root.keybindsPath
+                + " error=" + error + " pendingWrite=" + root.pendingWrite
+                + " wrote=" + root.wrote);
             root.loaded = true;
             root.loadGeneration += 1;
             if (error === FileViewError.FileNotFound && !root.pendingWrite && !root.wrote) {
@@ -73,28 +76,45 @@ Singleton {
     }
 
     // hypr/custom is user owned and normally already there, but a fresh
-    // installation has no custom directory at all.
+    // installation has no custom directory at all. The mkdir runs once at
+    // startup so that by the time the user saves, the directory is known
+    // to exist and the write can happen inside the same event — a save
+    // must not depend on a process hop that a config reload could kill.
     Process {
         id: mkdirProc
+        running: true
         command: ["mkdir", "-p", root.keybindsDir]
         onExited: (exitCode, exitStatus) => {
+            root.dirReady = true;
             if (!root.pendingWrite) return;
             root.pendingWrite = false;
             root.writeFile();
         }
     }
 
+    // The directory exists (startup mkdir finished), so a save writes
+    // directly instead of queueing behind a process.
+    property bool dirReady: false
+
     function reload() {
         // A write in flight owns the file. Reading it now would drop the
         // change that is about to be written.
-        if (root.pendingWrite) return;
+        if (root.pendingWrite) { console.log("[kbd] reload skipped (pendingWrite)"); return; }
 
         root.loaded = true;
         root.loadGeneration += 1;
         root.entries = KeybindStore.parseBlock(keybindsFile.text() ?? "");
+        console.log("[kbd] reload gen=" + root.loadGeneration
+            + " entries=" + root.entries.length);
     }
 
     function write() {
+        console.log("[kbd] write() dirReady=" + root.dirReady
+            + " entries=" + root.entries.length);
+        if (root.dirReady) {
+            root.writeFile();
+            return;
+        }
         root.pendingWrite = true;
         if (!mkdirProc.running) mkdirProc.running = true;
     }
@@ -109,9 +129,13 @@ Singleton {
         try {
             current = keybindsFile.text() ?? "";
         } catch (e) {
+            console.error("[kbd] writeFile: reading the current text failed: " + e);
             current = "";
         }
-        keybindsFile.setText(KeybindStore.splice(current, block));
+        const next = KeybindStore.splice(current, block);
+        console.log("[kbd] writeFile path=" + root.keybindsPath
+            + " bytes=" + next.length);
+        keybindsFile.setText(next);
         Quickshell.execDetached(["hyprctl", "reload"]);
     }
 
@@ -124,15 +148,16 @@ Singleton {
     // Adds an entry to the block. Returns {ok, error, id}: error is a
     // validation code, id the new entry's id when ok.
     function create(entry) {
-        if (!root.loaded) return { ok: false, error: "not-loaded", id: "" };
+        if (!root.loaded) { console.error("[kbd] create rejected: not-loaded"); return { ok: false, error: "not-loaded", id: "" }; }
 
         const id = KeybindStore.newId();
         const next = Object.assign({}, entry, { id: id });
         const error = KeybindStore.validate(next);
-        if (error !== "") return { ok: false, error: error, id: "" };
+        if (error !== "") { console.error("[kbd] create invalid: " + error); return { ok: false, error: error, id: "" }; }
 
         root.entries = root.entries.concat([next]);
         root.write();
+        console.log("[kbd] create ok id=" + id + " combo=" + next.combo);
         return { ok: true, error: "", id: id };
     }
 
