@@ -80,9 +80,6 @@ Item {
                 WSearchField {
                     id: searchField
                     Layout.fillWidth: true
-                    // Bleeds to the body edge, like the progress row above.
-                    Layout.leftMargin: -4
-                    Layout.rightMargin: -4
                     placeholderText: Translation.tr("Search devices")
                 }
 

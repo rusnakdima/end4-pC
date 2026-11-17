@@ -5,14 +5,14 @@ import qs.modules.common
 import qs.modules.common.widgets
 
 /**
- * The search row of a dialog: one bar that spans the whole panel, with the
- * search glyph inside it, the text field, and a clear button that only
- * exists while there is something to clear.
+ * The search row of a dialog: one bar with the search glyph inside it, the
+ * text field, and a clear button that only exists while there is something
+ * to clear.
  *
- * The row bleeds past the dialog's content inset (Appearance.rounding.large
- * on each side) exactly like the separators and the list below it, and pads
- * its own contents by the same amount, so the glyph lands on the same x as
- * the icons of the rows it filters.
+ * The row keeps the dialog's content inset on the left and right - the same
+ * x as the title above it - and pads its own contents by 16 px, so the bar
+ * reads as a control inside the panel rather than a strip welded to its
+ * edges.
  *
  * The contract is deliberately tiny - text, placeholderText, autoFocus,
  * accepted - so every dialog that embeds it behaves the same way. The
@@ -34,12 +34,10 @@ Item {
 
     implicitHeight: 48
     Layout.fillWidth: true
-    Layout.leftMargin: -Appearance.rounding.large
-    Layout.rightMargin: -Appearance.rounding.large
 
     Rectangle {
-        // The bar itself: full panel width, pill shaped, one step above
-        // the panel background like every other field in the shell.
+        // The bar itself: pill shaped, one step above the panel background
+        // like every other field in the shell.
         anchors.fill: parent
         radius: Appearance.rounding.full
         color: Appearance.colors.colLayer1
@@ -47,8 +45,8 @@ Item {
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: Appearance.rounding.large
-        anchors.rightMargin: Appearance.rounding.large
+        anchors.leftMargin: 16
+        anchors.rightMargin: 16
         spacing: 12
 
         MaterialSymbol {
