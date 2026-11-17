@@ -1,9 +1,9 @@
 [Unit]
 Description=Sunshine for hidden Hyprland (@HIDDEN_OUTPUT@)
-After=hyprland-remote.service pipewire.service
-Requires=hyprland-remote.service
+After=pipewire.service
 
 [Service]
+ExecStartPre=/usr/bin/bash -c 'for i in $(seq 1 60); do [ -S @RUNTIME@/remote/wayland-1 ] && exit 0; sleep 1; done; exit 1'
 Environment=XDG_RUNTIME_DIR=@RUNTIME@/remote
 Environment=WAYLAND_DISPLAY=wayland-1
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=@RUNTIME@/bus
