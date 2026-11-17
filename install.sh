@@ -191,6 +191,13 @@ patch_hyprland_env() {
             "$TARGET_HOME" >> "$tmp"
     fi
 
+    # Qt draws its own titlebar on Wayland; this drops the decoration and with
+    # it the close/maximize/minimize buttons. GTK apps are handled by
+    # configure_window_decorations below.
+    if [[ $DISABLE_WINDOW_BUTTONS -eq 1 ]] && ! grep -q 'QT_WAYLAND_DISABLE_WINDOWDECORATION' "$tmp"; then
+        printf '\nhl.env("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1")\n' >> "$tmp"
+    fi
+
     chmod --reference="$envlua" "$tmp" 2>/dev/null || chmod 644 "$tmp"
     mv -f "$tmp" "$envlua"
 
@@ -232,6 +239,67 @@ patch_hyprland_lua() {
     if ! grep -qF "$need" "$luafile"; then
         printf '\n-- end4-pC: animation preset overrides\n%s\n' "$need" >> "$luafile"
         echo "[install] Added animation-override require to $luafile"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Window titlebar buttons
+# ---------------------------------------------------------------------------
+# Hyprland never draws a titlebar: the close/maximize/minimize buttons belong
+# to the toolkit the app uses (GTK, Qt, Electron, ...). That is why there is
+# no option for them in hyprland.conf, and why the switch lives in the toolkit
+# configuration:
+#
+#   GTK 3/4          gtk-decoration-layout=":"      no buttons, titlebar stays
+#   Qt (Wayland)     QT_WAYLAND_DISABLE_WINDOWDECORATION=1  no titlebar at all
+#                    (written into hyprland/env.lua by patch_hyprland_env)
+#   GNOME/Electron   button-layout="" via gsettings
+#
+# Apps read these at startup, so they have to be restarted to pick the change
+# up. Set DISABLE_WINDOW_BUTTONS=0 to keep the buttons.
+configure_window_decorations() {
+    if [[ $DISABLE_WINDOW_BUTTONS -ne 1 ]]; then
+        echo "[install] Window titlebar buttons: kept (DISABLE_WINDOW_BUTTONS=0)"
+        return 0
+    fi
+    echo "[install] Disabling window titlebar buttons..."
+
+    # An empty layout ("left:right") removes the buttons but keeps the
+    # titlebar, which is all GTK offers: the headerbar itself is app UI, not
+    # a decoration, and cannot be switched off from the outside.
+    local ini
+    for ini in "$TARGET_HOME/.config/gtk-3.0/settings.ini" "$TARGET_HOME/.config/gtk-4.0/settings.ini"; do
+        mkdir -p "$(dirname "$ini")"
+        if [[ ! -f "$ini" ]]; then
+            printf '[Settings]\n' > "$ini"
+        elif ! grep -q '^\[Settings\]' "$ini"; then
+            # GTK ignores keys outside a group, so add the header if missing.
+            local tmp
+            tmp=$(mktemp "${ini}.XXXXXX")
+            { printf '[Settings]\n'; cat "$ini"; } > "$tmp"
+            chmod --reference="$ini" "$tmp" 2>/dev/null || chmod 644 "$tmp"
+            mv -f "$tmp" "$ini"
+        fi
+        if grep -q '^gtk-decoration-layout=' "$ini"; then
+            sed -i 's|^gtk-decoration-layout=.*|gtk-decoration-layout=:|' "$ini"
+        else
+            printf 'gtk-decoration-layout=:\n' >> "$ini"
+        fi
+        chown "$TARGET_USER" "$ini" 2>/dev/null || true
+    done
+
+    # Some Electron/Chromium builds read the GNOME setting instead of the GTK
+    # one. Best effort: dconf needs the user's D-Bus session, which is not
+    # there when the installer runs from a TTY.
+    if command -v gsettings >/dev/null 2>&1; then
+        local -a gs=(gsettings)
+        if [[ $(id -u) -eq 0 ]] && id "$TARGET_USER" &>/dev/null; then
+            gs=(sudo -u "$TARGET_USER" gsettings)
+        fi
+        if ! "${gs[@]}" set org.gnome.desktop.wm.preferences button-layout ':' 2>/dev/null; then
+            echo "[install] NOTE: could not write the GNOME button-layout (no D-Bus session)." >&2
+            echo "[install]       Run: gsettings set org.gnome.desktop.wm.preferences button-layout ':'" >&2
+        fi
     fi
 }
 
@@ -575,6 +643,14 @@ verify() {
         test -d "$TARGET_HOME/.local/state/quickshell/.venv"
     check "~/.config/ii-sddm-theme/sddm-wallpaper-sync.sh exists" \
         test -f "$TARGET_HOME/.config/ii-sddm-theme/sddm-wallpaper-sync.sh"
+    if [[ $DISABLE_WINDOW_BUTTONS -eq 1 ]]; then
+        check "window buttons disabled (GTK 3)" \
+            grep -q '^gtk-decoration-layout=:' "$TARGET_HOME/.config/gtk-3.0/settings.ini"
+        check "window buttons disabled (GTK 4)" \
+            grep -q '^gtk-decoration-layout=:' "$TARGET_HOME/.config/gtk-4.0/settings.ini"
+        check "window buttons disabled (Qt env)" \
+            grep -q 'QT_WAYLAND_DISABLE_WINDOWDECORATION' "$TARGET_HOME/.config/hypr/hyprland/env.lua"
+    fi
 
     echo ""
     echo "[install] Smoke check: $ok passed, $fail failed"
@@ -593,10 +669,15 @@ verify() {
 # install.
 SKIP_CHECKS=0
 WITH_WAYDROID=0
+# Window titlebar buttons (close/maximize/minimize) are toolkit-side, see
+# configure_window_decorations. On by default; DISABLE_WINDOW_BUTTONS=0 or
+# --keep-window-buttons leaves the apps alone.
+DISABLE_WINDOW_BUTTONS="${DISABLE_WINDOW_BUTTONS:-1}"
 for arg in "$@"; do
     case "$arg" in
         --skip-checks) SKIP_CHECKS=1 ;;
         --with-waydroid) WITH_WAYDROID=1 ;;
+        --keep-window-buttons) DISABLE_WINDOW_BUTTONS=0 ;;
     esac
 done
 
@@ -669,6 +750,7 @@ main() {
     install_hyprland_config
     patch_hyprland_env
     patch_hyprland_lua
+    configure_window_decorations
     install_fish_config
     install_kitty_config
     install_omp_config

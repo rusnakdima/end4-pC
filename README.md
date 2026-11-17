@@ -139,6 +139,28 @@ hl.bind("SUPER + escape", hl.dsp.global("quickshell:settingsToggle"), {descripti
 
 Open the launcher (`SUPER`) and type `<` — it'll show you the full list of configured keybinds.
 
+### How do I get rid of the close / maximize / minimize buttons?
+
+Hyprland does not draw titlebars at all — the buttons belong to the app's own
+toolkit, so there is no `hyprland.conf` option for them. `install.sh` turns them
+off by default; to do it by hand:
+
+```bash
+# GTK 3/4 apps: no buttons, titlebar stays (apps must be restarted)
+for f in ~/.config/gtk-3.0/settings.ini ~/.config/gtk-4.0/settings.ini; do
+    sed -i 's|^gtk-decoration-layout=.*|gtk-decoration-layout=:|' "$f"
+    grep -q '^gtk-decoration-layout=' "$f" || echo 'gtk-decoration-layout=:' >> "$f"
+done
+# GNOME/Electron consumers of the same setting
+gsettings set org.gnome.desktop.wm.preferences button-layout ':'
+# Qt on Wayland: no titlebar/buttons at all (put it in hyprland/env.lua)
+hl.env("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1")
+```
+
+GTK only removes the buttons; the headerbar itself is app UI and stays.
+Run the installer with `--keep-window-buttons` (or `DISABLE_WINDOW_BUTTONS=0`)
+to leave everything untouched.
+
 ### Why doesn't Settings have a search bar?
 
 It doesn't need one — the launcher already does that job. Open the launcher (`SUPER`) and just type what you're looking for (e.g. `wallpaper`, `bar`, `blur`); it'll match against page names and section keywords and jump you straight to the right Settings page, so there's no need for a separate search inside Settings itself.
