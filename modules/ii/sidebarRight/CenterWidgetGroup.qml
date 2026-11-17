@@ -1,5 +1,6 @@
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.modules.common.functions
 import qs.services
 import qs.modules.ii.sidebarRight.notifications
 import Qt5Compat.GraphicalEffects
@@ -17,6 +18,9 @@ Rectangle {
     }
     radius: Appearance.rounding.normal
     color: Appearance.colors.colLayer1
+    // The collapsible cards all wear the same hairline.
+    border.width: 1
+    border.color: ColorUtils.transparentize(Appearance.colors.colOutlineVariant, 0.55)
     // The list clips itself, but the card is the thing with the rounded
     // corners: a half-height spoiler must never paint its body outside them.
     clip: true

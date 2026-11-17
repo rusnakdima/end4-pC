@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.modules.common.functions
 import qs.services
 import qs.modules.ii.sidebarRight.calendar
 import qs.modules.ii.sidebarRight.todo
@@ -18,6 +19,9 @@ Rectangle {
     }
     radius: Appearance.rounding.normal
     color: Appearance.colors.colLayer1
+    // The collapsible cards all wear the same hairline.
+    border.width: 1
+    border.color: ColorUtils.transparentize(Appearance.colors.colOutlineVariant, 0.55)
     clip: true
     implicitHeight: collapsed ? collapsedBottomWidgetGroupRow.implicitHeight : 350
     property int selectedTab: Persistent.states.sidebar.bottomGroup.tab

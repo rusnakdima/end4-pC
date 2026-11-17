@@ -483,6 +483,9 @@ Item {
                 // The panels now stay transparent so there is still only one
                 // card (they used to be the card).
                 color: Appearance.colors.colLayer1
+                // The collapsible cards all wear the same hairline.
+                border.width: 1
+                border.color: ColorUtils.transparentize(Appearance.colors.colOutlineVariant, 0.55)
 
                 WindowGlass {
                     anchors.fill: parent

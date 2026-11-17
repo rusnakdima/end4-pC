@@ -2,6 +2,7 @@ import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.modules.common.functions
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -24,6 +25,10 @@ Rectangle {
     implicitHeight: contentItem.implicitHeight + root.verticalPadding * 2
     radius: Appearance.rounding.normal
     color: Appearance.colors.colLayer1
+    // Same hairline as the settings spoiler blocks, so a collapsible card
+    // reads as the same kind of block wherever it is.
+    border.width: 1
+    border.color: ColorUtils.transparentize(Appearance.colors.colOutlineVariant, 0.55)
     property real verticalPadding: 4
     property real horizontalPadding: 12
 

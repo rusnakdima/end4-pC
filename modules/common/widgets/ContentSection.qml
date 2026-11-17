@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import qs
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.modules.common.functions
 
 ColumnLayout {
     id: root
@@ -18,6 +19,10 @@ ColumnLayout {
 
     readonly property string sectionId: root.title
     readonly property bool collapsed: root.collapsible && Config.options.settings.collapsedSections.includes(root.sectionId)
+
+    // Inset of the block: neither the header nor the content ever touches
+    // the border.
+    readonly property real cardPadding: 12
 
     property real flashScan: 0
     property real flashPop: 0
@@ -80,111 +85,147 @@ ColumnLayout {
     }
 
     Layout.fillWidth: true
-    spacing: 6
+    spacing: 0
 
-    Item {
-        id: header
+    // A whole section is one block: slate panel, hairline border, and the
+    // header as its spoiler bar - the same chrome the per-app window rules
+    // wear, so every settings module reads as a stack of those blocks.
+    Rectangle {
+        id: card
         Layout.fillWidth: true
-        implicitHeight: headerRow.implicitHeight
+        implicitHeight: cardColumn.implicitHeight + root.cardPadding * 2
+        radius: Appearance.rounding.normal
+        color: headerArea.containsMouse
+            ? Appearance.colors.colLayer2Hover
+            : Appearance.colors.colLayer2
+        border.width: 1
+        border.color: headerArea.containsMouse
+            ? Appearance.colors.colOutlineVariant
+            : ColorUtils.transparentize(Appearance.colors.colOutlineVariant, 0.55)
 
-        RowLayout {
-            id: headerRow
-            anchors.left: parent.left
-            anchors.right: parent.right
-            spacing: 6
-
-            MaterialShapeWrappedMaterialSymbol {
-                text: root.icon
-                iconSize: Appearance.font.pixelSize.large + 1
-                wrappedShape: root.shape
-                color: bgColor
-                scale: 1 + 0.3 * root.flashPop
-            }
-            StyledText {
-                text: root.title
-                font.pixelSize: Appearance.font.pixelSize.larger
-                font.weight: Font.Medium
-                color: Qt.tint(Appearance.colors.colOnSecondaryContainer, Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, root.flashTint))
-
-                TitleScanLine {
-                    anchors.left: parent.left
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: -3
-                    width: parent.width
-                    position: root.flashScan
-                    opacity: root.flashTint
-                }
-            }
-
-            MaterialSymbol {
-                id: hintSymbol
-                visible: root.hint.length > 0
-                Layout.leftMargin: 2
-                text: root.hintIcon
-                iconSize: Appearance.font.pixelSize.larger
-                color: Appearance.colors.colSubtext
-                opacity: hintArea.containsMouse ? 1 : 0.55
-
-                Behavior on opacity {
-                    NumberAnimation { duration: 150 }
-                }
-
-                MouseArea {
-                    id: hintArea
-                    anchors.fill: parent
-                    anchors.margins: -4
-                    hoverEnabled: true
-                    cursorShape: Qt.WhatsThisCursor
-                }
-
-                StyledToolTip {
-                    extraVisibleCondition: hintArea.containsMouse
-                    text: root.hint
-                }
-            }
-
-            Item { Layout.fillWidth: true }
-
-            MaterialSymbol {
-                visible: root.collapsible
-                text: root.collapsed ? "expand_more" : ""
-                iconSize: Appearance.font.pixelSize.larger
-                color: Appearance.colors.colOnSecondaryContainer
-                opacity: 0.7
-            }
+        Behavior on color {
+            animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
         }
-
-        MouseArea {
-            anchors.fill: parent
-            enabled: root.collapsible
-            cursorShape: root.collapsible ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: clickTimer.restart()
-            onDoubleClicked: {
-                clickTimer.stop()
-                root.collapseAllSiblings()
-            }
-
-            Timer {
-                id: clickTimer
-                interval: 250
-                onTriggered: root.toggleCollapsed()
-            }
-        }
-    }
-
-    Item {
-        Layout.fillWidth: true
-        clip: true
-        implicitHeight: root.collapsed ? 0 : sectionContent.implicitHeight
-
-        Behavior on implicitHeight {
-            NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+        Behavior on border.color {
+            animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
         }
 
         ColumnLayout {
-            id: sectionContent
-            width: parent.width
-            spacing: 4
+            id: cardColumn
+            x: root.cardPadding
+            y: root.cardPadding
+            width: parent.width - root.cardPadding * 2
+            spacing: root.collapsed ? 0 : 6
+
+            Item {
+                id: header
+                Layout.fillWidth: true
+                implicitHeight: headerRow.implicitHeight
+
+                RowLayout {
+                    id: headerRow
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    spacing: 6
+
+                    MaterialShapeWrappedMaterialSymbol {
+                        text: root.icon
+                        iconSize: Appearance.font.pixelSize.large + 1
+                        wrappedShape: root.shape
+                        color: bgColor
+                        scale: 1 + 0.3 * root.flashPop
+                    }
+                    StyledText {
+                        text: root.title
+                        font.pixelSize: Appearance.font.pixelSize.larger
+                        font.weight: Font.Medium
+                        color: Qt.tint(Appearance.colors.colOnSecondaryContainer, Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, root.flashTint))
+
+                        TitleScanLine {
+                            anchors.left: parent.left
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: -3
+                            width: parent.width
+                            position: root.flashScan
+                            opacity: root.flashTint
+                        }
+                    }
+
+                    MaterialSymbol {
+                        id: hintSymbol
+                        visible: root.hint.length > 0
+                        Layout.leftMargin: 2
+                        text: root.hintIcon
+                        iconSize: Appearance.font.pixelSize.larger
+                        color: Appearance.colors.colSubtext
+                        opacity: hintArea.containsMouse ? 1 : 0.55
+
+                        Behavior on opacity {
+                            NumberAnimation { duration: 150 }
+                        }
+
+                        MouseArea {
+                            id: hintArea
+                            anchors.fill: parent
+                            anchors.margins: -4
+                            hoverEnabled: true
+                            cursorShape: Qt.WhatsThisCursor
+                        }
+
+                        StyledToolTip {
+                            extraVisibleCondition: hintArea.containsMouse
+                            text: root.hint
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // The same chevron language as the per-app blocks:
+                    // down while shut, up while open.
+                    MaterialSymbol {
+                        visible: root.collapsible
+                        text: root.collapsed ? "expand_more" : "expand_less"
+                        iconSize: Appearance.font.pixelSize.larger
+                        color: Appearance.colors.colOnSecondaryContainer
+                        opacity: 0.7
+                    }
+                }
+
+                MouseArea {
+                    id: headerArea
+                    anchors.fill: parent
+                    enabled: root.collapsible
+                    hoverEnabled: root.collapsible
+                    cursorShape: root.collapsible ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: clickTimer.restart()
+                    onDoubleClicked: {
+                        clickTimer.stop()
+                        root.collapseAllSiblings()
+                    }
+
+                    Timer {
+                        id: clickTimer
+                        interval: 250
+                        onTriggered: root.toggleCollapsed()
+                    }
+                }
+            }
+
+            Item {
+                Layout.fillWidth: true
+                clip: true
+                implicitHeight: root.collapsed ? 0 : sectionContent.implicitHeight
+
+                Behavior on implicitHeight {
+                    NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+                }
+
+                ColumnLayout {
+                    id: sectionContent
+                    width: parent.width
+                    spacing: 4
+                }
+            }
         }
     }
 }
