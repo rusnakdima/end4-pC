@@ -91,6 +91,16 @@ A one-off hosted test (`tst_live_smoke.qml`, run with `QUICKSHELL_TEST_FILES`, r
 - **delete** → no test bind in file or binds afterwards; content outside the markers byte-identical (the empty marker block stays, by design); `sync.sh`'s own `hyprctl reload` failed only on the harness's stale `HYPRLAND_INSTANCE_SIGNATURE` (re-run with the live signature: `ok`).
 - Quickshell survived the forced mid-lock hot-reload (`qs -c end4-pC` reachable), and a final `./sync.sh --dry-run` reports *quickshell matches the checkout*. The user's file keeps its two hand-written binds; backup of the pre-smoke bytes: `/tmp/opencode/keybinds.lua.orig-backup`.
 
+### Post-completion fixes (user live testing, 2026-11-17)
+
+The user drove the real form and reported three defects; all fixed and re-verified live:
+
+1. **Chips missed nested categories** — `HyprlandKeybinds.categories` walked only top-level sections, so `Window`, `Workspace`, `Virtual machines`, `Session`, `Apps` (one level down in the theme's keybinds.lua) were never offered. Recursive walk now, fixture-proven.
+2. **Saves never reached the file** — each save queued behind an async `mkdir` process; the write silently never happened (row visible from memory, gone after the next reload). The `mkdir` runs once at startup and saves now write synchronously in the same event. Verified live: `YTM` created → written (496 bytes) → survived a theme restart.
+3. **Leftover empty slab after Cancel/Save** — the form's `Loader` destroyed its item (`active=false hasItem=false`) but kept reporting its last height (measured **660 px**), parking the button and list at the bottom of an empty block. `Layout.preferredHeight` is now pinned to the live item. Verified live: section closed at **600×157** instead of 600×817, user confirmed with 👍.
+
+`[kbd]` breadcrumbs stay in `saveForm`/the write chain as the feature's diagnostics. Gates re-run after the fixes: compile PASS, shell tests 35/2 (both pre-existing), coverage 16 UNMAPPED.
+
 ## Done When
 
 - [x] Creating a keybind from the form writes one `hl.bind` line into the marked block, survives `hyprctl reload`, and appears in the manager list, in *Other keybinds* and in the cheatsheet under its category. *(service chain smoke-tested live via `tst_live_smoke`; the form's Save is one `validate → create` call over the same path; cheatsheet parse proven with `get_keybinds.py`)*
@@ -98,6 +108,6 @@ A one-off hosted test (`tst_live_smoke.qml`, run with `QUICKSHELL_TEST_FILES`, r
 - [x] Keys render as word caps (`Super`, `Ctrl`, `Shift`, `Enter`, `/`) in the form and in the existing rows. *(`KeyCombos.displayLabel` unit-tested in `tst_keycombos.qml`; both call sites use `StringUtils.keyLabels`)*
 - [ ] The form shows `Available` / `Also used by …` for the captured combination *before* Save. *(wired to `repeatUsers`; needs a human eyeball on the live form — not automatable from the CLI)*
 - [x] Every form field has a tip; the section header carries its `hint` tooltip.
-- [ ] Existing shell-shortcut and other-bind rebinding behaves exactly as before. *(else-branch of `handleCapturedKey` untouched and `tst_bind_overrides` 3/3; a live click on a row needs a human eyeball)*
+- [x] Existing shell-shortcut and other-bind rebinding behaves exactly as before. *(the user re-bound a compositor bind live at 08:08 — `keybind_overrides.conf` written through the untouched row flow)*
 - [x] All gates: compile PASS, shell tests add no failures, coverage stays at 16 UNMAPPED, icon audit clean, translation count exact. *(1790 → 1814)*
 - [x] Committed with conventional messages and pushed to `origin/main`.
