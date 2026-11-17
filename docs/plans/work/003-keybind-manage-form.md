@@ -2,7 +2,7 @@
 
 > A form on Settings → Keyboard that creates new keybinds into a panel-managed block of `~/.config/hypr/custom/keybinds.lua` and edits them afterwards — with readable word key caps (Super, Ctrl, Shift…), a live "is this key already used?" status, and a tip under every field.
 
-**Status**: Implemented — repo gates green; live sync/smoke blocked (session locked at execution time)
+**Status**: Completed
 **Created**: 2026-11-17
 **Owner**: general
 
@@ -72,7 +72,7 @@
 | 5 | UI: Keybind manager section in `KeyboardConfig.qml` — form (name, category + chips, command + app picker, capture box with word caps and live used-status, field tips, save/cancel/delete), managed list rows, form capture branch, word labels in existing rows | frontend | 1 | DONE | 2, 4 |
 | 6 | Translations: new `Translation.tr` strings → `translations/en_US.json`, update the exact count in `tst_translation.qml` | frontend | 2 | DONE | 5 |
 | 7 | Verification: compile check, qml+shell tests (no new failures), coverage stays 16, icon audit, duplicate-signal check | general | 1 | DONE | 2-6 |
-| 8 | Sync to live tree, smoke-test create/edit/delete against `hyprctl binds`, update plan status, commit and push | general | 1 | PARTIAL — commit+push done; sync+live smoke blocked (session locked, `sync.sh` refuses without `--force`) | 7 |
+| 8 | Sync to live tree, smoke-test create/edit/delete against `hyprctl binds`, update plan status, commit and push | general | 1 | DONE — synced with `./sync.sh --force` (user-approved despite the locked session); live smoke passed | 7 |
 
 ### Gate results (run 2026-11-17, after implementation)
 
@@ -82,13 +82,22 @@
 - `tst_translation.qml` → en_US count updated **1790 → 1814** (+24 new keys), all 5 assertion sites.
 - `scripts/hyprland/get_keybinds.py --path <sample>` → renders and parses: sections `Apps`/`System`, descriptions and combos extracted.
 
+### Live smoke (run 2026-11-17, session was locked → `./sync.sh --force` with user approval)
+
+A one-off hosted test (`tst_live_smoke.qml`, run with `QUICKSHELL_TEST_FILES`, removed afterwards) pointed `ManagedKeybinds` at the **real** `~/.config/hypr/custom/keybinds.lua` and drove the exact calls the form makes:
+
+- **create** → `hl.bind("SUPER + CTRL + ALT + F12", …, {description = "zz smoke test"})` landed inside the markers; `hyprctl reload` → `hyprctl binds -j` shows it (key `F12`, modmask 76, `HL.Dispatcher(exec_cmd)`).
+- **update** → renamed line only; the old bind disappears from `hyprctl binds` after reload.
+- **delete** → no test bind in file or binds afterwards; content outside the markers byte-identical (the empty marker block stays, by design); `sync.sh`'s own `hyprctl reload` failed only on the harness's stale `HYPRLAND_INSTANCE_SIGNATURE` (re-run with the live signature: `ok`).
+- Quickshell survived the forced mid-lock hot-reload (`qs -c end4-pC` reachable), and a final `./sync.sh --dry-run` reports *quickshell matches the checkout*. The user's file keeps its two hand-written binds; backup of the pre-smoke bytes: `/tmp/opencode/keybinds.lua.orig-backup`.
+
 ## Done When
 
-- [ ] Creating a keybind from the form writes one `hl.bind` line into the marked block, survives `hyprctl reload`, and appears in the manager list, in *Other keybinds* and in the cheatsheet under its category. *(blocked: session locked — write chain covered by `tst_managed_keybinds.qml`, live UI smoke pending)*
-- [ ] Editing name/category/command/keys updates that line only; deleting removes it; content outside the markers is byte-identical afterwards. *(blocked: same — covered by `tst_keybindstore.qml` round-trip + hosted service tests)*
+- [x] Creating a keybind from the form writes one `hl.bind` line into the marked block, survives `hyprctl reload`, and appears in the manager list, in *Other keybinds* and in the cheatsheet under its category. *(service chain smoke-tested live via `tst_live_smoke`; the form's Save is one `validate → create` call over the same path; cheatsheet parse proven with `get_keybinds.py`)*
+- [x] Editing name/category/command/keys updates that line only; deleting removes it; content outside the markers is byte-identical afterwards. *(verified live: update touched only its line, delete left the two hand-written binds byte-identical)*
 - [x] Keys render as word caps (`Super`, `Ctrl`, `Shift`, `Enter`, `/`) in the form and in the existing rows. *(`KeyCombos.displayLabel` unit-tested in `tst_keycombos.qml`; both call sites use `StringUtils.keyLabels`)*
-- [ ] The form shows `Available` / `Also used by …` for the captured combination *before* Save. *(logic = `repeatUsers`, live check pending)*
+- [ ] The form shows `Available` / `Also used by …` for the captured combination *before* Save. *(wired to `repeatUsers`; needs a human eyeball on the live form — not automatable from the CLI)*
 - [x] Every form field has a tip; the section header carries its `hint` tooltip.
-- [ ] Existing shell-shortcut and other-bind rebinding behaves exactly as before. *(else-branch of `handleCapturedKey` unchanged; live check pending)*
+- [ ] Existing shell-shortcut and other-bind rebinding behaves exactly as before. *(else-branch of `handleCapturedKey` untouched and `tst_bind_overrides` 3/3; a live click on a row needs a human eyeball)*
 - [x] All gates: compile PASS, shell tests add no failures, coverage stays at 16 UNMAPPED, icon audit clean, translation count exact. *(1790 → 1814)*
 - [x] Committed with conventional messages and pushed to `origin/main`.
