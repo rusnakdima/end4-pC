@@ -5,7 +5,7 @@ set -u
 
 MODE="${1:?start|stop}"
 export XDG_RUNTIME_DIR=@RUNTIME@
-export WAYLAND_DISPLAY=wayland-1
+export WAYLAND_DISPLAY=@WAYLAND_DISPLAY@
 export HOME=@HOME@
 export USER=@USER@
 export LOGNAME=@USER@
@@ -37,7 +37,7 @@ reload_physical_qs() {
     log "restarting physical quickshell"
     setsid env \
         XDG_RUNTIME_DIR=@RUNTIME@ \
-        WAYLAND_DISPLAY=wayland-1 \
+        WAYLAND_DISPLAY=@WAYLAND_DISPLAY@ \
         DBUS_SESSION_BUS_ADDRESS=unix:path=@RUNTIME@/bus \
         HOME=@HOME@ \
         /usr/bin/qs -p @HOME@/.config/quickshell/end4-pC \

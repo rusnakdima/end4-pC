@@ -7,7 +7,7 @@ Wants=wayvnc-mirror.service
 Type=simple
 KillMode=process
 Environment=XDG_RUNTIME_DIR=@RUNTIME@
-Environment=WAYLAND_DISPLAY=wayland-1
+Environment=WAYLAND_DISPLAY=@WAYLAND_DISPLAY@
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=@RUNTIME@/bus
 Environment=VNC_THEME_LOCK=1
 ExecStart=@HOME@/.config/hypr/custom/scripts/vnc-theme-watch @RUNTIME@/wayvncctl-mirror

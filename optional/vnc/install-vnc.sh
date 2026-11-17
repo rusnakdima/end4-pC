@@ -68,12 +68,30 @@ if [[ -f "$CONFIG" ]]; then
     set +a
 fi
 
-VNC_MIRROR_PORT="${VNC_MIRROR_PORT:-5901}"
-VNC_HIDDEN_PORT="${VNC_HIDDEN_PORT:-5902}"
+pick_port() {
+    local p="${1:-5901}"
+    while ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]$p$"; do
+        p=$((p + 1))
+    done
+    printf '%s\n' "$p"
+}
+
+VNC_MODE="${VNC_MODE:-full}"
+VNC_MIRROR_PORT="${VNC_MIRROR_PORT:-$(pick_port 5901)}"
+VNC_HIDDEN_PORT="${VNC_HIDDEN_PORT:-$(pick_port $((VNC_MIRROR_PORT + 1)))}"
 VNC_AUDIO="${VNC_AUDIO:-sunshine}"
 VNC_AUTOLOGIN="${VNC_AUTOLOGIN:-1}"
 VNC_THEME_LOCK="${VNC_THEME_LOCK:-1}"
-VNC_HIDDEN_OUTPUT="${VNC_HIDDEN_OUTPUT:-Virtual-1}"
+VNC_HIDDEN_OUTPUT="${VNC_HIDDEN_OUTPUT:-}"
+VNC_MIRROR_INPUT="${VNC_MIRROR_INPUT:-1}"
+VNC_WAYLAND_DISPLAY="${VNC_WAYLAND_DISPLAY:-}"
+VNC_SESSION="${VNC_SESSION:-}"
+VNC_SUNSHINE_NAME="${VNC_SUNSHINE_NAME:-}"
+
+[[ "$VNC_MODE" == "full" || "$VNC_MODE" == "mirror" ]] || {
+    warn "unknown VNC_MODE='$VNC_MODE'; using full"
+    VNC_MODE=full
+}
 
 if [[ -z "${VNC_BIND_ADDR:-}" ]]; then
     if command -v tailscale >/dev/null 2>&1; then
@@ -92,10 +110,30 @@ fi
 RUNTIME="/run/user/$TARGET_UID"
 HIDDEN_RUNTIME="$RUNTIME/remote"
 BACKUP=/var/lib/end4-pC-vnc/backup
+HOST_SHORT=$(hostname -s 2>/dev/null || hostname)
+
+if [[ -z "${VNC_WAYLAND_DISPLAY:-}" ]]; then
+    for sock in "$RUNTIME"/wayland-*; do
+        [[ -S "$sock" ]] && { VNC_WAYLAND_DISPLAY=$(basename "$sock"); break; }
+    done
+fi
+[[ -n "${VNC_WAYLAND_DISPLAY:-}" ]] || VNC_WAYLAND_DISPLAY=wayland-1
+
+if [[ -z "${VNC_SESSION:-}" ]]; then
+    if [[ -f /usr/share/wayland-sessions/hyprland.desktop ]]; then
+        VNC_SESSION=hyprland
+    else
+        VNC_SESSION=$(basename "$(find /usr/share/wayland-sessions -name '*.desktop' 2>/dev/null | head -n1)" .desktop)
+        [[ -n "$VNC_SESSION" ]] || VNC_SESSION=hyprland
+    fi
+fi
+[[ -n "${VNC_SUNSHINE_NAME:-}" ]] || VNC_SUNSHINE_NAME="$HOST_SHORT-hyprland"
+log "mode=$VNC_MODE user=$TARGET_USER display=$VNC_WAYLAND_DISPLAY session=$VNC_SESSION"
 
 # ---------------------------------------------------------------------------
-# Dependencies and GPU discovery
+# Dependencies and GPU discovery (full mode only)
 # ---------------------------------------------------------------------------
+if [[ "$VNC_MODE" == "full" ]]; then
 command -v pacman >/dev/null 2>&1 || die "pacman is required"
 
 missing=()
@@ -130,13 +168,48 @@ done
 RENDER_DEV=$(ls /dev/dri/renderD* 2>/dev/null | head -n1 || true)
 [[ -n "$RENDER_DEV" ]] || die "DRM render node not found"
 
-log "VKMS=$VKMS_DEV physical=$PHYS_CARD render=$RENDER_DEV"
+# Physical GPU identity for a device-independent Xorg config.
+PHYS_SYS=$(readlink -f "/sys/class/drm/$(basename "$PHYS_CARD")/device" 2>/dev/null || true)
+PCI_SLOT="${PHYS_SYS##*/}"
+VENDOR_ID=$(cat "$PHYS_SYS/vendor" 2>/dev/null || true)
+case "$VENDOR_ID" in
+    0x8086) XORG_DRIVER=modesetting ;;
+    0x1002) XORG_DRIVER=amdgpu ;;
+    0x10de) XORG_DRIVER=nvidia ;;
+    *)      XORG_DRIVER=modesetting ;;
+esac
+XORG_BUSID=""
+if [[ "$PCI_SLOT" =~ ^([0-9a-fA-F]+):([0-9a-fA-F]+):([0-9a-fA-F]+)\.([0-9a-fA-F]+)$ ]]; then
+    XORG_BUSID=$(printf 'PCI:%d:%d:%d' \
+        "$((16#${BASH_REMATCH[2]}))" \
+        "$((16#${BASH_REMATCH[3]}))" \
+        "$((16#${BASH_REMATCH[4]}))")
+fi
+
+# VKMS connector name is normally Virtual-1, but detect it from sysfs.
+if [[ -z "${VNC_HIDDEN_OUTPUT:-}" ]]; then
+    for st in /sys/class/drm/card*-Virtual-*/status; do
+        [[ -f "$st" ]] || continue
+        if [[ "$(cat "$st" 2>/dev/null)" == "connected" ]]; then
+            VNC_HIDDEN_OUTPUT=$(basename "$(dirname "$st")")
+            VNC_HIDDEN_OUTPUT=${VNC_HIDDEN_OUTPUT#*-}
+            break
+        fi
+    done
+fi
+[[ -n "${VNC_HIDDEN_OUTPUT:-}" ]] || VNC_HIDDEN_OUTPUT=Virtual-1
+
+log "VKMS=$VKMS_DEV physical=$PHYS_CARD render=$RENDER_DEV hidden=$VNC_HIDDEN_OUTPUT"
+log "xorg driver=$XORG_DRIVER busid=${XORG_BUSID:-unknown}"
 log "bind=$VNC_BIND_ADDR mirror=$VNC_MIRROR_PORT hidden=$VNC_HIDDEN_PORT audio=$VNC_AUDIO"
+fi
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-$ROOT install -d -m 755 "$BACKUP"
+if [[ "$VNC_MODE" == "full" ]]; then
+    $ROOT install -d -m 755 "$BACKUP"
+fi
 
 backup_file() {
     local f="$1" key
@@ -163,11 +236,17 @@ render() {
         -e "s|@HOME@|$TARGET_HOME|g" \
         -e "s|@RUNTIME@|$RUNTIME|g" \
         -e "s|@BIND@|$VNC_BIND_ADDR|g" \
-        -e "s|@VKMS@|$VKMS_DEV|g" \
-        -e "s|@PHYS@|$PHYS_CARD|g" \
-        -e "s|@RENDER@|$RENDER_DEV|g" \
+        -e "s|@VKMS@|${VKMS_DEV:-}|g" \
+        -e "s|@PHYS@|${PHYS_CARD:-}|g" \
+        -e "s|@RENDER@|${RENDER_DEV:-}|g" \
         -e "s|@MIRROR_PORT@|$VNC_MIRROR_PORT|g" \
         -e "s|@HIDDEN_PORT@|$VNC_HIDDEN_PORT|g" \
+        -e "s|@HIDDEN_OUTPUT@|${VNC_HIDDEN_OUTPUT:-Virtual-1}|g" \
+        -e "s|@WAYLAND_DISPLAY@|$VNC_WAYLAND_DISPLAY|g" \
+        -e "s|@SESSION@|$VNC_SESSION|g" \
+        -e "s|@SUNSHINE_NAME@|$VNC_SUNSHINE_NAME|g" \
+        -e "s|@XORG_DRIVER@|${XORG_DRIVER:-modesetting}|g" \
+        -e "s|@XORG_BUSID@|${XORG_BUSID:-}|g" \
         -e "s|VNC_THEME_LOCK=1|VNC_THEME_LOCK=$VNC_THEME_LOCK|g" \
         "$src" > "$dst"
 }
@@ -188,10 +267,82 @@ install_rendered() {
 }
 
 # ---------------------------------------------------------------------------
+# Mirror-only mode: expose the current physical session, no VKMS/system setup.
+# ---------------------------------------------------------------------------
+if [[ "$VNC_MODE" == "mirror" ]]; then
+    if [[ $(id -u) -eq "$TARGET_UID" ]]; then
+        ROOT=""
+    fi
+
+    for cmd in wayvnc; do
+        command -v "$cmd" >/dev/null 2>&1 || die "$cmd is required"
+    done
+    for cmd in jq grim hyprlock; do
+        command -v "$cmd" >/dev/null 2>&1 || warn "$cmd missing; related theme hooks may be limited"
+    done
+
+    install_rendered "$FILES/user/wayvnc/mirror.conf" \
+        "$TARGET_HOME/.config/wayvnc/mirror.conf" 644 user
+    install_rendered "$FILES/user/systemd/wayvnc-mirror.service" \
+        "$TARGET_HOME/.config/systemd/user/wayvnc-mirror.service" 644 user
+
+    if [[ -d "$TARGET_HOME/.config/quickshell/end4-pC" ]]; then
+        install_rendered "$FILES/user/scripts/vnc-theme-hooks.sh" \
+            "$TARGET_HOME/.config/hypr/custom/scripts/vnc-theme-hooks.sh" 755 user
+        install_rendered "$FILES/user/scripts/vnc-theme-watch" \
+            "$TARGET_HOME/.config/hypr/custom/scripts/vnc-theme-watch" 755 user
+        install_rendered "$FILES/user/systemd/vnc-theme-hooks.service" \
+            "$TARGET_HOME/.config/systemd/user/vnc-theme-hooks.service" 644 user
+        phys_src=""
+        for candidate in \
+            "$TARGET_HOME/.config/hypr/custom/scripts/__video_wallpaper.sh" \
+            "$TARGET_HOME/.config/quickshell/end4-pC/scripts/wallpapers/__video_wallpaper.sh"; do
+            [[ -x "$candidate" ]] && { phys_src="$candidate"; break; }
+        done
+        if [[ -n "$phys_src" ]]; then
+            $ROOT install -d -o "$TARGET_USER" -g "$TARGET_GROUP" \
+                "$TARGET_HOME/.config/hypr/custom/scripts/vnc-physical"
+            $ROOT install -m 755 -o "$TARGET_USER" -g "$TARGET_GROUP" \
+                "$phys_src" "$TARGET_HOME/.config/hypr/custom/scripts/vnc-physical/__video_wallpaper.sh"
+        fi
+    fi
+
+    $ROOT install -d -o "$TARGET_USER" -g "$TARGET_GROUP" "$TARGET_HOME/.config/end4-pC"
+    cat >"$CONFIG" <<CONF
+# Generated by end4-pC optional VNC installer.
+VNC_MODE="mirror"
+VNC_USER="$TARGET_USER"
+VNC_BIND_ADDR="$VNC_BIND_ADDR"
+VNC_MIRROR_PORT="$VNC_MIRROR_PORT"
+VNC_MIRROR_INPUT="$VNC_MIRROR_INPUT"
+VNC_WAYLAND_DISPLAY="$VNC_WAYLAND_DISPLAY"
+VNC_THEME_LOCK="$VNC_THEME_LOCK"
+CONF
+    chown "$TARGET_USER:$TARGET_GROUP" "$CONFIG" 2>/dev/null || true
+    chmod 600 "$CONFIG" 2>/dev/null || true
+
+    run_as_target systemctl --user daemon-reload || warn "user systemd not reachable"
+    run_as_target systemctl --user enable --now wayvnc-mirror.service || warn "could not start wayvnc mirror"
+    if [[ -f "$TARGET_HOME/.config/systemd/user/vnc-theme-hooks.service" ]]; then
+        run_as_target systemctl --user enable --now vnc-theme-hooks.service || warn "could not start VNC theme hooks"
+    fi
+
+    if [[ $(id -u) -eq 0 ]] && command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi active; then
+        ufw allow from 100.64.0.0/10 to any port "$VNC_MIRROR_PORT" proto tcp comment 'end4-pC VNC mirror' || true
+    fi
+
+    log "installed mirror-only VNC"
+    log "  physical mirror: vnc://$VNC_BIND_ADDR:$VNC_MIRROR_PORT"
+    log "  display=$VNC_WAYLAND_DISPLAY user=$TARGET_USER"
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
 # System configuration
 # ---------------------------------------------------------------------------
 backup_file /etc/environment
 backup_file /etc/sddm.conf.d/10-autologin.conf
+backup_file /etc/X11/xorg.conf.d/99-physical-only.conf
 backup_file /etc/X11/xorg.conf.d/99-intel-only.conf
 
 printf 'vkms\n' | $ROOT tee /etc/modules-load.d/vkms.conf >/dev/null
@@ -208,11 +359,16 @@ fi
 printf 'AQ_DRM_DEVICES=%s\nLIBSEAT_BACKEND=logind\n' "$PHYS_CARD" |
     $ROOT tee -a /etc/environment >/dev/null
 
-if lspci 2>/dev/null | grep -qi 'Intel.*VGA'; then
-    install_rendered "$FILES/system/xorg/99-intel-only.conf" \
-        /etc/X11/xorg.conf.d/99-intel-only.conf 644
+DISPLAY_SERVER=$(grep -Rhs '^DisplayServer=' /etc/sddm.conf /etc/sddm.conf.d 2>/dev/null | tail -n1 | cut -d= -f2 || true)
+if [[ "${DISPLAY_SERVER:-x11}" == "wayland" ]]; then
+    log "display manager is Wayland; skipping Xorg physical-only config"
+elif [[ -n "${XORG_BUSID:-}" ]]; then
+    install_rendered "$FILES/system/xorg/99-physical-only.conf" \
+        /etc/X11/xorg.conf.d/99-physical-only.conf 644
+    $ROOT rm -f /etc/X11/xorg.conf.d/99-intel-only.conf
+    log "installed Xorg physical-only config: driver=$XORG_DRIVER busid=$XORG_BUSID"
 else
-    warn "no Intel VGA detected; skipping Xorg Intel-only config"
+    warn "physical GPU PCI BusID not detected; skipping Xorg config"
     warn "the physical display manager may claim VKMS and block the hidden session"
 fi
 

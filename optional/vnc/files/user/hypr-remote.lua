@@ -6,7 +6,7 @@ HOME = home
 dofile(home .. "/.config/hypr/hyprland.lua")
 
 hl.monitor({
-    output   = "Virtual-1",
+    output   = "@HIDDEN_OUTPUT@",
     mode     = "1920x1080@60",
     position = "0x0",
     scale    = 1,

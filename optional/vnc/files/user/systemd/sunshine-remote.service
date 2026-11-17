@@ -1,5 +1,5 @@
 [Unit]
-Description=Sunshine for hidden Hyprland (Virtual-1)
+Description=Sunshine for hidden Hyprland (@HIDDEN_OUTPUT@)
 After=hyprland-remote.service pipewire.service
 Requires=hyprland-remote.service
 

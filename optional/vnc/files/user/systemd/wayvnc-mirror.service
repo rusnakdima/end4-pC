@@ -1,11 +1,11 @@
 [Unit]
-Description=WayVNC mirror of physical Hyprland (DP-1, interactive)
+Description=WayVNC physical session mirror (interactive)
 After=graphical-session.target
 PartOf=graphical-session.target
 
 [Service]
 Environment=XDG_RUNTIME_DIR=@RUNTIME@
-Environment=WAYLAND_DISPLAY=wayland-1
+Environment=WAYLAND_DISPLAY=@WAYLAND_DISPLAY@
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=@RUNTIME@/bus
 ExecStart=/usr/bin/wayvnc -C %h/.config/wayvnc/mirror.conf -a -r -f 30 -S @RUNTIME@/wayvncctl-mirror
 Restart=on-failure

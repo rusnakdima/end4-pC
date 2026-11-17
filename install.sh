@@ -670,6 +670,7 @@ verify() {
 SKIP_CHECKS=0
 WITH_WAYDROID=0
 WITH_VNC=0
+VNC_MODE="${VNC_MODE:-full}"
 VNC_AUDIO="${VNC_AUDIO:-sunshine}"
 VNC_AUTOLOGIN="${VNC_AUTOLOGIN:-1}"
 # Window titlebar buttons (close/maximize/minimize) are toolkit-side, see
@@ -681,6 +682,7 @@ for arg in "$@"; do
         --skip-checks) SKIP_CHECKS=1 ;;
         --with-waydroid) WITH_WAYDROID=1 ;;
         --with-vnc) WITH_VNC=1 ;;
+        --vnc-mode=*) VNC_MODE="${arg#*=}" ;;
         --vnc-audio=*) VNC_AUDIO="${arg#*=}" ;;
         --vnc-autologin=*) VNC_AUTOLOGIN="${arg#*=}" ;;
         --keep-window-buttons) DISABLE_WINDOW_BUTTONS=0 ;;
@@ -782,7 +784,7 @@ main() {
     # This is an add-on and does not block the desktop install on failure.
     if [[ ${WITH_VNC:-0} -eq 1 ]]; then
         echo "[install] Optional component: VNC remote desktop (--with-vnc)"
-        if ! env VNC_AUDIO="$VNC_AUDIO" VNC_AUTOLOGIN="$VNC_AUTOLOGIN" \
+        if ! env VNC_MODE="$VNC_MODE" VNC_AUDIO="$VNC_AUDIO" VNC_AUTOLOGIN="$VNC_AUTOLOGIN" \
             "$SOURCE_DIR/optional/vnc/install-vnc.sh"; then
             echo "[install] WARN: VNC setup failed — see [vnc] messages above." >&2
             echo "[install]       Rerun: ./optional/vnc/install-vnc.sh" >&2

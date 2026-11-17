@@ -1,12 +1,12 @@
 [Unit]
-Description=WayVNC hidden Virtual-1 (VKMS)
+Description=WayVNC hidden @HIDDEN_OUTPUT@ (VKMS)
 
 [Service]
 ExecStartPre=/usr/bin/bash -c 'for i in $(seq 1 60); do [ -S @RUNTIME@/remote/wayland-1 ] && exit 0; sleep 1; done; exit 1'
 Environment=XDG_RUNTIME_DIR=@RUNTIME@/remote
 Environment=WAYLAND_DISPLAY=wayland-1
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=@RUNTIME@/bus
-ExecStart=/usr/bin/wayvnc -C %h/.config/wayvnc/remote.conf -o Virtual-1 -r -f 60 -S @RUNTIME@/remote/wayvncctl-remote
+ExecStart=/usr/bin/wayvnc -C %h/.config/wayvnc/remote.conf -o @HIDDEN_OUTPUT@ -r -f 60 -S @RUNTIME@/remote/wayvncctl-remote
 Restart=on-failure
 RestartSec=3
 

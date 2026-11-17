@@ -3,9 +3,14 @@
 This module installs a Tailscale-friendly VNC setup for end4-pC:
 
 - `:5901` — physical session mirror, **interactive**
-- `:5902` — separate hidden Hyprland session on VKMS
+- `:5902` — separate hidden Hyprland session on VKMS (`full` mode)
 - optional audio via Sunshine + Moonlight
 - optional end4-pC wallpaper blanking and lock-on-disconnect
+- `mirror` mode for laptops and single-session machines
+
+Everything device-specific is detected at install time: user, home, UID,
+Tailscale address, Wayland display, DRM cards, VKMS output, physical GPU
+driver/BusID, display manager, session name, hostname, and free ports.
 
 It is **not** installed by default. Use:
 
@@ -34,10 +39,10 @@ enables `sunshine-remote.service`. Moonlight still needs to be paired manually.
 ## Architecture
 
 ```text
-laptop
-  ├─ Remmina :5901 ── physical Hyprland (DP-1 + HDMI-A-2), interactive
-  ├─ Remmina :5902 ── hidden Hyprland (Virtual-1 on VKMS), interactive
-  └─ Moonlight ────── Sunshine → Virtual-1 + hypr_remote.monitor (audio)
+client
+  ├─ Remmina :5901 ── physical Hyprland (detected physical outputs), interactive
+  ├─ Remmina :5902 ── hidden Hyprland (detected VKMS output), interactive
+  └─ Moonlight ────── Sunshine → detected VKMS output + hypr_remote.monitor
 ```
 
 The hidden session is a **separate Hyprland compositor**, not a third monitor
@@ -50,7 +55,7 @@ The hidden session uses:
 - private runtime `/run/user/<uid>/remote`
 - end4-pC loaded from the real user's `hyprland.lua`
 
-The physical session is pinned to the Intel GPU:
+The physical session is pinned to the detected physical GPU:
 `AQ_DRM_DEVICES=<physical card>` and `LIBSEAT_BACKEND=logind`.
 
 ## Requirements
@@ -80,16 +85,26 @@ Copy `vnc.conf.example` to `~/.config/end4-pC/vnc.conf` or set environment
 variables before running:
 
 ```bash
-VNC_USER=dmitriy
-VNC_BIND_ADDR=100.90.92.21
-VNC_MIRROR_PORT=5901
-VNC_HIDDEN_PORT=5902
+VNC_MODE=full             # full | mirror
+VNC_USER=                 # empty = installer target user
+VNC_BIND_ADDR=            # empty = first Tailscale IPv4
+VNC_MIRROR_PORT=          # empty = first free port
+VNC_HIDDEN_PORT=          # empty = next free port
+VNC_MIRROR_INPUT=1        # 1 interactive, 0 view-only
 VNC_AUDIO=sunshine        # sunshine | none
 VNC_AUTOLOGIN=1           # 1 | 0
 ```
 
 If `VNC_BIND_ADDR` is omitted, the installer uses the first Tailscale IPv4
-address, or `127.0.0.1` with a warning.
+address, or `127.0.0.1` with a warning. GPU card, render node, VKMS connector,
+Wayland display, session name, hostname, and Xorg driver/BusID are detected
+from the machine; nothing is copied from another host.
+
+For a laptop or a machine that only needs the physical session:
+
+```bash
+VNC_MODE=mirror VNC_AUDIO=none VNC_AUTOLOGIN=0 ./optional/vnc/install-vnc.sh
+```
 
 ## Audio
 

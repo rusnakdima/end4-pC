@@ -9,13 +9,23 @@
 # Leave empty to use the installer target user.
 VNC_USER=""
 
+# full = physical mirror + separate hidden VKMS session
+# mirror = physical session only (recommended for laptops)
+VNC_MODE="full"
+
 # Address the VNC servers bind to.  Strongly recommended: Tailscale IPv4.
 # If empty, install-vnc.sh uses `tailscale ip -4` and falls back to 127.0.0.1.
 VNC_BIND_ADDR=""
 
-# WayVNC ports.
-VNC_MIRROR_PORT="5901"   # physical session, interactive, all physical outputs
-VNC_HIDDEN_PORT="5902"   # hidden Hyprland on VKMS, interactive
+# WayVNC ports. Leave empty to auto-pick the first free ports.
+VNC_MIRROR_PORT=""       # physical session, interactive, all physical outputs
+VNC_HIDDEN_PORT=""       # hidden Hyprland on VKMS (full mode only)
+
+# Physical session input: 1 = interactive, 0 = view-only.
+VNC_MIRROR_INPUT="1"
+
+# physical Wayland display; auto-detected when empty.
+VNC_WAYLAND_DISPLAY=""
 
 # Audio:
 #   sunshine -> install/enable Sunshine for Moonlight (video + audio)
@@ -27,7 +37,7 @@ VNC_AUDIO="sunshine"
 VNC_AUTOLOGIN="1"
 
 # Hidden output and runtime name.
-VNC_HIDDEN_OUTPUT="Virtual-1"
+VNC_HIDDEN_OUTPUT=""
 VNC_RUNTIME_SUBDIR="remote"
 
 # Lock the physical session when the last VNC client disconnects.

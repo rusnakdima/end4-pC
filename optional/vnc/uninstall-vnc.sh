@@ -44,6 +44,7 @@ if [[ -f "$CONFIG" ]]; then
     . "$CONFIG"
     set +a
 fi
+VNC_MODE="${VNC_MODE:-full}"
 VNC_MIRROR_PORT="${VNC_MIRROR_PORT:-5901}"
 VNC_HIDDEN_PORT="${VNC_HIDDEN_PORT:-5902}"
 BACKUP=/var/lib/end4-pC-vnc/backup
@@ -71,6 +72,7 @@ restore_backup /etc/environment || {
     fi
 }
 restore_backup /etc/sddm.conf.d/10-autologin.conf || $ROOT rm -f /etc/sddm.conf.d/10-autologin.conf
+restore_backup /etc/X11/xorg.conf.d/99-physical-only.conf || $ROOT rm -f /etc/X11/xorg.conf.d/99-physical-only.conf
 restore_backup /etc/X11/xorg.conf.d/99-intel-only.conf || $ROOT rm -f /etc/X11/xorg.conf.d/99-intel-only.conf
 restore_backup "$TARGET_HOME/.config/hypr/remote.lua" || rm -f "$TARGET_HOME/.config/hypr/remote.lua"
 
