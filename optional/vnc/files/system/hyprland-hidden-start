@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -e
+export XDG_RUNTIME_DIR=@RUNTIME@/remote
+export DBUS_SESSION_BUS_ADDRESS=unix:path=@RUNTIME@/bus
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=Hyprland
+export HOME=@HOME@
+export USER=@USER@
+export LOGNAME=@USER@
+export WAYLAND_DISPLAY=wayland-1
+export AQ_DRM_DEVICES=@VKMS@
+export LIBSEAT_BACKEND=seatd
+export SEATD_VTBOUND=0
+export PULSE_SINK=hypr_remote
+export PULSE_SERVER=unix:@RUNTIME@/pulse/native
+
+exec /usr/bin/Hyprland --config @HOME@/.config/hypr/remote.lua

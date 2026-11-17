@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -u
+
+SOCK="${1:-@RUNTIME@/wayvncctl-mirror}"
+HOOK=@HOME@/.config/hypr/custom/scripts/vnc-theme-hooks.sh
+LOG=@HOME@/.config/hypr/custom/scripts/vnc-theme-watch.log
+active=0
+
+log() { printf '%s %s\n' "$(date '+%F %T')" "$*" >>"$LOG"; }
+
+count_clients() {
+    wayvncctl -S "$SOCK" -j client-list 2>/dev/null | jq 'length' 2>/dev/null || echo 0
+}
+
+c="$(count_clients)"
+if [ "${c:-0}" -gt 0 ]; then
+    active=1
+    log "startup with $c client(s)"
+    "$HOOK" start >>"$LOG" 2>&1
+fi
+
+while :; do
+    wayvncctl -S "$SOCK" -r -j event-receive 2>/dev/null | while IFS= read -r _event; do
+        c="$(count_clients)"
+        if [ "${c:-0}" -gt 0 ] && [ "$active" -eq 0 ]; then
+            active=1
+            log "client connected ($c active)"
+            "$HOOK" start >>"$LOG" 2>&1
+        fi
+        if [ "${c:-0}" -eq 0 ] && [ "$active" -eq 1 ]; then
+            sleep 3
+            c="$(count_clients)"
+            if [ "${c:-0}" -eq 0 ]; then
+                active=0
+                log "last client disconnected"
+                "$HOOK" stop >>"$LOG" 2>&1
+            fi
+        fi
+    done
+    sleep 2
+done

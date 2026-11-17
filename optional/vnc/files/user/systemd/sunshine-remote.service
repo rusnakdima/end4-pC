@@ -1,0 +1,18 @@
+[Unit]
+Description=Sunshine for hidden Hyprland (Virtual-1)
+After=hyprland-remote.service pipewire.service
+Requires=hyprland-remote.service
+
+[Service]
+Environment=XDG_RUNTIME_DIR=@RUNTIME@/remote
+Environment=WAYLAND_DISPLAY=wayland-1
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=@RUNTIME@/bus
+Environment=PULSE_SINK=hypr_remote
+Environment=PULSE_SERVER=unix:@RUNTIME@/pulse/native
+Environment=HOME=@HOME@
+ExecStart=/usr/bin/sunshine %h/.config/sunshine/sunshine-remote.conf
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

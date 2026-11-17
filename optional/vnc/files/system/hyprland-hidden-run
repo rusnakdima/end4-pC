@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+rm -f /run/seatd.sock
+export SEATD_VTBOUND=0
+export SEATD_SOCK=/run/seatd.sock
+
+/usr/bin/seatd -g seat -l info &
+seatd_pid=$!
+cleanup() {
+    kill "$seatd_pid" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+for _ in $(seq 1 50); do
+    [ -S /run/seatd.sock ] && break
+    sleep 0.1
+done
+if [ ! -S /run/seatd.sock ]; then
+    echo "private seatd socket did not appear" >&2
+    exit 1
+fi
+
+setpriv --reuid=@USER@ --regid=@GROUP@ --init-groups /usr/local/bin/hyprland-hidden-start

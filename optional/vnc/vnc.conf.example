@@ -1,0 +1,37 @@
+# end4-pC optional VNC configuration.
+#
+# Copy this file to ~/.config/end4-pC/vnc.conf, or export the same variables
+# before running optional/vnc/install-vnc.sh.
+#
+# install.sh reads this file too when invoked with --with-vnc.
+
+# User that owns the physical Hyprland session and the hidden session.
+# Leave empty to use the installer target user.
+VNC_USER=""
+
+# Address the VNC servers bind to.  Strongly recommended: Tailscale IPv4.
+# If empty, install-vnc.sh uses `tailscale ip -4` and falls back to 127.0.0.1.
+VNC_BIND_ADDR=""
+
+# WayVNC ports.
+VNC_MIRROR_PORT="5901"   # physical session, interactive, all physical outputs
+VNC_HIDDEN_PORT="5902"   # hidden Hyprland on VKMS, interactive
+
+# Audio:
+#   sunshine -> install/enable Sunshine for Moonlight (video + audio)
+#   none     -> VNC only (VNC carries no audio)
+VNC_AUDIO="sunshine"
+
+# 1 = configure SDDM autologin for the physical session (needed for :5901
+#     without a manual local login). 0 = leave the display manager alone.
+VNC_AUTOLOGIN="1"
+
+# Hidden output and runtime name.
+VNC_HIDDEN_OUTPUT="Virtual-1"
+VNC_RUNTIME_SUBDIR="remote"
+
+# Lock the physical session when the last VNC client disconnects.
+VNC_THEME_LOCK="1"
+
+# Blank the physical wallpaper while a VNC client is connected.
+VNC_THEME_BLANK_WALLPAPER="1"

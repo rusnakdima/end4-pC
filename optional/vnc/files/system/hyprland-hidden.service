@@ -1,0 +1,25 @@
+[Unit]
+StartLimitIntervalSec=30
+StartLimitBurst=5
+Description=Hidden Hyprland remote session (VKMS)
+After=systemd-user-sessions.service
+Before=sddm.service display-manager.service
+
+[Service]
+DeviceAllow=char-drm rw
+ExecStartPre=/usr/bin/rm -f /run/seatd.sock
+Type=simple
+PrivateDevices=yes
+BindPaths=@VKMS@
+BindPaths=@RENDER@
+Environment=SEATD_VTBOUND=0
+ExecStartPre=/usr/bin/install -d -o @USER@ -g @GROUP@ -m 700 @RUNTIME@/remote
+ExecStartPre=/usr/bin/ln -sfn @RUNTIME@/bus @RUNTIME@/remote/bus
+ExecStartPre=/usr/bin/ln -sfn @RUNTIME@/pipewire-0 @RUNTIME@/remote/pipewire-0
+ExecStartPre=/usr/bin/ln -sfn @RUNTIME@/pulse @RUNTIME@/remote/pulse
+ExecStart=/usr/local/bin/hyprland-hidden-run
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
