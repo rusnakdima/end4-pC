@@ -669,6 +669,9 @@ verify() {
 # install.
 SKIP_CHECKS=0
 WITH_WAYDROID=0
+WITH_VNC=0
+VNC_AUDIO="${VNC_AUDIO:-sunshine}"
+VNC_AUTOLOGIN="${VNC_AUTOLOGIN:-1}"
 # Window titlebar buttons (close/maximize/minimize) are toolkit-side, see
 # configure_window_decorations. On by default; DISABLE_WINDOW_BUTTONS=0 or
 # --keep-window-buttons leaves the apps alone.
@@ -677,6 +680,9 @@ for arg in "$@"; do
     case "$arg" in
         --skip-checks) SKIP_CHECKS=1 ;;
         --with-waydroid) WITH_WAYDROID=1 ;;
+        --with-vnc) WITH_VNC=1 ;;
+        --vnc-audio=*) VNC_AUDIO="${arg#*=}" ;;
+        --vnc-autologin=*) VNC_AUTOLOGIN="${arg#*=}" ;;
         --keep-window-buttons) DISABLE_WINDOW_BUTTONS=0 ;;
     esac
 done
@@ -769,6 +775,17 @@ main() {
         if ! "$SOURCE_DIR/optional/waydroid/install-waydroid.sh"; then
             echo "[install] WARN: Waydroid setup failed — see [waydroid] messages above." >&2
             echo "[install]       Rerun: ./optional/waydroid/install-waydroid.sh" >&2
+        fi
+    fi
+
+    # Optional VNC/remote-desktop setup — only with --with-vnc.
+    # This is an add-on and does not block the desktop install on failure.
+    if [[ ${WITH_VNC:-0} -eq 1 ]]; then
+        echo "[install] Optional component: VNC remote desktop (--with-vnc)"
+        if ! env VNC_AUDIO="$VNC_AUDIO" VNC_AUTOLOGIN="$VNC_AUTOLOGIN" \
+            "$SOURCE_DIR/optional/vnc/install-vnc.sh"; then
+            echo "[install] WARN: VNC setup failed — see [vnc] messages above." >&2
+            echo "[install]       Rerun: ./optional/vnc/install-vnc.sh" >&2
         fi
     fi
 
