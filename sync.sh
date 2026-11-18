@@ -116,13 +116,14 @@ qs_keep=(
     --exclude='/file:/'
     --exclude='/.git/'
     --exclude='/verification_complete.txt'
+    --exclude='/.backup-*/'
     --exclude='__pycache__/'
 )
 
 # diff's --exclude takes a pattern relative to the root and no leading slash,
 # so the same exclusions are spelled out again for the verification pass.
 qs_diff_keep=(--exclude=dots --exclude=.omp --exclude='file:'
-              --exclude=.git --exclude=verification_complete.txt --exclude=__pycache__)
+              --exclude=.git --exclude=verification_complete.txt --exclude='.backup-*' --exclude=__pycache__)
 hypr_diff_keep=(--exclude=custom --exclude=monitors.lua --exclude=profiles
                 --exclude=shellOverrides --exclude=colors.lua --exclude=colors.conf
                 --exclude=hypridle.conf)
