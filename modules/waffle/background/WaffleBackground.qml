@@ -67,5 +67,25 @@ Variants {
                     || Wallpapers.displayPathFor(panelRoot.effectiveWallpaperPath))
             fillMode: Image.PreserveAspectCrop
         }
+
+        // The still above only stepped aside because an mpvpaper player used
+        // to draw below this layer. In-shell mode there is no such process,
+        // so this family needs its own desktop video item — otherwise a clip
+        // wallpaper looks frozen the moment the waffle family is selected.
+        WallpaperMedia {
+            anchors.fill: parent
+            visible: Config.options.background.inShellVideo
+                && panelRoot.wallpaperIsVideo
+                && panelRoot.showLiveVideo
+            source: Config.options.background.inShellVideo
+                ? panelRoot.effectiveWallpaperPath
+                : ""
+            syncGroup: !Config.options.background.inShellVideo
+                ? ""
+                : (GlobalStates.screenLocked && !WallpaperVideo.lockSharesDesktop ? "lock" : "desktop")
+            showStill: false
+            fillMode: Image.PreserveAspectCrop
+            playing: !LiveWallpaper.paused
+        }
     }
 }

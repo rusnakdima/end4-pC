@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Window
 import Quickshell.Io
 import qs.modules.common
+import qs.modules.common.functions as CF
 import qs.services
 
 /**
@@ -79,18 +80,24 @@ Item {
         return media.syncElapsed % video.duration;
     }
 
-    onSyncTargetChanged: {
-        if (media.syncTarget < 0 || !video.seekable) return;
-        const drift = Math.abs(video.position - media.syncTarget);
-        // A position near the loop seam looks like a huge drift; the loop
-        // will wrap it naturally.
-        if (drift > 50 && drift < video.duration - 50)
-            video.position = media.syncTarget;
+    // Last time this decoder was seeked to the shared clock. The clock ticks
+    // every 100 ms; seeking on every tick is what made healthy decoders stall
+    // on keyframes and look frozen on the desktop and in every preview.
+    property real lastSeekAt: 0
+
+    function syncToClock(force): void {
+        if (!video.seekable) return;
+        const now = Date.now();
+        if (!CF.MediaUtils.shouldSeek(video.position, media.syncTarget, video.duration,
+                now, media.lastSeekAt, media.active, force))
+            return;
+        video.position = media.syncTarget;
+        media.lastSeekAt = now;
     }
+
+    onSyncTargetChanged: media.syncToClock(false)
     onVideoReadyChanged: {
-        if (!media.videoReady) return;
-        if (media.syncTarget >= 0 && video.seekable)
-            video.position = media.syncTarget;
+        if (media.videoReady) media.syncToClock(true);
     }
 
     Process {
@@ -106,28 +113,31 @@ Item {
         }
     }
 
-    onSourceChanged: {
+    // Only a surface that is actually on screen asks for the proxy. A closed
+    // sidebar or an unfocused settings card used to spawn its own prefetch
+    // process, so a single clipboard could queue five encodes of the same clip.
+    function updateProxy(): void {
         proxyProc.running = false;
         media.playbackPath = "";
-        if (!media.isVideo || !media.useProxy || media.source.length === 0) return;
+        if (!media.isVideo || !media.useProxy || media.source.length === 0 || !media.active) return;
         proxyProc.sourcePath = media.source;
         proxyProc.command = ["bash", Directories.videoWallpaperScriptPath, "--prefetch", media.source];
         proxyProc.running = true;
     }
-    onUseProxyChanged: {
-        proxyProc.running = false;
-        media.playbackPath = "";
-        if (!media.isVideo || !media.useProxy || media.source.length === 0) return;
-        proxyProc.sourcePath = media.source;
-        proxyProc.command = ["bash", Directories.videoWallpaperScriptPath, "--prefetch", media.source];
-        proxyProc.running = true;
+
+    onSourceChanged: media.updateProxy()
+    onUseProxyChanged: media.updateProxy()
+    onActiveChanged: {
+        if (media.active) {
+            media.updateProxy();
+            media.syncToClock(true);
+            if (video.playbackState !== MediaPlayer.PlayingState) video.play();
+        } else {
+            proxyProc.running = false;
+            video.pause();
+        }
     }
-    Component.onCompleted: {
-        if (!media.isVideo || !media.useProxy || media.source.length === 0) return;
-        proxyProc.sourcePath = media.source;
-        proxyProc.command = ["bash", Directories.videoWallpaperScriptPath, "--prefetch", media.source];
-        proxyProc.running = true;
-    }
+    Component.onCompleted: media.updateProxy()
     // The still for an image is the image itself. For a clip it is the poster
     // the wallpaper pipeline already generated for the current wallpaper; any
     // other clip falls back to the freedesktop thumbnail, rendered on demand
@@ -229,13 +239,4 @@ Item {
         }
     }
 
-    onActiveChanged: {
-        if (media.active) {
-            if (media.syncTarget >= 0 && video.seekable)
-                video.position = media.syncTarget;
-            if (video.playbackState !== MediaPlayer.PlayingState) video.play();
-        } else {
-            video.pause();
-        }
-    }
 }

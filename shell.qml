@@ -48,6 +48,10 @@ ShellRoot {
         ConflictKiller.load()
         Cliphist.refresh()
         Wallpapers.load()
+        // The wallpaper image is re-applied from config on every shell start;
+        // restart the clip's clock the same way so a video wallpaper is part
+        // of the theme and starts playing instead of sitting on its poster.
+        WallpaperVideo.restart()
         Football.load()
         Updates.load()
         // The window mode has to be back in place before the first window

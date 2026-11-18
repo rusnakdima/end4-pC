@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import Quickshell
 import Quickshell.Wayland
+import qs.services
 
 Scope {
 	id: root
@@ -15,6 +16,10 @@ Scope {
 
 		function onReloadCompleted() {
 			root.failed = false;
+			// The new engine recreated WallpaperVideo, but make the restart of
+			// the theme video explicit: every surface joins the clip at zero
+			// instead of inheriting a clock from a torn-down shell.
+			WallpaperVideo.restart();
 			popupLoader.loading = true;
 		}
 

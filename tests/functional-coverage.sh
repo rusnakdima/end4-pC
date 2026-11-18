@@ -58,6 +58,7 @@ declare -A EXPLICIT_MAP=(
     [AppWindowRules]="tst_app_window_rules.qml"
     [HyprlandKeybinds]="tst_keybinds.qml"
     [ManagedKeybinds]="tst_managed_keybinds.qml"
+    [WallpaperVideo]="tst_wallpaper_video.qml"
     [XkbRules]="tst_xkbrules.qml"
 )
 

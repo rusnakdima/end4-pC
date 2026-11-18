@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import qs.modules.common
 import qs.services
 
@@ -62,6 +63,32 @@ Singleton {
             root.desktopEpoch += delta;
             root.lockEpoch += delta;
             root.pausedAt = 0;
+        }
+    }
+
+    // Called when the theme/shell comes back (startup, reload, re-applied
+    // wallpaper). Every surface joins the clip at the start again instead of
+    // guessing an epoch from a stale process.
+    function restart(): void {
+        const now = Date.now();
+        root.desktopEpoch = now;
+        root.lockEpoch = now;
+        root.desktopElapsed = 0;
+        root.lockElapsed = 0;
+        root.pausedAt = 0;
+    }
+
+    IpcHandler {
+        target: "wallpaperVideo"
+        function restart(): void { root.restart() }
+        function status(): string {
+            return JSON.stringify({
+                desktopSource: root.desktopRawSource,
+                lockSource: root.lockRawSource,
+                desktopElapsed: root.desktopElapsed,
+                lockElapsed: root.lockElapsed,
+                paused: root.paused
+            });
         }
     }
 

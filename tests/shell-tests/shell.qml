@@ -56,7 +56,8 @@ ShellRoot {
         "tst_ConfigMultiSelect.qml",
         "tst_dialog_search_field.qml",
         "tst_VolumeLevelMeter.qml",
-        "tst_config_sync.qml"
+        "tst_config_sync.qml",
+        "tst_wallpaper_video.qml"
     ]
 
     property int doneCount: 0

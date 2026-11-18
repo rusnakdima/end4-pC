@@ -215,6 +215,9 @@ Singleton {
         Quickshell.execDetached(args);
         root.changed()
         if (Images.isVideoPath(path)) {
+            // Re-applying a clip has to restart it even when the path itself
+            // did not change (no source-change signal to reset the clock).
+            WallpaperVideo.restart();
             // switchwall only writes background.wallpaperPath and
             // background.thumbnailPath once the proxy has been encoded, so the
             // desktop kept showing the PREVIOUS wallpaper's poster for the
