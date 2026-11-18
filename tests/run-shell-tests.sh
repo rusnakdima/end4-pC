@@ -18,7 +18,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 HARNESS_DIR="tests/shell-tests"
-TIMEOUT_SECONDS=120
+TIMEOUT_SECONDS="${SHELL_TEST_TIMEOUT_SECONDS:-120}"
 
 if ! command -v qs > /dev/null 2>&1; then
     echo "quickshell not found: the hosted tests need the 'qs' binary on PATH" >&2
@@ -26,16 +26,21 @@ if ! command -v qs > /dev/null 2>&1; then
 fi
 
 # The harness creates no window, but Quickshell itself still needs a
-# Wayland display to start, and a runtime directory for its sockets.
-if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
-    runtime_dir="/run/user/$(id -u)"
-    if [[ -d "$runtime_dir" ]]; then
-        export XDG_RUNTIME_DIR="$runtime_dir"
+# Wayland display to start, and a runtime directory for its sockets. A variable
+# that is *set* to a stale path (common inside containers and sudo sessions)
+# used to crash the shell instead of failing this script with a clear message.
+runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+if [[ ! -d "$runtime_dir" ]]; then
+    fallback="/run/user/$(id -u)"
+    if [[ -d "$fallback" ]]; then
+        echo "XDG_RUNTIME_DIR='$runtime_dir' is not a directory; using '$fallback'" >&2
+        runtime_dir="$fallback"
     else
-        echo "XDG_RUNTIME_DIR is not set and $runtime_dir does not exist" >&2
+        echo "XDG_RUNTIME_DIR is invalid and $fallback does not exist" >&2
         exit 2
     fi
 fi
+export XDG_RUNTIME_DIR="$runtime_dir"
 
 if [[ -z "${WAYLAND_DISPLAY:-}" ]]; then
     # Pick up the socket of a running session, if there is one.
@@ -50,6 +55,10 @@ if [[ -z "${WAYLAND_DISPLAY:-}" ]]; then
     echo "no Wayland display found: set WAYLAND_DISPLAY or start a session" >&2
     exit 2
 fi
+
+# Qt's default "wayland;xcb" combination can pick the wrong plugin in a
+# headless harness, which makes the shell exit before printing any results.
+export QT_QPA_PLATFORM=wayland
 
 output=$(mktemp)
 trap 'rm -f "$output"' EXIT
@@ -70,7 +79,8 @@ set -e
 result_line=$(grep -E '^.*SHELL_TEST_RESULT ' "$output" | tail -n 1 || true)
 
 if [[ -z "$result_line" ]]; then
-    echo "FAIL: the shell exited without printing a result line (status $shell_status)" >&2
+    echo "FAIL: the shell exited without a result line after ${TIMEOUT_SECONDS}s (status $shell_status)" >&2
+    echo "A test file may be hanging; the files below never reported." >&2
     echo "--- output ---" >&2
     cat "$output" >&2
     echo "--- files that did not report ---" >&2

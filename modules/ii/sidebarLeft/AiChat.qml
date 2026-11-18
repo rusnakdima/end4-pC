@@ -32,10 +32,13 @@ Item {
         return Translation.tr("Speech to text");
     }
 
-    function insertTranscript(text) {
+    // Live phrases must not be deduplicated: a spoken "no no" or "yes yes"
+    // legitimately produces the same text twice in a row. Only the one-shot
+    // transcript is guarded against being inserted twice.
+    function insertTranscript(text, dedupe = true) {
         if (!text || text.length === 0)
             return;
-        if (text === root.lastInsertedTranscript)
+        if (dedupe && text === root.lastInsertedTranscript)
             return;
         root.lastInsertedTranscript = text;
 
@@ -62,7 +65,7 @@ Item {
         }
         function onTranscriptSegment(text) {
             if (SpeechToText.deliveryMode !== "chat") return;
-            root.insertTranscript(text);
+            root.insertTranscript(text, false);
         }
     }
 

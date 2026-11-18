@@ -99,9 +99,11 @@ def resolve_device(device):
 
 
 def decode_wav_file(path):
-    """Decode a WAV file with the stdlib and return (samples, rate).
+    """Decode a WAV file with the stdlib and return (numpy samples, rate).
 
-    Returns None when the file is not a readable WAV.
+    Returns None when the file is not a readable WAV. The samples stay in a
+    float32 numpy array: a five minute 16 kHz recording was a ~150 MB Python
+    list before, now it is a ~19 MB array.
     """
     try:
         with wave.open(path, "rb") as handle:
@@ -112,48 +114,53 @@ def decode_wav_file(path):
     except (OSError, wave.Error):
         return None
 
+    import numpy as np
+
     if width == 2:
         data = array.array("h")
         data.frombytes(frames[: len(frames) - (len(frames) % 2)])
         if sys.byteorder == "big":
             data.byteswap()
-        samples = [value / 32768.0 for value in data]
+        samples = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
     elif width == 1:
-        samples = [(byte - 128) / 128.0 for byte in frames]
+        samples = (np.frombuffer(frames, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
     elif width == 4:
         data = array.array("i")
         data.frombytes(frames[: len(frames) - (len(frames) % 4)])
         if sys.byteorder == "big":
             data.byteswap()
-        samples = [value / 2147483648.0 for value in data]
+        samples = np.frombuffer(data, dtype=np.int32).astype(np.float32) / 2147483648.0
     else:
         return None
 
     if channels > 1:
-        samples = [
-            sum(samples[index : index + channels]) / float(channels)
-            for index in range(0, len(samples) - channels + 1, channels)
-        ]
+        count = (samples.size // channels) * channels
+        samples = samples[:count].reshape(-1, channels).mean(axis=1)
 
     return samples, rate
 
 
 def resample(samples, source_rate, target_rate):
-    """Resample mono float samples to the target rate (linear interpolation)."""
-    if source_rate == target_rate or not samples:
+    """Resample mono float samples to the target rate (linear interpolation).
+
+    numpy's interp replaces the old per-sample Python loop, which was the
+    dominant cost when transcribing files captured at a higher sample rate.
+    """
+    if source_rate == target_rate or source_rate <= 0:
         return samples
-    if source_rate <= 0:
+    import numpy as np
+
+    if hasattr(samples, "size"):
+        if samples.size == 0:
+            return samples
+    elif not samples:
         return samples
-    target_length = max(1, int(round(len(samples) * float(target_rate) / source_rate)))
-    step = (len(samples) - 1) / float(target_length - 1) if target_length > 1 else 0.0
-    result = []
-    for index in range(target_length):
-        position = index * step
-        lower = int(position)
-        upper = min(lower + 1, len(samples) - 1)
-        weight = position - lower
-        result.append(samples[lower] * (1.0 - weight) + samples[upper] * weight)
-    return result
+    source = np.asarray(samples, dtype=np.float64)
+    target_length = max(1, int(round(source.size * float(target_rate) / source_rate)))
+    if target_length == 1:
+        return np.array([source[-1]], dtype=np.float32)
+    positions = np.linspace(0, source.size - 1, target_length)
+    return np.interp(positions, np.arange(source.size), source).astype(np.float32)
 
 
 def decode_with_ffmpeg(path):
@@ -179,11 +186,13 @@ def decode_with_ffmpeg(path):
         return None
     if result.returncode != 0 or not result.stdout:
         return None
+    import numpy as np
+
     data = array.array("h")
     data.frombytes(result.stdout[: len(result.stdout) - (len(result.stdout) % 2)])
     if sys.byteorder == "big":
         data.byteswap()
-    return [value / 32768.0 for value in data]
+    return np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
 
 
 def load_audio(path):
@@ -212,9 +221,11 @@ def load_audio(path):
 
 
 def to_numpy(samples):
-    """Convert a list of float samples into the float32 array whisper expects."""
+    """Convert samples into the float32 array whisper expects."""
     import numpy as np
 
+    if isinstance(samples, np.ndarray):
+        return samples if samples.dtype == np.float32 else samples.astype(np.float32)
     return np.asarray(samples, dtype=np.float32)
 
 
@@ -267,8 +278,10 @@ def transcribe_audio(path, model_id, language, device, compute_type):
     whisper_language = None if (language is None or language == "auto") else language
 
     def run():
+        # Greedy decoding is several times faster than the default beam of 5
+        # with a small accuracy trade-off; dictation already uses beam_size=1.
         segments, info = model.transcribe(
-            samples, language=whisper_language, vad_filter=True
+            samples, language=whisper_language, vad_filter=True, beam_size=1
         )
         texts = []
         detected_language = whisper_language or ""

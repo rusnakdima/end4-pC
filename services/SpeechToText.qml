@@ -85,6 +85,13 @@ Singleton {
     property var insertQueue: []
     property bool insertBusy: false
     property bool insertErrorNotified: false
+    property bool insertQueueWarned: false
+    property bool insertTimedOut: false
+
+    // Each backend process is tagged with the generation it was started for.
+    // Events from an older (killed) process must not overwrite the state of a
+    // newer recording.
+    property int captureGeneration: 0
 
     // The backend transcribes after the capture ends, so the process stays alive
     // for as long as the inference takes (up to 5 minutes of audio, which on a
@@ -101,11 +108,21 @@ Singleton {
             root.currentState = "idle";
             root.errorValue = "";
         }
-        // When STT is disabled, stop any active recording and mark as disabled.
+        // When STT is disabled, stop any active session. An in-flight
+        // transcription is killed outright and its stale exit is ignored by
+        // the generation guard, so "disabled" stays sticky until re-enabled.
         if (!root.enabled) {
             if (root.recording) {
                 root.stopRecording();
+            } else if (root.transcribing) {
+                sttProcess.generation = -1;
+                sttProcess.running = false;
+                root.pendingHasText = false;
+                root.pendingText = "";
+                root.pendingError = "";
+                root.cleanupFiles();
             }
+            stopTimer.stop();
             root.errorValue = Translation.tr("Speech to text is disabled");
             root.currentState = "disabled";
         }
@@ -147,6 +164,8 @@ Singleton {
         root.segmentBuffer = "";
         root.detectedLanguage = "";
         root.insertErrorNotified = false;
+        root.insertQueueWarned = false;
+        root.insertTimedOut = false;
 
         // Track this recording in history.
         const entry = {
@@ -164,18 +183,12 @@ Singleton {
         root.launchCapture();
     }
 
-    function launchCapture() {
-        root.currentState = "recording";
-        // Ensure any previous instance is stopped before setting a new command
-        if (sttProcess.running) {
-            sttProcess.running = false;
-        }
-
+    // Build the backend argv. Kept pure so tests can assert what the service
+    // actually requests instead of searching the source file for flag names.
+    function buildCommand(mode) {
         const script = `${FileUtils.trimFileProtocol(Directories.scriptPath)}/ai/stt/stt-venv.sh`;
-        if (root.liveTyping) {
-            // Phrase-by-phrase dictation: no WAV, one JSON line per phrase and
-            // a final aggregate line.
-            sttProcess.command = [
+        const command = mode === "stream"
+            ? [
                 "bash", script, "stream",
                 "--stop-file", root.stopPath,
                 "--model", root.sttModel,
@@ -183,9 +196,8 @@ Singleton {
                 "--device", root.sttDevice,
                 "--compute-type", root.sttComputeType,
                 "--max-seconds", String(root.sttMaxSeconds)
-            ];
-        } else {
-            sttProcess.command = [
+            ]
+            : [
                 "bash", script, "record",
                 "--out", root.wavPath,
                 "--stop-file", root.stopPath,
@@ -195,20 +207,51 @@ Singleton {
                 "--compute-type", root.sttComputeType,
                 "--max-seconds", String(root.sttMaxSeconds)
             ];
-        }
         if (root.sttSource.length > 0) {
-            sttProcess.command.push("--source-target", root.sttSource);
+            command.push("--source-target", root.sttSource);
         }
+        return command;
+    }
+
+    function launchCapture() {
+        root.currentState = "recording";
+        // Invalidate the old process before killing it: its exit/stdout events
+        // must not be applied to the recording that is about to start.
+        sttProcess.generation = -1;
+        if (sttProcess.running) {
+            sttProcess.running = false;
+        }
+        root.captureGeneration += 1;
+        sttProcess.command = root.buildCommand(root.liveTyping ? "stream" : "record");
+        sttProcess.generation = root.captureGeneration;
         sttProcess.running = true;
         startWatchdog.restart();
+    }
+
+    // Single entry points for backend events, so tests can exercise the
+    // generation guard without spawning a real process.
+    function processOutput(gen, line) {
+        if (gen !== root.captureGeneration) return;
+        root.handleStdout(line);
+    }
+
+    function processExited(gen, exitCode) {
+        if (gen !== root.captureGeneration) return;
+        sttProcess.running = false;
+        root.handleExit(exitCode);
     }
 
     function stopRecording() {
         if (!root.recording) return;
 
         // The backend stops capturing as soon as the marker file shows up and
-        // then transcribes, so the process exits on its own afterwards.
-        Quickshell.execDetached(["bash", "-c", `mkdir -p '${root.captureDir}' && touch '${root.stopPath}'`]);
+        // then transcribes, so the process exits on its own afterwards. Paths
+        // are passed as arguments (never interpolated into the shell script)
+        // so quotes in XDG state directories cannot break the command.
+        Quickshell.execDetached([
+            "bash", "-c", 'mkdir -p -- "$1" && touch -- "$2"',
+            "bash", root.captureDir, root.stopPath
+        ]);
         root.currentState = "transcribing";
         stopTimer.restart();
     }
@@ -271,7 +314,16 @@ Singleton {
     function insertText(text) {
         if (!text || text.length === 0) return;
         // Queue instead of cancelling: a phrase every few seconds must not
-        // truncate the phrase that is still being typed.
+        // truncate the phrase that is still being typed. Bound the queue so a
+        // stuck typing helper cannot accumulate phrases indefinitely.
+        const maxQueue = 32;
+        if (root.insertQueue.length >= maxQueue) {
+            root.insertQueue.shift();
+            if (!root.insertQueueWarned) {
+                root.insertQueueWarned = true;
+                root.notify(Translation.tr("Speech to text"), "Transcript queue is full - older phrases were dropped");
+            }
+        }
         root.insertQueue.push(text);
         root.pumpInsertQueue();
     }
@@ -279,12 +331,14 @@ Singleton {
     function pumpInsertQueue() {
         if (root.insertBusy || root.insertQueue.length === 0) return;
         root.insertBusy = true;
+        root.insertTimedOut = false;
         insertProcess.command = [
             "bash",
             `${FileUtils.trimFileProtocol(Directories.scriptPath)}/ai/stt/insert-text.sh`,
             root.insertQueue[0]
         ];
         insertProcess.running = true;
+        insertWatchdog.restart();
     }
 
     function notify(summary, body) {
@@ -306,6 +360,9 @@ Singleton {
 
         if (payload.error !== undefined && payload.error !== null) {
             root.pendingError = String(payload.error);
+            // An error supersedes any text already buffered from this run.
+            root.pendingText = "";
+            root.pendingHasText = false;
             return;
         }
 
@@ -365,6 +422,15 @@ Singleton {
             root.recordings = updated;
         }
 
+        // The feature was disabled while this backend process was still
+        // finishing: keep history, but never deliver text or leave the
+        // "disabled" state behind.
+        if (!root.enabled) {
+            root.sessionTarget = "";
+            root.cleanupFiles();
+            return;
+        }
+
         if (root.pendingHasText) {
             root.transcriptValue = root.pendingText;
             root.errorValue = "";
@@ -411,36 +477,55 @@ Singleton {
 
     Process {
         id: sttProcess
+        // Generation of the capture this process belongs to. Set to -1 when
+        // the process is superseded so its late events are discarded.
+        property int generation: 0
         stdout: SplitParser {
             onRead: data => {
-                root.handleStdout(data);
+                root.processOutput(sttProcess.generation, data);
             }
         }
         stderr: StdioCollector {
             id: sttStderr
             onStreamFinished: {
-                root.stderrText = sttStderr.text.trim();
+                if (sttProcess.generation === root.captureGeneration) {
+                    root.stderrText = sttStderr.text.trim();
+                }
             }
         }
         onStarted: {
             startWatchdog.stop();
         }
         onExited: (exitCode, exitStatus) => {
-            sttProcess.running = false;
-            root.handleExit(exitCode);
+            root.processExited(sttProcess.generation, exitCode);
         }
     }
 
     Process {
         id: insertProcess
         onExited: (exitCode, exitStatus) => {
+            insertWatchdog.stop();
             root.insertBusy = false;
             if (root.insertQueue.length > 0) root.insertQueue.shift();
-            if (exitCode !== 0 && !root.insertErrorNotified) {
+            if (root.insertTimedOut) {
+                root.insertTimedOut = false;
+            } else if (exitCode !== 0 && !root.insertErrorNotified) {
                 root.insertErrorNotified = true;
                 root.notify(Translation.tr("Speech to text"), Translation.tr("Could not type the transcript"));
             }
             root.pumpInsertQueue();
+        }
+    }
+
+    Timer {
+        // A stuck typing helper must not block every later phrase forever.
+        id: insertWatchdog
+        interval: 10000
+        repeat: false
+        onTriggered: {
+            if (!root.insertBusy) return;
+            root.insertTimedOut = true;
+            insertProcess.running = false;
         }
     }
 
@@ -484,7 +569,11 @@ Singleton {
         onTriggered: {
             if (!sttProcess.running) return;
             const pid = sttProcess.processId;
-            Quickshell.execDetached(["bash", "-c", `pkill -TERM -P ${pid} 2>/dev/null; kill -TERM ${pid} 2>/dev/null; true`]);
+            Quickshell.execDetached([
+                "bash", "-c",
+                'pkill -TERM -P "$1" 2>/dev/null; kill -TERM "$1" 2>/dev/null; true',
+                "bash", String(pid)
+            ]);
         }
     }
 }
