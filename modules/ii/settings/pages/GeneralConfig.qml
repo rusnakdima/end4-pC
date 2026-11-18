@@ -11,6 +11,16 @@ ContentPage {
     id: page
     forceWidth: true
 
+    readonly property var dateFormatPresets: [
+        "ddd, dd/MM",
+        "dddd, dd MMMM yyyy",
+        "ddd, dd MMM yyyy",
+        "dd/MM/yyyy",
+        "dd.MM.yyyy",
+        "MM/dd/yyyy",
+        "MMM dd, yyyy",
+        "yyyy-MM-dd"
+    ]
     
     Process {
         id: translationProc
@@ -47,7 +57,7 @@ ContentPage {
                 property date now: new Date()
 
                 Timer {
-                    interval: Config.options.time.secondPrecision ? 1000 : 15000
+                    interval: StringUtils.formatHasSeconds(DateTime.timeFormat) ? 1000 : 15000
                     running: true
                     repeat: true
                     triggeredOnStart: true
@@ -69,15 +79,7 @@ ContentPage {
                             font.features: { "tnum": 1 }
                             font.weight: Font.Medium
                             color: Appearance.colors.colPrimary
-                            text: {
-                                const fmt = Config.options.time.format;
-                                if (Config.options.time.secondPrecision) {
-                                    if (fmt === "hh:mm") return Qt.formatTime(previewCard.now, "hh:mm:ss");
-                                    if (fmt === "h:mm ap") return Qt.formatTime(previewCard.now, "h:mm:ss ap");
-                                    if (fmt === "h:mm AP") return Qt.formatTime(previewCard.now, "h:mm:ss AP");
-                                }
-                                return Qt.formatTime(previewCard.now, fmt);
-                            }
+                            text: Qt.formatTime(previewCard.now, DateTime.timeFormat)
                         }
                         StyledText {
                             Layout.fillWidth: true
@@ -106,14 +108,12 @@ ContentPage {
                 ConfigSelectionArray {
                     text: Translation.tr("Format")
                     icon: "schedule"
-                    currentValue: Config.options.time.format
+                    currentValue: StringUtils.removeSecondsFromFormat(DateTime.timeFormat)
                     onSelected: newValue => {
-                        if (newValue === "hh:mm") {
-                            Quickshell.execDetached(["bash", "-c", `sed -i 's/\\TIME12\\b/TIME/' '${FileUtils.trimFileProtocol(Directories.config)}/hypr/hyprlock.conf'`]);
-                        } else {
-                            Quickshell.execDetached(["bash", "-c", `sed -i 's/\\TIME\\b/TIME12/' '${FileUtils.trimFileProtocol(Directories.config)}/hypr/hyprlock.conf'`]);
-                        }
-                        Config.options.time.format = newValue;
+                        const is24Hour = !/ap/i.test(newValue);
+                        const expression = is24Hour ? "s/\\TIME12\\b/TIME/" : "s/\\TIME\\b/TIME12/";
+                        Quickshell.execDetached(["bash", "-c", `sed -i '${expression}' '${FileUtils.trimFileProtocol(Directories.config)}/hypr/hyprlock.conf'`]);
+                        Config.options.time.format = StringUtils.setFormatSeconds(newValue, Config.options.time.secondPrecision);
                     }
                     options: [
                         { displayName: Translation.tr("24h"), value: "hh:mm" },
@@ -126,6 +126,7 @@ ContentPage {
                     text: Translation.tr("Second precision")
                     checked: Config.options.time.secondPrecision
                     onCheckedChanged: {
+                        Config.options.time.format = StringUtils.setFormatSeconds(DateTime.timeFormat, checked);
                         Config.options.time.secondPrecision = checked;
                     }
                 }
@@ -142,18 +143,37 @@ ContentPage {
                     buttonIcon: "scoreboard"
                     text: Translation.tr("Clock String Format")
                     placeholderText: Translation.tr("Clock String Format")
-                    value: Config.options.time.format
+                    value: DateTime.timeFormat
                     onValueChanged: {
                         Config.options.time.format = value;
                     }
                 }
-                
+
+                ConfigComboBox {
+                    Layout.fillWidth: true
+                    buttonIcon: "date_range"
+                    text: Translation.tr("Presets")
+                    fieldWidth: 240
+                    currentValue: Config.options.time.dateFormat
+                    onSelected: newValue => {
+                        Config.options.time.dateFormat = newValue;
+                    }
+                    model: {
+                        const current = Config.options.time.dateFormat;
+                        const presets = page.dateFormatPresets;
+                        const choices = current !== "" && presets.indexOf(current) === -1
+                            ? [current, ...presets]
+                            : presets;
+                        return choices.map(pattern => ({ displayName: pattern, value: pattern }));
+                    }
+                }
+
                 ConfigTextArea {
                     Layout.fillWidth: true
                     buttonIcon: "calendar_month"
                     text: Translation.tr("Date String Format")
                     placeholderText: Translation.tr("Date String Format")
-                    value: Config .options.time.dateFormat
+                    value: Config.options.time.dateFormat
                     onValueChanged: {
                         Config.options.time.dateFormat = value;
                     }

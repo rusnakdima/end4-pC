@@ -225,6 +225,50 @@ Singleton {
     }
 
     /**
+     * Tells whether a Qt time format contains a seconds field.
+     * @param { string } format
+     * @returns { boolean }
+     */
+    function formatHasSeconds(format) {
+        return /(^|[^A-Za-z])s{1,2}(?![A-Za-z])/.test(String(format ?? ""));
+    }
+
+    /**
+     * Removes the seconds field (and its separator) from a Qt time format.
+     * @param { string } format
+     * @returns { string }
+     */
+    function removeSecondsFromFormat(format) {
+        return String(format ?? "")
+            .replace(/:s{1,2}(?![A-Za-z])/g, "")
+            .replace(/^s{1,2}(?![A-Za-z])/, "")
+            .trim();
+    }
+
+    /**
+     * Adds or removes the seconds field of a Qt time format, keeping the
+     * am/pm marker at the end.
+     * @param { string } format
+     * @param { boolean } enabled
+     * @returns { string }
+     */
+    function setFormatSeconds(format, enabled) {
+        if (!enabled)
+            return removeSecondsFromFormat(format);
+        if (formatHasSeconds(format))
+            return String(format);
+
+        const value = String(format ?? "");
+        if (value === "")
+            return "hh:mm:ss";
+
+        const meridiem = value.match(/\s*(ap|AP)\s*$/);
+        if (meridiem)
+            return value.slice(0, meridiem.index) + ":ss" + value.slice(meridiem.index);
+        return value + ":ss";
+    }
+
+    /**
      * Escapes HTML special characters in a string.
      * @param { string } str
      * @returns { string }

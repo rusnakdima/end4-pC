@@ -2,6 +2,7 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 import qs
 import qs.modules.common
+import qs.modules.common.functions
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -22,12 +23,18 @@ Singleton {
     // clock.date is undefined for a moment after a configuration reload, so
     // every binding that reads it has to be guarded.
     readonly property bool clockReady: clock.date !== undefined && clock.date !== null
-    property string time: clockReady ? Qt.locale().toString(clock.date, Config.options?.time.format ?? "hh:mm") : ""
+    // The stored format follows the second-precision switch; normalizing here
+    // also repairs configs written before the switch started doing that.
+    readonly property string timeFormat: StringUtils.setFormatSeconds(
+        Config.options?.time.format ?? "hh:mm",
+        Config.options?.time.secondPrecision ?? false
+    )
+    property string time: clockReady ? Qt.locale().toString(clock.date, timeFormat) : ""
     property string shortDate: clockReady ? Qt.locale().toString(clock.date, Config.options?.time.shortDateFormat ?? "dd/MM") : ""
     property string date: clockReady ? Qt.locale().toString(clock.date, Config.options?.time.dateWithYearFormat ?? "dd/MM/yyyy") : ""
     property string longDate: clockReady ? Qt.locale().toString(clock.date, Config.options?.time.dateFormat ?? "dddd, dd/MM") : ""
     property string collapsedCalendarFormat: clockReady ? Qt.locale().toString(clock.date, "dddd, MMMM dd") : ""
-    readonly property bool use12HourFormat: (Config.options?.time.format ?? "hh:mm").toLowerCase().indexOf("ap") !== -1
+    readonly property bool use12HourFormat: timeFormat.toLowerCase().indexOf("ap") !== -1
     readonly property int hour24: clockReady ? clock.date.getHours() : 0
     readonly property int minute: clockReady ? clock.date.getMinutes() : 0
     readonly property int second: clockReady ? clock.date.getSeconds() : 0

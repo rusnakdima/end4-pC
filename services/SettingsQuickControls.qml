@@ -465,12 +465,12 @@ Singleton {
 
 
         "general:Format": root.select(
-            () => Config.options.time.format,
+            () => StringUtils.removeSecondsFromFormat(DateTime.timeFormat),
             value => {
                 const hyprlock = FileUtils.trimFileProtocol(Directories.config) + "/hypr/hyprlock.conf";
                 const expression = value === "hh:mm" ? "s/\\TIME12\\b/TIME/" : "s/\\TIME\\b/TIME12/";
                 Quickshell.execDetached(["sed", "-i", expression, hyprlock]);
-                Config.options.time.format = value;
+                Config.options.time.format = StringUtils.setFormatSeconds(value, Config.options.time.secondPrecision);
             },
             [
                 { displayName: Translation.tr("24h"),       value: "hh:mm"   },
@@ -478,7 +478,13 @@ Singleton {
                 { displayName: Translation.tr("12h AM/PM"), value: "h:mm AP" }
             ]
         ),
-        "general:Second precision": root.toggle(() => Config.options.time.secondPrecision, v => Config.options.time.secondPrecision = v),
+        "general:Second precision": root.toggle(
+            () => Config.options.time.secondPrecision,
+            value => {
+                Config.options.time.format = StringUtils.setFormatSeconds(DateTime.timeFormat, value);
+                Config.options.time.secondPrecision = value;
+            }
+        ),
         "general:Show date": root.toggle(() => Config.options.time.showDate, v => Config.options.time.showDate = v),
         "general:Low warning": root.spin(() => Config.options.battery.low, v => Config.options.battery.low = v, 0, 100, 5),
         "general:Critical warning": root.spin(() => Config.options.battery.critical, v => Config.options.battery.critical = v, 0, 100, 5),

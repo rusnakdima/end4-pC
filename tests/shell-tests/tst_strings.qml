@@ -221,4 +221,42 @@ TestCase {
         compare(StringUtils.filterByQuery(null, "home", ["ssid"]).length, 0);
         compare(StringUtils.filterByQuery(undefined, "", ["ssid"]).length, 0);
     }
+
+    /**
+     * The second-precision switch adds or removes the seconds field of the
+     * clock format, so the helpers have to keep the chosen base format and
+     * the am/pm marker intact.
+     */
+    function test_format_has_seconds() {
+        verify(!StringUtils.formatHasSeconds("hh:mm"));
+        verify(!StringUtils.formatHasSeconds("h:mm ap"));
+        verify(StringUtils.formatHasSeconds("hh:mm:ss"));
+        verify(StringUtils.formatHasSeconds("h:mm:ss ap"));
+        verify(StringUtils.formatHasSeconds("h:mm:ss AP"));
+        verify(StringUtils.formatHasSeconds("ss"));
+        verify(!StringUtils.formatHasSeconds("ddd, dd/MM"));
+        verify(!StringUtils.formatHasSeconds(""));
+    }
+
+    function test_remove_seconds_from_format_keeps_the_base_format() {
+        compare(StringUtils.removeSecondsFromFormat("hh:mm:ss"), "hh:mm");
+        compare(StringUtils.removeSecondsFromFormat("h:mm:ss ap"), "h:mm ap");
+        compare(StringUtils.removeSecondsFromFormat("h:mm:ss AP"), "h:mm AP");
+        compare(StringUtils.removeSecondsFromFormat("hh:mm"), "hh:mm");
+        // A literal word that happens to end in "s" is not a seconds field.
+        compare(StringUtils.removeSecondsFromFormat("HH 'hours' mm"), "HH 'hours' mm");
+    }
+
+    function test_set_format_seconds_round_trips() {
+        compare(StringUtils.setFormatSeconds("hh:mm", true), "hh:mm:ss");
+        compare(StringUtils.setFormatSeconds("hh:mm:ss", false), "hh:mm");
+        compare(StringUtils.setFormatSeconds("h:mm ap", true), "h:mm:ss ap");
+        compare(StringUtils.setFormatSeconds("h:mm:ss ap", false), "h:mm ap");
+        compare(StringUtils.setFormatSeconds("h:mm AP", true), "h:mm:ss AP");
+        compare(StringUtils.setFormatSeconds("h:mm AP", false), "h:mm AP");
+        // Already in the requested state: unchanged.
+        compare(StringUtils.setFormatSeconds("hh:mm:ss", true), "hh:mm:ss");
+        compare(StringUtils.setFormatSeconds("", false), "");
+        compare(StringUtils.setFormatSeconds("", true), "hh:mm:ss");
+    }
 }
