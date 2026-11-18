@@ -139,6 +139,11 @@ hl.bind("SUPER + escape", hl.dsp.global("quickshell:settingsToggle"), {descripti
 
 Open the launcher (`SUPER`) and type `<` — it'll show you the full list of configured keybinds.
 
+### How do I move a window to another workspace?
+
+- `SUPER + ALT + <1-0>` sends the focused window to workspace N and leaves you on the current one.
+- `SUPER + SHIFT + <1-0>` sends it there **and switches to that workspace**. This bind is installed by default into `~/.config/hypr/custom/keybinds.lua`.
+
 ### How do I get rid of the close / maximize / minimize buttons?
 
 Hyprland does not draw titlebars at all — the buttons belong to the app's own

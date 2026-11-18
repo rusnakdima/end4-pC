@@ -164,6 +164,38 @@ install_hyprland_config() {
 }
 
 # ---------------------------------------------------------------------------
+# Default keybinds
+# ---------------------------------------------------------------------------
+# A few binds extend the theme's Hyprland defaults but cannot live in the
+# deployed keybinds file: that file comes from the vendored dots/ tree, which
+# is not part of every checkout. They are injected into the user-owned
+# ~/.config/hypr/custom/keybinds.lua behind a marker instead, the same way
+# optional/waydroid does it. The marker keeps the step idempotent, and the
+# shell's keybind manager only rewrites its own block, so this one survives
+# every save and every update.
+install_keybind_defaults() {
+    local snippet="$SOURCE_DIR/defaults/hyprland/keybinds-snippet.lua"
+    local dest="$TARGET_HOME/.config/hypr/custom/keybinds.lua"
+    local marker="end4-pC workspace-follow keybinds"
+
+    [[ -f "$snippet" ]] || return 0
+
+    echo "[install] Adding default keybinds..."
+    mkdir -p "$(dirname "$dest")"
+    touch "$dest"
+    if grep -qF "$marker" "$dest"; then
+        echo "[install] default keybinds already present"
+    else
+        { printf '\n'; cat "$snippet"; } >> "$dest"
+        echo "[install] default keybinds written to custom/keybinds.lua"
+    fi
+    # The installer may run under sudo: hand the file back to its owner.
+    if [[ $(id -u) -eq 0 && -n "${TARGET_USER:-}" ]]; then
+        chown "$TARGET_USER:" "$dest" 2>/dev/null || true
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Hyprland env vars
 # ---------------------------------------------------------------------------
 patch_hyprland_env() {
@@ -756,6 +788,7 @@ main() {
     install_packages
     install_qs_config
     install_hyprland_config
+    install_keybind_defaults
     patch_hyprland_env
     patch_hyprland_lua
     configure_window_decorations

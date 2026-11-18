@@ -15,6 +15,9 @@
 #   ./sync.sh --no-reload  skip `hyprctl reload`
 #   ./sync.sh --check      run tests/qml-compile-check.sh first, abort on failure
 #   ./sync.sh --force      sync even while the session is locked (dangerous)
+#   ./sync.sh --keybinds-only
+#                          only inject the default keybinds into
+#                          ~/.config/hypr/custom/keybinds.lua and reload
 #
 set -uo pipefail
 
@@ -22,6 +25,8 @@ src="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 qs_dest="${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/end4-pC"
 hypr_dest="${XDG_CONFIG_HOME:-$HOME/.config}/hypr"
 sddm_hook="$HOME/.config/ii-sddm-theme/sddm-wallpaper-sync.sh"
+default_keybind_snippet="$src/defaults/hyprland/keybinds-snippet.lua"
+custom_keybinds="$hypr_dest/custom/keybinds.lua"
 
 # -c compares by checksum, so a file whose content already matches is left
 # alone even when its timestamp differs -- several live files are owned by root
@@ -33,13 +38,15 @@ dry_run=0
 do_reload=1
 do_check=0
 force=0
+keybinds_only=0
 for arg in "$@"; do
     case "$arg" in
         --dry-run|-n) dry_run=1 ;;
         --no-reload)  do_reload=0 ;;
         --check)      do_check=1 ;;
         --force)      force=1 ;;
-        -h|--help)    sed -n '2,18p' "${BASH_SOURCE[0]}"; exit 0 ;;
+        --keybinds-only) keybinds_only=1 ;;
+        -h|--help)    sed -n '2,22p' "${BASH_SOURCE[0]}"; exit 0 ;;
         *) echo "sync.sh: unknown option: $arg" >&2; exit 2 ;;
     esac
 done
@@ -128,7 +135,7 @@ hypr_diff_keep=(--exclude=custom --exclude=monitors.lua --exclude=profiles
 #   1. QUICKSHELL_CONFIG_NAME "ii" (upstream's name) -> this config's name
 #   2. the SDDM wallpaper hook appended after the switch() call
 #
-# See install.sh:126 (name) and install.sh:502 (SDDM hook).
+# See install.sh:126 (name) and install.sh:606 (SDDM hook).
 # ----------------------------------------------------------------
 
 patch_form() {
@@ -280,7 +287,7 @@ deploy_patches() {
         fi
     done < <(find "$qs_dest/scripts" -type f -name '*.sh' -print0 2>/dev/null)
 
-    # install.sh:502 -- refresh the SDDM greeter wallpaper after switch().
+    # install.sh:606 -- refresh the SDDM greeter wallpaper after switch().
     local switchwall="$qs_dest/scripts/colors/switchwall.sh" line tmp mode
     if [[ -f "$switchwall" ]] && ! grep -q 'sddm-wallpaper-sync.sh' "$switchwall"; then
         line=$(grep -nF '    switch "$imgpath' "$switchwall" | tail -1 | cut -d: -f1)
@@ -297,7 +304,7 @@ deploy_patches() {
         fi
     fi
 
-    # install.sh:202 -- qsConfig drives every `qs -c $qsConfig` call in the
+    # install.sh:242 -- qsConfig drives every `qs -c $qsConfig` call in the
     # Hyprland config, so it must never end up as upstream's "ii".
     for f in "$hypr_dest/hyprland/env.lua" "$hypr_dest/hyprland/variables.lua"; do
         if [[ -f "$f" ]] && grep -q 'hl\.env("qsConfig", "ii")' "$f"; then
@@ -305,6 +312,25 @@ deploy_patches() {
             echo "patched qsConfig in ${f#"$hypr_dest"/}"
         fi
     done
+}
+
+# The theme's default keybinds that cannot live in the deployed dots tree are
+# injected into the user-owned custom/keybinds.lua behind a marker. This is
+# the same step install.sh runs; the marker makes it idempotent, and this is
+# the only part of custom/ that sync.sh ever writes.
+install_keybind_defaults() {
+    local marker="end4-pC workspace-follow keybinds"
+    [[ -f "$default_keybind_snippet" ]] || return 0
+    mkdir -p "$(dirname "$custom_keybinds")"
+    touch "$custom_keybinds"
+    if grep -qF "$marker" "$custom_keybinds"; then
+        echo "== default keybinds =="
+        echo "       already present in custom/keybinds.lua"
+        return 0
+    fi
+    { printf '\n'; cat "$default_keybind_snippet"; } >> "$custom_keybinds"
+    echo "== default keybinds =="
+    echo "       added to custom/keybinds.lua"
 }
 
 # ---------------------------------------------------------------------------
@@ -321,26 +347,53 @@ fi
 
 [[ $dry_run -eq 1 ]] && echo "-- dry run: nothing will be written --"
 
-sync_tree "quickshell ($qs_dest)" \
-    "${qs_keep[@]}" \
-    ${qs_rsync_skip[@]+"${qs_rsync_skip[@]}"} \
-    ${qs_root_owned[@]+"${qs_root_owned[@]}"} \
-    "$src/" "$qs_dest/"
+if [[ $keybinds_only -eq 0 ]]; then
+    sync_tree "quickshell ($qs_dest)" \
+        "${qs_keep[@]}" \
+        ${qs_rsync_skip[@]+"${qs_rsync_skip[@]}"} \
+        ${qs_root_owned[@]+"${qs_root_owned[@]}"} \
+        "$src/" "$qs_dest/"
 
-sync_tree "hyprland ($hypr_dest)" \
-    "${hypr_keep[@]}" \
-    ${hypr_root_owned[@]+"${hypr_root_owned[@]}"} \
-    "$src/dots/.config/hypr/" "$hypr_dest/"
+    # dots/ is vendored and git-ignored, so a checkout that never carried it
+    # (or lost it) must not turn the whole sync into a failure.
+    if [[ -d "$src/dots/.config/hypr" ]]; then
+        sync_tree "hyprland ($hypr_dest)" \
+            "${hypr_keep[@]}" \
+            ${hypr_root_owned[@]+"${hypr_root_owned[@]}"} \
+            "$src/dots/.config/hypr/" "$hypr_dest/"
+    else
+        echo "== hyprland ($hypr_dest) =="
+        echo "       skipped: dots/.config/hypr is not in this checkout"
+    fi
 
-# After both copies, so nothing a copy just brought in is left unpatched.
-if [[ $dry_run -eq 0 ]]; then
-    deploy_patches
+    # After both copies, so nothing a copy just brought in is left unpatched.
+    if [[ $dry_run -eq 0 ]]; then
+        deploy_patches
+    fi
+
+    verify_tree "quickshell" "$src" "$qs_dest" \
+        "${qs_diff_keep[@]}" ${qs_diff_skip[@]+"${qs_diff_skip[@]}"}
+    verify_patched
+    if [[ -d "$src/dots/.config/hypr" ]]; then
+        verify_tree "hyprland" "$src/dots/.config/hypr" "$hypr_dest" "${hypr_diff_keep[@]}"
+    fi
+else
+    echo "== tree sync skipped (--keybinds-only) =="
 fi
 
-verify_tree "quickshell" "$src" "$qs_dest" \
-    "${qs_diff_keep[@]}" ${qs_diff_skip[@]+"${qs_diff_skip[@]}"}
-verify_patched
-verify_tree "hyprland" "$src/dots/.config/hypr" "$hypr_dest" "${hypr_diff_keep[@]}"
+# The default keybinds live outside the synced trees, in the user-owned
+# custom/keybinds.lua. install.sh runs the same step on a fresh install.
+if [[ $dry_run -eq 1 ]]; then
+    if grep -qF "end4-pC workspace-follow keybinds" "$custom_keybinds" 2>/dev/null; then
+        echo "== default keybinds =="
+        echo "       already present in custom/keybinds.lua"
+    else
+        echo "== default keybinds =="
+        echo "       would be added to custom/keybinds.lua"
+    fi
+else
+    install_keybind_defaults
+fi
 
 # Colour output is owned by the runtime, not by this sync -- say so rather than
 # leaving the reader to wonder why a few files still differ.
