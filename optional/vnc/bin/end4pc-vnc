@@ -46,13 +46,13 @@ DEFAULTS = {
     "desktopName": "end4-pC",
     "capture": {
         "mode": "all",  # all | single | headless
-        "output": "HDMI-A-2",
+        "output": "",   # filled from the currently connected monitors
         "headless": {
             "width": 1920,
             "height": 1080,
             "refresh": 60,
             "scale": 1.0,
-            "mirror": "HDMI-A-2",
+            "mirror": "",
         },
     },
     "encoding": {
@@ -128,6 +128,21 @@ def _tempfile(path: Path) -> tuple[int, str]:
     return fd, name
 
 
+def preferred_output() -> str:
+    """Pick a connected physical output, preferring an external monitor."""
+    try:
+        available = physical_outputs()
+    except SystemExit:
+        return ""
+    if not available:
+        return ""
+    for monitor in available:
+        name = str(monitor.get("name", ""))
+        if not re.match(r"^(eDP|LVDS|DSI)", name, re.IGNORECASE):
+            return name
+    return str(available[0].get("name", ""))
+
+
 def load_config() -> dict:
     cfg = json.loads(json.dumps(DEFAULTS))
     if CONFIG_FILE.exists():
@@ -137,6 +152,18 @@ def load_config() -> dict:
         except (OSError, ValueError) as exc:
             raise SystemExit(f"cannot read {CONFIG_FILE}: {exc}")
     cfg["version"] = 1
+
+    # Never send a stale/hardcoded port name to wayvnc: if the configured
+    # output is no longer connected, fall back to a detected one.
+    fallback = preferred_output()
+    if fallback:
+        capture = cfg.setdefault("capture", {})
+        known = {str(m.get("name", "")) for m in physical_outputs()}
+        if known and capture.get("output") not in known:
+            capture["output"] = fallback
+        headless = capture.setdefault("headless", {})
+        if known and headless.get("mirror") not in known:
+            headless["mirror"] = fallback
     return cfg
 
 

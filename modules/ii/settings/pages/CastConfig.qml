@@ -585,7 +585,9 @@ ContentPage {
                     Layout.preferredHeight: 150
                     visible: Cast.logTail !== ""
                     radius: Appearance.rounding.normal
-                    color: Appearance.colors.colLayer
+                    color: Appearance.colors.colLayer1
+                    border.width: 1
+                    border.color: Appearance.colors.colOutlineVariant
                     clip: true
 
                     Flickable {

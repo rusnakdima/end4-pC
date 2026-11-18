@@ -40,12 +40,18 @@ ContentPage {
     readonly property bool authOff: !page.get("network.auth", true)
     readonly property string tailscaleAddress: (Vnc.addresses ?? []).find(a => a.startsWith("100.")) ?? ""
 
+    function detectedOutput() {
+        const monitors = (Vnc.monitors ?? []).filter(m => !m.disabled)
+        const external = monitors.find(m => !/^(eDP|LVDS|DSI)/i.test(m.name ?? ""))
+        return (external ?? monitors[0])?.name ?? ""
+    }
+
     function defaultDraft() {
         return {
             version: 1,
             autostart: false,
             desktopName: "end4-pC",
-            capture: { mode: "all", output: "HDMI-A-2" },
+            capture: { mode: "all", output: page.detectedOutput() },
             encoding: { maxFps: 30, renderCursor: true, gpu: false, disableResizing: false },
             network: {
                 address: "127.0.0.1",
@@ -100,10 +106,18 @@ ContentPage {
     }
 
     function resetDraft() {
-        if (Vnc.settings && Object.keys(Vnc.settings).length > 0)
+        if (Vnc.settings && Object.keys(Vnc.settings).length > 0) {
             page.draft = page.copy(Vnc.settings)
-        else
+            // A saved output may be from a monitor that is no longer plugged
+            // in; keep the combo on a real, connected output.
+            const output = page.get("capture.output", "")
+            if (output && !page.outputOptions.some(o => o.value === output)) {
+                const fallback = page.detectedOutput()
+                if (fallback) page.set("capture.output", fallback)
+            }
+        } else {
             page.draft = page.defaultDraft()
+        }
         page.dirty = false
     }
 
