@@ -25,6 +25,15 @@ install -Dm644 "$here/systemd/wayvnc.service" "$HOME/.config/systemd/user/wayvnc
 "$HOME/.local/bin/end4pc-vnc" init
 systemctl --user daemon-reload
 
+# The retired full/hidden setup can still hold the default wayvnc control
+# socket, which makes this user service fail with "Another wayvnc process is
+# already running". Warn instead of disabling someone's service silently.
+if systemctl --user list-unit-files 2>/dev/null | grep -qE '^wayvnc-mirror\.service'; then
+    echo "NOTE: legacy VNC units detected. If wayvnc.service fails with" >&2
+    echo "  'Another wayvnc process is already running', disable them:" >&2
+    echo "  systemctl --user disable --now wayvnc-mirror.service vnc-theme-hooks.service" >&2
+fi
+
 if [[ "${1:-}" == "--enable" ]]; then
     systemctl --user enable --now wayvnc.service
 fi
