@@ -1,184 +1,145 @@
-# Optional VNC remote desktop for end4-pC
+# end4-pC VNC (user-level)
 
-This module installs a Tailscale-friendly VNC setup for end4-pC:
-
-- `:5901` — physical session mirror, **interactive**
-- `:5902` — separate hidden Hyprland session on VKMS (`full` mode)
-- optional audio via Sunshine + Moonlight
-- optional end4-pC wallpaper blanking and lock-on-disconnect
-- `mirror` mode for laptops and single-session machines
-
-Everything device-specific is detected at install time: user, home, UID,
-Tailscale address, Wayland display, DRM cards, VKMS output, physical GPU
-driver/BusID, display manager, session name, hostname, and free ports.
-
-It is **not** installed by default. Use:
-
-```bash
-./install.sh --with-vnc
-```
-
-Or run it standalone:
-
-```bash
-./optional/vnc/install-vnc.sh
-```
-
-## Important: VNC has no audio
-
-VNC does not carry audio. If you connect with Remmina/wayvnc, you will not hear
-sound. Audio requires a separate transport:
-
-- **Sunshine + Moonlight** (recommended): video, input, and audio.
-- PipeWire/PulseAudio tunnel (manual; not installed by this script).
-- VNC only: video and input, **no sound**.
-
-`--vnc-audio=sunshine` installs the null sink and Sunshine configuration and
-enables `sunshine-remote.service`. Moonlight still needs to be paired manually.
-
-## Architecture
+A VNC server for the **existing** Hyprland session. It does not start a second
+compositor, does not use VKMS, and does not touch `/etc`, seatd, PipeWire
+runtime paths or the end4-pC shell configuration.
 
 ```text
-client
-  ├─ Remmina :5901 ── physical Hyprland (detected physical outputs), interactive
-  ├─ Remmina :5902 ── hidden Hyprland (detected VKMS output), interactive
-  └─ Moonlight ────── Sunshine → detected VKMS output + hypr_remote.monitor
+remote client
+   │  TLS VNC / SSH tunnel / Tailscale
+   ▼
+wayvnc  (systemd --user service)
+   │  captures the existing monitor(s), injects input into the same seat
+   ▼
+Hyprland (single instance) ── Quickshell, PipeWire, lock screen
 ```
 
-The hidden session is a **separate Hyprland compositor**, not a third monitor
-inside the host session. The host keeps only its physical monitors.
+## What it supports
 
-The hidden session uses:
+- All physical monitors as one stream (`-a`) or one selected monitor (`-o`).
+- TLS authentication with a self-signed certificate and a VNC password
+  (or PAM authentication).
+- Bind to loopback, a Tailscale address, or another local address.
+- Render cursor, FPS limit, GPU option, client resize control, view-only mode.
+- Match the host keyboard layout, or override the XKB settings.
+- Runtime output switching and per-client disconnect.
+- Optional lock-on-disconnect / idle inhibition.
+- A full Settings page under **Settings → VNC**.
 
-- VKMS (`/dev/dri/vkms`) as its only DRM output
-- a private `seatd` inside a private `/dev` namespace
-- private runtime `/run/user/<uid>/remote`
-- end4-pC loaded from the real user's `hyprland.lua`
+Not supported:
 
-The physical session is pinned to the detected physical GPU:
-`AQ_DRM_DEVICES=<physical card>` and `LIBSEAT_BACKEND=logind`.
+- A virtual “mirror” output. On Hyprland 0.57 wayvnc cannot capture a mirrored
+  headless output; use all monitors or one physical output.
+- Audio. VNC carries no audio; use Sunshine/Moonlight or a separate audio
+  transport if you need sound.
 
-## Requirements
+## Install
 
-- Arch/CachyOS, Hyprland, end4-pC installed
-- `wayvnc`, `seatd`, `jq`, `grim`, `hyprlock`
-- `sunshine` for audio (optional)
-- `vkms` kernel module
-- Tailscale (strongly recommended)
-- SDDM or another display manager for the physical session
-
-The installer performs system changes:
-
-- `/etc/modules-load.d/vkms.conf`
-- `/etc/udev/rules.d/99-vkms.rules`
-- `/etc/environment` (`AQ_DRM_DEVICES`, `LIBSEAT_BACKEND=logind`)
-- `/etc/X11/xorg.conf.d/99-intel-only.conf`
-- SDDM autologin (unless `--vnc-autologin=0`)
-- disables system `seatd` (the hidden service starts its own)
-- UFW rules restricted to `100.64.0.0/10` (Tailscale)
-
-Backups are stored in `/var/lib/end4-pC-vnc/backup`.
-
-## Configuration
-
-Copy `vnc.conf.example` to `~/.config/end4-pC/vnc.conf` or set environment
-variables before running:
+Run as the desktop user:
 
 ```bash
-VNC_MODE=full             # full | mirror
-VNC_USER=                 # empty = installer target user
-VNC_BIND_ADDR=            # empty = first Tailscale IPv4
-VNC_MIRROR_PORT=          # empty = first free port
-VNC_HIDDEN_PORT=          # empty = next free port
-VNC_MIRROR_INPUT=1        # 1 interactive, 0 view-only
-VNC_AUDIO=sunshine        # sunshine | none
-VNC_AUTOLOGIN=1           # 1 | 0
+./optional/vnc/install-user.sh
 ```
 
-If `VNC_BIND_ADDR` is omitted, the installer uses the first Tailscale IPv4
-address, or `127.0.0.1` with a warning. GPU card, render node, VKMS connector,
-Wayland display, session name, hostname, and Xorg driver/BusID are detected
-from the machine; nothing is copied from another host.
+This installs:
 
-For a laptop or a machine that only needs the physical session:
+- `~/.local/bin/end4pc-vnc`
+- `~/.config/systemd/user/wayvnc.service`
+- `~/.config/end4-pC/vnc.json`
+- `~/.config/end4-pC/vnc.secret` (mode 600)
+- `~/.config/end4-pC/vnc/tls/{cert,key}.pem`
+- a generated `wayvnc` config under the same directory
+
+It does **not** enable the service by default. Enable it from the VNC Settings
+page, or:
 
 ```bash
-VNC_MODE=mirror VNC_AUDIO=none VNC_AUTOLOGIN=0 ./optional/vnc/install-vnc.sh
+systemctl --user enable --now wayvnc.service
 ```
 
-## Runtime CLI and settings
+The installer generates a random VNC password in
+`~/.config/end4-pC/vnc.secret` (mode 600). Set your own password in
+**Settings → VNC → Network & Security** before connecting, or read that file
+locally and replace it from Settings.
 
-The installer adds `~/.local/bin/end4pc-vnc`:
+The service binds to `127.0.0.1:5900` by default. Connect through SSH:
 
 ```bash
-end4pc-vnc status
-end4pc-vnc status --json
-end4pc-vnc get mirror_input
-end4pc-vnc set mirror_input 0     # view-only physical mirror
-end4pc-vnc set mirror_input 1     # interactive physical mirror
-end4pc-vnc set theme_lock 1
-end4pc-vnc set blank_wallpaper 1
-end4pc-vnc restart
+ssh -L 5900:127.0.0.1:5900 user@host
 ```
 
-Only runtime-safe keys can be changed this way. Structural changes (mode,
-ports, GPU, autologin, audio) require re-running `install-vnc.sh` so the
-generated units and system files are rebuilt consistently.
-
-The end4-pC Settings app has a **VNC** page backed by this CLI. It shows the
-detected endpoints and provides the three runtime toggles.
-
-## Audio
-
-After install:
-
-```bash
-systemctl --user enable --now sunshine-remote.service
-ss -tlnp | grep -E '47984|47989|47990|48010'
-```
-
-Open the Sunshine web UI, pair Moonlight, and select the stream. Sound from
-apps in the hidden session is routed to `hypr_remote` and captured by Sunshine.
-The host speakers remain silent.
-
-## Theme hooks
-
-When a client connects to `:5901`:
-
-- physical live video slows/stops
-- static wallpaper is blanked
-- only the physical quickshell is restarted
-
-When the last client disconnects:
-
-- wallpaper is restored
-- `hyprlock` locks the physical session
-
-Set `VNC_THEME_LOCK=0` in `vnc-theme-hooks.service` to disable locking while
-testing.
+Then point the VNC client at `localhost:5900` and accept the certificate
+fingerprint shown in Settings → VNC → Network & Security.
 
 ## Security
 
-- Bind to Tailscale only where possible.
-- VNC authentication is disabled by default in this module; rely on Tailscale
-  and UFW, or put VNC behind an SSH tunnel.
-- Autologin is enabled by default because `:5901` needs a physical session.
-  Disable it with `--vnc-autologin=0`; then log in physically first.
-- Locking on disconnect is enabled by default.
+- TLS authentication and a VNC password are enabled by default.
+- The password is stored in `vnc.secret` with mode `600`; it is never printed by
+  `status` and never returned to the Settings page.
+- If authentication is disabled, the controller refuses any bind address that
+  is not loopback.
+- Do not expose port 5900 directly to the LAN/WAN. Prefer an SSH tunnel or a
+  Tailscale bind (the Settings page lists the detected Tailscale address).
+- The self-signed certificate is intentionally local; compare its SHA256
+  fingerprint on first connect.
+
+## Settings page
+
+**Settings → VNC** controls:
+
+- service start/stop/restart and autostart;
+- capture mode, output, FPS, cursor, GPU, resizing;
+- bind address, port, TLS, username, password, certificate, PAM;
+- remote input and keyboard layout;
+- lock-on-disconnect, idle inhibition, exit-on-disconnect, log level;
+- connected clients, outputs, diagnostics, SSH tunnel command and logs.
+
+The page stages changes and sends one JSON patch to the controller. The
+controller validates, writes atomically and restarts the user service when
+needed. The page never writes `~/.config/illogical-impulse/config.json` and
+never restarts Quickshell.
+
+## CLI
+
+```bash
+~/.local/bin/end4pc-vnc status
+~/.local/bin/end4pc-vnc apply --stdin < settings.json
+~/.local/bin/end4pc-vnc service start|stop|restart
+~/.local/bin/end4pc-vnc service autostart-on|autostart-off
+~/.local/bin/end4pc-vnc password          # reads the password from stdin
+~/.local/bin/end4pc-vnc cert regenerate
+~/.local/bin/end4pc-vnc clients
+~/.local/bin/end4pc-vnc outputs
+~/.local/bin/end4pc-vnc output-set HDMI-A-2
+~/.local/bin/end4pc-vnc desktop-name "end4-pC"
+~/.local/bin/end4pc-vnc log -n 200
+```
+
+The QML singleton also exposes `qs -c end4-pC ipc call vnc refresh` and
+`... ipc call vnc applyCurrent` for diagnostics.
 
 ## Uninstall
 
 ```bash
-./optional/vnc/uninstall-vnc.sh
+./optional/vnc/uninstall-user.sh          # keeps config/TLS/password
+./optional/vnc/uninstall-user.sh --purge  # removes config/TLS/password too
 ```
 
-This disables/removes the units and generated configs and restores the backed-up
-system files. It does not remove packages.
+## Legacy installer
 
-## Known limitations
+`install-vnc.sh` is the old full/hidden VKMS setup. It is **retired** and exits
+unless `END4PC_VNC_LEGACY=1` is set. It created a second Hyprland session and
+was the source of the earlier audio/config/lock problems. The old documentation
+is preserved as `README-legacy.md`; do not use it for new installs.
 
-- A single wayvnc `-a` stream captures all physical outputs as one framebuffer.
-- VNC password authentication is not enabled by this installer.
-- Hidden-session audio requires Sunshine/Moonlight, not VNC.
-- The VKMS/private-seatd layout is Arch/CachyOS-specific and should be tested
-  after the first reboot.
+## Troubleshooting
+
+- `systemctl --user status wayvnc.service`
+- `journalctl --user -u wayvnc.service -n 200 --no-pager`
+- `~/.local/bin/end4pc-vnc validate`
+- `ss -ltnp | grep 5900`
+- If the input is view-only, check **Allow remote input** and that the
+  compositor accepted virtual keyboard/pointer devices.
+- If the screen is locked and the remote is black, the compositor may block
+  screen capture during `ext-session-lock`; unlock locally or use a separate
+  capture stack.

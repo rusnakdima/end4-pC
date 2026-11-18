@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+# DEPRECATED: this full/hidden VKMS installer is retired. It created a second
+# Hyprland session and is not used by the Settings page. Use install-user.sh.
+if [[ "${END4PC_VNC_LEGACY:-0}" != "1" ]]; then
+    echo "install-vnc.sh is retired. Use ./install-user.sh for the supported user-level setup." >&2
+    echo "Set END4PC_VNC_LEGACY=1 only if you intentionally need the old code." >&2
+    exit 1
+fi
+
 #
 # install-vnc.sh — optional VNC/remote-desktop setup for end4-pC.
 #

@@ -160,6 +160,7 @@ Scope {
         function toggle(): void { GlobalStates.settingsOpen = !GlobalStates.settingsOpen; }
         function open(): void   { GlobalStates.settingsOpen = true; }
         function close(): void  { GlobalStates.settingsOpen = false; }
+        function openAt(pageId: string): void { GlobalStates.openSettingsAt(pageId, "", "", ""); }
     }
 
     CompositorGlobalShortcut {

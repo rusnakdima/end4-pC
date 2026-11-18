@@ -1,179 +1,1091 @@
-#!/usr/bin/env bash
-# end4pc-vnc — status and safe runtime controls for the optional VNC module.
-set -u
+#!/usr/bin/env python3
+"""end4pc-vnc - user-level controller for the end4-pC WayVNC setup.
 
-CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/end4-pC/vnc.conf"
-COMMAND="${1:-status}"
+The controller is deliberately the only writer of the VNC configuration.  The
+Settings page and the CLI call it; it validates, writes atomically and restarts
+the user service when needed.  It never touches the end4-pC shell config and it
+never starts a second compositor.
+"""
 
-load_config() {
-    if [[ -f "$CONFIG" ]]; then
-        set -a
-        # shellcheck disable=SC1090
-        . "$CONFIG"
-        set +a
-    fi
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import secrets
+import shutil
+import signal
+import socket
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+APP = "end4pc-vnc"
+SERVICE = "wayvnc.service"
+
+HOME = Path(os.environ.get("HOME") or Path.home())
+XDG_CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME") or (HOME / ".config"))
+XDG_RUNTIME_DIR = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}")
+CONFIG_DIR = XDG_CONFIG_HOME / "end4-pC"
+CONFIG_FILE = CONFIG_DIR / "vnc.json"
+SECRET_FILE = CONFIG_DIR / "vnc.secret"
+VNC_DIR = CONFIG_DIR / "vnc"
+TLS_DIR = VNC_DIR / "tls"
+CERT_FILE = TLS_DIR / "cert.pem"
+KEY_FILE = TLS_DIR / "key.pem"
+WAYVNC_CONF = VNC_DIR / "wayvnc.conf"
+STATE_FILE = XDG_RUNTIME_DIR / "end4pc-vnc-state.json"
+LOCK_FILE = XDG_RUNTIME_DIR / "end4pc-vnc.lock"
+
+DEFAULTS = {
+    "version": 1,
+    "autostart": False,
+    "desktopName": "end4-pC",
+    "capture": {
+        "mode": "all",  # all | single | headless
+        "output": "HDMI-A-2",
+        "headless": {
+            "width": 1920,
+            "height": 1080,
+            "refresh": 60,
+            "scale": 1.0,
+            "mirror": "HDMI-A-2",
+        },
+    },
+    "encoding": {
+        "maxFps": 30,
+        "renderCursor": True,
+        "gpu": False,
+        "disableResizing": False,
+    },
+    "network": {
+        "address": "127.0.0.1",
+        "port": 5900,
+        "auth": True,
+        "username": os.environ.get("USER") or HOME.name,
+        "pam": False,
+        "relaxEncryption": False,
+        "allowBrokenCrypto": False,
+    },
+    "input": {
+        "enabled": True,
+        "seat": "",
+        "matchHostKeyboard": True,
+        "xkb": {"layout": "", "variant": "", "model": "", "options": "", "rules": ""},
+    },
+    "behavior": {
+        "lockOnDisconnect": False,
+        "inhibitIdle": False,
+        "exitOnDisconnect": False,
+        "logLevel": "warning",
+    },
 }
 
-svc_user_active() {
-    systemctl --user is-active --quiet "$1" 2>/dev/null && printf 'true' || printf 'false'
-}
-svc_user_enabled() {
-    systemctl --user is-enabled --quiet "$1" 2>/dev/null && printf 'true' || printf 'false'
-}
-svc_system_active() {
-    systemctl is-active --quiet "$1" 2>/dev/null && printf 'true' || printf 'false'
-}
-svc_system_enabled() {
-    systemctl is-enabled --quiet "$1" 2>/dev/null && printf 'true' || printf 'false'
-}
+LOG_LEVELS = {"error", "warning", "info", "debug", "trace", "quiet"}
+NAME_RE = re.compile(r"^[A-Za-z0-9_.:@-]+$")
 
-load_config
-VNC_MODE="${VNC_MODE:-full}"
-VNC_MIRROR_PORT="${VNC_MIRROR_PORT:-5901}"
-VNC_HIDDEN_PORT="${VNC_HIDDEN_PORT:-5902}"
-VNC_MIRROR_INPUT="${VNC_MIRROR_INPUT:-1}"
-VNC_THEME_LOCK="${VNC_THEME_LOCK:-1}"
-VNC_THEME_BLANK_WALLPAPER="${VNC_THEME_BLANK_WALLPAPER:-1}"
-VNC_BIND_ADDR="${VNC_BIND_ADDR:-$(tailscale ip -4 2>/dev/null | head -n1 || true)}"
-VNC_BIND_ADDR="${VNC_BIND_ADDR:-127.0.0.1}"
 
-case "${VNC_MIRROR_INPUT}" in 0|1) ;; *) VNC_MIRROR_INPUT=1 ;; esac
-case "${VNC_THEME_LOCK}" in 0|1) ;; *) VNC_THEME_LOCK=1 ;; esac
-case "${VNC_THEME_BLANK_WALLPAPER}" in 0|1) ;; *) VNC_THEME_BLANK_WALLPAPER=1 ;; esac
+# --------------------------------------------------------------------------
+# small helpers
+# --------------------------------------------------------------------------
 
-status_json() {
-    local installed=false
-    [[ -f "$CONFIG" ]] && installed=true
-    jq -n \
-        --arg host "$(hostname -s 2>/dev/null || hostname)" \
-        --arg user "$(id -un)" \
-        --arg mode "$VNC_MODE" \
-        --arg bind "$VNC_BIND_ADDR" \
-        --arg mirror_port "$VNC_MIRROR_PORT" \
-        --arg hidden_port "$VNC_HIDDEN_PORT" \
-        --arg mirror_input "$VNC_MIRROR_INPUT" \
-        --arg theme_lock "$VNC_THEME_LOCK" \
-        --arg blank_wallpaper "$VNC_THEME_BLANK_WALLPAPER" \
-        --argjson installed "$installed" \
-        --argjson mirror_active "$(svc_user_active wayvnc-mirror.service)" \
-        --argjson mirror_enabled "$(svc_user_enabled wayvnc-mirror.service)" \
-        --argjson hidden_active "$(svc_system_active hyprland-hidden.service)" \
-        --argjson hidden_enabled "$(svc_system_enabled hyprland-hidden.service)" \
-        --argjson remote_active "$(svc_user_active wayvnc-remote.service)" \
-        --argjson hooks_active "$(svc_user_active vnc-theme-hooks.service)" \
-        --argjson sunshine_active "$(svc_user_active sunshine-remote.service)" \
-        '{
-            host: $host,
-            user: $user,
-            installed: $installed,
-            mode: $mode,
-            bind: $bind,
-            mirror_port: ($mirror_port | tonumber? // $mirror_port),
-            hidden_port: ($hidden_port | tonumber? // $hidden_port),
-            mirror_input: ($mirror_input | tonumber),
-            theme_lock: ($theme_lock | tonumber),
-            blank_wallpaper: ($blank_wallpaper | tonumber),
-            endpoints: {
-                mirror: ("vnc://" + $bind + ":" + $mirror_port),
-                hidden: ("vnc://" + $bind + ":" + $hidden_port)
-            },
-            services: {
-                mirror: { active: $mirror_active, enabled: $mirror_enabled },
-                hidden: { active: $hidden_active, enabled: $hidden_enabled },
-                remote_vnc: { active: $remote_active },
-                theme_hooks: { active: $hooks_active },
-                sunshine: { active: $sunshine_active }
+
+def deep_merge(base: dict, patch: dict) -> dict:
+    out = dict(base)
+    for key, value in (patch or {}).items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = deep_merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def atomic_write(path: Path, text: str, mode: int = 0o600) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = _tempfile(path)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
+def _tempfile(path: Path) -> tuple[int, str]:
+    import tempfile
+
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+    return fd, name
+
+
+def load_config() -> dict:
+    cfg = json.loads(json.dumps(DEFAULTS))
+    if CONFIG_FILE.exists():
+        try:
+            raw = json.loads(CONFIG_FILE.read_text(encoding="utf-8") or "{}")
+            cfg = deep_merge(cfg, raw)
+        except (OSError, ValueError) as exc:
+            raise SystemExit(f"cannot read {CONFIG_FILE}: {exc}")
+    cfg["version"] = 1
+    return cfg
+
+
+def save_config(cfg: dict) -> None:
+    atomic_write(CONFIG_FILE, json.dumps(cfg, indent=2, sort_keys=True) + "\n")
+
+
+def read_secret() -> str:
+    try:
+        return SECRET_FILE.read_text(encoding="utf-8").strip("\r\n")
+    except OSError:
+        return ""
+
+
+def write_secret(secret: str) -> None:
+    atomic_write(SECRET_FILE, secret + "\n")
+
+
+def loopback(address: str) -> bool:
+    return (address or "").strip() in {"127.0.0.1", "::1", "localhost"}
+
+
+def run(cmd: list[str], *, check: bool = False, timeout: float = 15.0) -> tuple[int, str, str]:
+    try:
+        proc = subprocess.run(
+            cmd,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            env=os.environ.copy(),
+        )
+        if check and proc.returncode != 0:
+            raise RuntimeError((proc.stderr or proc.stdout).strip() or f"{cmd[0]} failed")
+        return proc.returncode, proc.stdout, proc.stderr
+    except FileNotFoundError:
+        return 127, "", f"{cmd[0]}: not found"
+    except subprocess.TimeoutExpired:
+        return 124, "", f"{cmd[0]}: timed out"
+
+
+def hypr_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.setdefault("XDG_RUNTIME_DIR", str(XDG_RUNTIME_DIR))
+    if not env.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        root = Path(env["XDG_RUNTIME_DIR"]) / "hypr"
+        try:
+            candidates = sorted(root.iterdir(), key=lambda p: p.stat().st_mtime)
+            if candidates:
+                env["HYPRLAND_INSTANCE_SIGNATURE"] = candidates[-1].name
+        except OSError:
+            pass
+    return env
+
+
+def hyprctl(args: list[str]) -> tuple[int, str, str]:
+    try:
+        proc = subprocess.run(
+            ["hyprctl", *args],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=10,
+            env=hypr_env(),
+        )
+        return proc.returncode, proc.stdout, proc.stderr
+    except FileNotFoundError:
+        return 127, "", "hyprctl: not found"
+    except subprocess.TimeoutExpired:
+        return 124, "", "hyprctl: timed out"
+
+
+def hypr_eval(code: str) -> tuple[int, str, str]:
+    return hyprctl(["eval", code])
+
+
+def monitors(all_monitors: bool = False) -> list[dict]:
+    args = ["monitors"]
+    if all_monitors:
+        args.append("all")
+    args.append("-j")
+    rc, out, _ = hyprctl(args)
+    if rc != 0:
+        return []
+    try:
+        data = json.loads(out or "[]")
+        return data if isinstance(data, list) else []
+    except ValueError:
+        return []
+
+
+def physical_outputs() -> list[dict]:
+    return [m for m in monitors() if not m.get("disabled") and not str(m.get("name", "")).startswith("HEADLESS")]
+
+
+def wayvncctl(args: list[str], timeout: float = 5.0) -> tuple[int, str, str]:
+    if not shutil.which("wayvncctl"):
+        return 127, "", "wayvncctl: not found"
+    return run(["wayvncctl", "--json", *args], timeout=timeout)
+
+
+def service_state() -> tuple[bool, bool, str]:
+    rc, out, _ = run(["systemctl", "--user", "is-active", SERVICE])
+    active = rc == 0 and out.strip() == "active"
+    rc2, out2, _ = run(["systemctl", "--user", "is-enabled", SERVICE])
+    enabled = rc2 == 0 and out2.strip() in {"enabled", "enabled-runtime"}
+    rc3, out3, _ = run(["systemctl", "--user", "show", "-p", "ActiveState", "-p", "SubState", "--value", SERVICE])
+    state = " ".join(x.strip() for x in out3.splitlines() if x.strip()) if rc3 == 0 else "unknown"
+    return active, enabled, state
+
+
+def systemctl(action: str) -> tuple[bool, str]:
+    if action not in {"start", "stop", "restart", "enable", "disable"}:
+        raise ValueError(action)
+    if action in {"start", "restart"}:
+        # A previous failed configuration can leave the unit in start-limit-hit.
+        run(["systemctl", "--user", "reset-failed", SERVICE])
+    rc, out, err = run(["systemctl", "--user", action, SERVICE])
+    if rc != 0:
+        return False, (err or out).strip() or f"systemctl {action} failed"
+    return True, ""
+
+
+def service_installed() -> bool:
+    return Path(HOME / ".config/systemd/user" / SERVICE).exists()
+
+
+def fingerprint() -> str:
+    if not CERT_FILE.exists() or not shutil.which("openssl"):
+        return ""
+    rc, out, _ = run(
+        ["openssl", "x509", "-in", str(CERT_FILE), "-noout", "-fingerprint", "-sha256"],
+        timeout=5,
+    )
+    if rc != 0:
+        return ""
+    return out.strip().split("=", 1)[-1].strip()
+
+
+# --------------------------------------------------------------------------
+# validation and generation
+# --------------------------------------------------------------------------
+
+
+def validate(cfg: dict, secret: str) -> list[str]:
+    errors: list[str] = []
+    cap = cfg.get("capture") or {}
+    mode = cap.get("mode")
+    if mode not in {"all", "single", "headless"}:
+        errors.append("capture.mode must be all, single or headless")
+    if mode == "single":
+        out = str(cap.get("output") or "").strip()
+        if not out or not NAME_RE.match(out):
+            errors.append("capture.output is required for single-monitor mode")
+    if mode == "headless":
+        # A mirrored headless output is hidden from wayvnc's output list on
+        # Hyprland 0.57, so it cannot be captured.  Keep the config key for
+        # completeness but refuse it instead of starting a broken service.
+        errors.append("virtual mirror is not supported by wayvnc on Hyprland; use all monitors or a single physical output")
+
+    enc = cfg.get("encoding") or {}
+    try:
+        fps = int(enc.get("maxFps", 30))
+        if fps < 1 or fps > 120:
+            errors.append("encoding.maxFps must be 1-120")
+    except (TypeError, ValueError):
+        errors.append("encoding.maxFps must be a number")
+
+    net = cfg.get("network") or {}
+    address = str(net.get("address") or "").strip()
+    if not address:
+        errors.append("network.address is required")
+    try:
+        port = int(net.get("port", 5900))
+        if port < 1024 or port > 65535:
+            errors.append("network.port must be 1024-65535")
+    except (TypeError, ValueError):
+        errors.append("network.port must be a number")
+    auth = bool(net.get("auth"))
+    pam = bool(net.get("pam"))
+    if not auth and not loopback(address):
+        errors.append("authentication must stay enabled unless the bind address is loopback")
+    if auth:
+        if not pam and not secret:
+            errors.append("a VNC password is required when authentication is enabled")
+        if not pam and secret:
+            if secret != secret.strip() or "\n" in secret or "\r" in secret:
+                errors.append("the VNC password cannot start/end with whitespace or contain newlines")
+            if len(secret) > 256:
+                errors.append("the VNC password is too long")
+        if not shutil.which("openssl"):
+            errors.append("openssl is required to generate the TLS certificate")
+
+    inp = cfg.get("input") or {}
+    xkb = inp.get("xkb") or {}
+    for key in ("layout", "variant", "model", "options", "rules"):
+        value = xkb.get(key, "")
+        if value is not None and not isinstance(value, str):
+            errors.append(f"input.xkb.{key} must be a string")
+    seat = str(inp.get("seat") or "")
+    if seat and not NAME_RE.match(seat):
+        errors.append("input.seat contains unsupported characters")
+
+    beh = cfg.get("behavior") or {}
+    log_level = str(beh.get("logLevel") or "warning")
+    if log_level not in LOG_LEVELS:
+        errors.append("behavior.logLevel is invalid")
+
+    name = str(cfg.get("desktopName") or "").strip()
+    if not name:
+        errors.append("desktopName is required")
+    return errors
+
+
+def ensure_tls(cfg: dict) -> None:
+    """Generate a self-signed certificate when auth is on and none exists."""
+    if not bool((cfg.get("network") or {}).get("auth")):
+        return
+    TLS_DIR.mkdir(parents=True, exist_ok=True)
+    os.chmod(TLS_DIR, 0o700)
+    if CERT_FILE.exists() and KEY_FILE.exists():
+        return
+    if not shutil.which("openssl"):
+        raise RuntimeError("openssl is required to generate the TLS certificate")
+    address = str((cfg.get("network") or {}).get("address") or "127.0.0.1")
+    san = ["DNS:localhost", "IP:127.0.0.1", "IP:::1"]
+    if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", address):
+        san.append(f"IP:{address}")
+    elif NAME_RE.match(address):
+        san.append(f"DNS:{address}")
+    cmd = [
+        "openssl",
+        "req",
+        "-x509",
+        "-newkey",
+        "rsa:4096",
+        "-sha256",
+        "-days",
+        "3650",
+        "-nodes",
+        "-keyout",
+        str(KEY_FILE),
+        "-out",
+        str(CERT_FILE),
+        "-subj",
+        "/CN=end4pc-vnc",
+        "-addext",
+        "subjectAltName=" + ",".join(dict.fromkeys(san)),
+    ]
+    rc, out, err = run(cmd, timeout=60)
+    if rc != 0:
+        raise RuntimeError((err or out).strip() or "openssl failed")
+    os.chmod(KEY_FILE, 0o600)
+    os.chmod(CERT_FILE, 0o600)
+
+
+def write_wayvnc_conf(cfg: dict) -> None:
+    net = cfg.get("network") or {}
+    lines = [
+        "use_relative_paths=false",
+        f"address={str(net.get('address') or '127.0.0.1').strip()}",
+        f"port={int(net.get('port', 5900))}",
+        f"enable_auth={'true' if net.get('auth') else 'false'}",
+    ]
+    if net.get("auth"):
+        lines += [
+            f"certificate_file={CERT_FILE}",
+            f"private_key_file={KEY_FILE}",
+            f"username={str(net.get('username') or '').strip()}",
+        ]
+        if net.get("pam"):
+            lines.append("enable_pam=true")
+        else:
+            lines.append(f"password={read_secret()}")
+        if net.get("relaxEncryption"):
+            lines.append("relax_encryption=true")
+        if net.get("allowBrokenCrypto"):
+            lines.append("allow_broken_crypto=true")
+    inp = cfg.get("input") or {}
+    if inp.get("matchHostKeyboard"):
+        rc, layout, _ = hyprctl(["getoption", "input:kb_layout", "-j"])
+        rc2, options, _ = hyprctl(["getoption", "input:kb_options", "-j"])
+        try:
+            layout = json.loads(layout).get("str", "") if rc == 0 else ""
+        except ValueError:
+            layout = ""
+        try:
+            options = json.loads(options).get("str", "") if rc2 == 0 else ""
+        except ValueError:
+            options = ""
+        if layout:
+            lines.append(f"xkb_layout={layout}")
+        if options:
+            lines.append(f"xkb_options={options}")
+    else:
+        xkb = inp.get("xkb") or {}
+        for key in ("layout", "variant", "model", "options", "rules"):
+            value = str(xkb.get(key) or "").strip()
+            if value:
+                lines.append(f"xkb_{key}={value}")
+    atomic_write(WAYVNC_CONF, "\n".join(lines) + "\n")
+
+
+def wayvnc_args(cfg: dict) -> list[str]:
+    cap = cfg.get("capture") or {}
+    enc = cfg.get("encoding") or {}
+    inp = cfg.get("input") or {}
+    beh = cfg.get("behavior") or {}
+    args = ["-C", str(WAYVNC_CONF)]
+    mode = cap.get("mode")
+    if mode == "all":
+        args.append("-a")
+    elif mode == "single":
+        args += ["-o", str(cap.get("output"))]
+    elif mode == "headless":
+        name = load_state().get("headless")
+        if not name:
+            raise RuntimeError("headless output is not prepared")
+        args += ["-o", name]
+    if enc.get("renderCursor"):
+        args.append("-r")
+    args += ["-f", str(int(enc.get("maxFps", 30)))]
+    if enc.get("gpu"):
+        args.append("-g")
+    if enc.get("disableResizing"):
+        args.append("-R")
+    if not inp.get("enabled"):
+        args.append("-d")
+    if inp.get("seat"):
+        args += ["-s", str(inp["seat"])]
+    if cfg.get("desktopName"):
+        args += ["-n", str(cfg["desktopName"])]
+    if beh.get("exitOnDisconnect"):
+        args.append("-e")
+    if beh.get("logLevel"):
+        args += ["-L", str(beh["logLevel"])]
+    return args
+
+
+# --------------------------------------------------------------------------
+# headless output
+# --------------------------------------------------------------------------
+
+
+def load_state() -> dict:
+    try:
+        return json.loads(STATE_FILE.read_text(encoding="utf-8") or "{}")
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(state: dict) -> None:
+    atomic_write(STATE_FILE, json.dumps(state, sort_keys=True) + "\n", 0o600)
+
+
+def headless_names() -> list[str]:
+    return [m.get("name") for m in monitors(all_monitors=True) if str(m.get("name", "")).startswith("HEADLESS")]
+
+
+def mirror_lua(name: str, cfg: dict) -> str:
+    h = (cfg.get("capture") or {}).get("headless") or {}
+    try:
+        w = int(h.get("width", 1920))
+        hgt = int(h.get("height", 1080))
+        refresh = int(h.get("refresh", 60))
+        scale = float(h.get("scale", 1.0))
+    except (TypeError, ValueError):
+        w, hgt, refresh, scale = 1920, 1080, 60, 1.0
+    target = str(h.get("mirror") or "").strip() or focused_output()
+    if not NAME_RE.match(name) or not NAME_RE.match(target):
+        raise RuntimeError("invalid headless output name")
+    return (
+        f'hl.monitor({{ output = "{name}", mode = "{w}x{hgt}@{refresh}", '
+        f'position = "0x0", scale = {scale}, mirror = "{target}" }})'
+    )
+
+
+def focused_output() -> str:
+    for m in monitors():
+        if m.get("focused"):
+            return str(m.get("name"))
+    outs = physical_outputs()
+    return str(outs[0]["name"]) if outs else ""
+
+
+def ensure_headless(cfg: dict) -> str:
+    state = load_state()
+    names = headless_names()
+    name = state.get("headless")
+    if name not in names:
+        before = set(names)
+        rc, out, err = hyprctl(["output", "create", "headless"])
+        if rc != 0:
+            raise RuntimeError((err or out).strip() or "cannot create headless output")
+        for _ in range(50):
+            new = [n for n in headless_names() if n not in before]
+            if new:
+                name = new[0]
+                break
+            time.sleep(0.1)
+        if not name:
+            raise RuntimeError("headless output was created but never appeared")
+    rc, out, err = hypr_eval(mirror_lua(name, cfg))
+    if rc != 0:
+        raise RuntimeError((err or out).strip() or "cannot mirror headless output")
+    state["headless"] = name
+    save_state(state)
+    return name
+
+
+def disable_headless() -> None:
+    state = load_state()
+    name = state.get("headless")
+    if not name:
+        return
+    if name in headless_names():
+        hypr_eval(f'hl.monitor({{ output = "{name}", disabled = true }})')
+        # hyprctl output remove refuses mirrored virtual outputs on some
+        # Hyprland versions.  A disabled output is inert and is re-used on
+        # the next start; it disappears on the next compositor start.
+        hyprctl(["output", "remove", name])
+    state.pop("headless", None)
+    save_state(state)
+
+
+# --------------------------------------------------------------------------
+# status
+# --------------------------------------------------------------------------
+
+
+def clients() -> list[dict]:
+    rc, out, _ = wayvncctl(["client-list"])
+    if rc != 0:
+        return []
+    try:
+        data = json.loads(out or "[]")
+    except ValueError:
+        return []
+    if isinstance(data, dict):
+        data = data.get("clients", [])
+    return data if isinstance(data, list) else []
+
+
+def output_list() -> list[dict]:
+    rc, out, _ = wayvncctl(["output-list"])
+    if rc != 0:
+        return []
+    try:
+        data = json.loads(out or "[]")
+    except ValueError:
+        return []
+    if isinstance(data, dict):
+        data = data.get("outputs", [])
+    return data if isinstance(data, list) else []
+
+
+def addresses() -> list[str]:
+    out: list[str] = []
+    for value in ("127.0.0.1", "::1"):
+        out.append(value)
+    if shutil.which("tailscale"):
+        rc, text, _ = run(["tailscale", "ip", "-4"], timeout=5)
+        if rc == 0:
+            for line in text.splitlines():
+                line = line.strip()
+                if line and line not in out:
+                    out.append(line)
+    rc, text, _ = run(["ip", "-j", "addr", "show"], timeout=5)
+    if rc == 0:
+        try:
+            for iface in json.loads(text):
+                for info in iface.get("addr_info", []):
+                    if info.get("family") == "inet":
+                        local = info.get("local")
+                        if local and local not in out:
+                            out.append(local)
+        except ValueError:
+            pass
+    return out
+
+
+def status_payload() -> dict:
+    cfg = load_config()
+    secret = read_secret()
+    active, enabled, state = service_state()
+    monitors_all = monitors(all_monitors=True)
+    normal = [m for m in monitors_all if not m.get("disabled")]
+    errors = validate(cfg, secret)
+    if not shutil.which("wayvnc"):
+        errors.append("wayvnc is not installed")
+    if not service_installed():
+        errors.append("wayvnc.service is not installed for this user")
+    tls_ready = CERT_FILE.exists() and KEY_FILE.exists()
+    current = ""
+    try:
+        name = load_state().get("headless")
+        if name in [m.get("name") for m in monitors_all]:
+            current = name
+    except Exception:
+        current = ""
+    return {
+        "config": cfg,
+        "hasPassword": bool(secret),
+        "tlsReady": tls_ready,
+        "fingerprint": fingerprint(),
+        "serviceActive": active,
+        "serviceEnabled": enabled,
+        "serviceState": state,
+        "serviceInstalled": service_installed(),
+        "helper": str(Path(__file__).resolve()),
+        "hostname": socket.gethostname(),
+        "version": wayvnc_version(),
+        "clients": clients(),
+        "wayvncOutputs": output_list(),
+        "monitors": normal,
+        "outputs": [
+            {
+                "name": m.get("name"),
+                "width": m.get("width"),
+                "height": m.get("height"),
+                "refresh": m.get("refreshRate"),
+                "focused": bool(m.get("focused")),
+                "disabled": bool(m.get("disabled")),
+                "headless": str(m.get("name", "")).startswith("HEADLESS"),
+                "mirrorOf": m.get("mirrorOf"),
             }
-        }'
-}
+            for m in monitors_all
+        ],
+        "headless": current,
+        "addresses": addresses(),
+        "errors": errors,
+    }
 
-status_human() {
-    echo "VNC mode:       $VNC_MODE"
-    echo "Config:         $CONFIG"
-    echo "Physical:       vnc://$VNC_BIND_ADDR:$VNC_MIRROR_PORT  (interactive=$VNC_MIRROR_INPUT)"
-    echo "Hidden:         vnc://$VNC_BIND_ADDR:$VNC_HIDDEN_PORT"
-    echo "Theme lock:     $VNC_THEME_LOCK"
-    echo "Blank wallpaper: $VNC_THEME_BLANK_WALLPAPER"
-    echo "Mirror service: $(svc_user_active wayvnc-mirror.service) active / $(svc_user_enabled wayvnc-mirror.service) enabled"
-    echo "Hidden service: $(svc_system_active hyprland-hidden.service) active / $(svc_system_enabled hyprland-hidden.service) enabled"
-    echo "Hooks service:  $(svc_user_active vnc-theme-hooks.service) active"
-}
 
-get_key() {
-    case "${1:-}" in
-        mirror_input) printf '%s\n' "$VNC_MIRROR_INPUT" ;;
-        theme_lock) printf '%s\n' "$VNC_THEME_LOCK" ;;
-        blank_wallpaper) printf '%s\n' "$VNC_THEME_BLANK_WALLPAPER" ;;
-        mode) printf '%s\n' "$VNC_MODE" ;;
-        bind) printf '%s\n' "$VNC_BIND_ADDR" ;;
-        mirror_port) printf '%s\n' "$VNC_MIRROR_PORT" ;;
-        hidden_port) printf '%s\n' "$VNC_HIDDEN_PORT" ;;
-        *) echo "unknown key: ${1:-}" >&2; return 2 ;;
-    esac
-}
+def wayvnc_version() -> dict:
+    rc, out, _ = wayvncctl(["version"])
+    if rc != 0:
+        return {}
+    try:
+        return json.loads(out or "{}")
+    except ValueError:
+        return {}
 
-write_key() {
-    local key="$1" value="$2" dir
-    dir=$(dirname "$CONFIG")
-    mkdir -p "$dir"
-    touch "$CONFIG"
-    if grep -q "^${key}=" "$CONFIG"; then
-        sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$CONFIG"
-    else
-        printf '%s="%s"\n' "$key" "$value" >>"$CONFIG"
-    fi
-}
 
-set_key() {
-    local key="${1:-}" value="${2:-}" cfgkey
-    case "$key" in
-        mirror_input|theme_lock|blank_wallpaper) ;;
-        *) echo "refusing to change structural key '$key' at runtime; edit $CONFIG and reconfigure" >&2; return 2 ;;
-    esac
-    case "$value" in 0|1) ;; *) echo "value must be 0 or 1" >&2; return 2 ;; esac
-    case "$key" in
-        mirror_input) cfgkey=VNC_MIRROR_INPUT ;;
-        theme_lock) cfgkey=VNC_THEME_LOCK ;;
-        blank_wallpaper) cfgkey=VNC_THEME_BLANK_WALLPAPER ;;
-    esac
-    write_key "$cfgkey" "$value"
-    case "$key" in
-        mirror_input) systemctl --user try-restart wayvnc-mirror.service 2>/dev/null || true ;;
-        theme_lock|blank_wallpaper) systemctl --user try-restart vnc-theme-hooks.service 2>/dev/null || true ;;
-    esac
-    printf 'set %s=%s\n' "$key" "$value"
-}
+# --------------------------------------------------------------------------
+# commands
+# --------------------------------------------------------------------------
 
-case "$COMMAND" in
-    status)
-        if [[ "${2:-}" == "--json" ]]; then status_json; else status_human; fi
-        ;;
-    get) get_key "${2:-}" ;;
-    set) set_key "${2:-}" "${3:-}" ;;
-    restart)
-        systemctl --user restart wayvnc-mirror.service vnc-theme-hooks.service 2>/dev/null || true
-        echo "restarted VNC user services"
-        ;;
-    reconfigure)
-        echo "Run the installer to change mode, ports, GPU, autologin, or audio:"
-        echo "  ./optional/vnc/install-vnc.sh   # from the end4-pC checkout"
-        ;;
-    help|-h|--help)
-        cat <<HELP
-Usage: end4pc-vnc <command> [args]
 
-Commands:
-  status [--json]       Show detected status and service state
-  get <key>             mirror_input|theme_lock|blank_wallpaper|mode|bind|mirror_port|hidden_port
-  set <key> <0|1>       mirror_input|theme_lock|blank_wallpaper
-  restart               Restart the VNC user services
-  reconfigure           Print installer instructions for structural changes
+def cmd_status(_args: argparse.Namespace) -> int:
+    print(json.dumps(status_payload(), indent=2))
+    return 0
 
-Config: $CONFIG
-HELP
-        ;;
-    *)
-        echo "unknown command: $COMMAND" >&2
-        exit 2
-        ;;
-esac
+
+def read_stdin_line() -> str:
+    line = sys.stdin.readline()
+    if not line:
+        line = sys.stdin.read()
+    return line.rstrip("\r\n")
+
+
+def cmd_apply(_args: argparse.Namespace) -> int:
+    raw = sys.stdin.readline()
+    if not raw.strip():
+        raw = sys.stdin.read()
+    if not raw.strip():
+        print(json.dumps({"ok": False, "error": "empty settings payload"}))
+        return 2
+    try:
+        patch = json.loads(raw)
+    except ValueError as exc:
+        print(json.dumps({"ok": False, "error": f"invalid JSON: {exc}"}))
+        return 2
+    cfg = deep_merge(load_config(), patch)
+    secret = read_secret()
+    errors = validate(cfg, secret)
+    if errors:
+        print(json.dumps({"ok": False, "error": "; ".join(errors)}))
+        return 2
+    try:
+        if (cfg.get("network") or {}).get("auth"):
+            ensure_tls(cfg)
+        write_wayvnc_conf(cfg)
+    except RuntimeError as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}))
+        return 1
+    old = load_config()
+    save_config(cfg)
+    was_autostart = bool(old.get("autostart"))
+    if bool(cfg.get("autostart")) != was_autostart:
+        action = "enable" if cfg.get("autostart") else "disable"
+        ok, err = systemctl(action)
+        if not ok:
+            print(json.dumps({"ok": False, "error": err}))
+            return 1
+    if cfg.get("capture", {}).get("mode") != "headless":
+        disable_headless()
+        # Virtual outputs left behind by an old experiment must not stay in
+        # the session: they get their own lock surfaces and can steal focus
+        # from the physical monitors while the session is locked.
+        for name in headless_names():
+            hyprctl(["output", "remove", name])
+    active, _, _ = service_state()
+    restarted = False
+    if active:
+        ok, err = systemctl("restart")
+        if not ok:
+            print(json.dumps({"ok": False, "error": err}))
+            return 1
+        restarted = True
+    print(json.dumps({"ok": True, "restarted": restarted, "status": status_payload()}, indent=2))
+    return 0
+
+
+def cmd_init(_args: argparse.Namespace) -> int:
+    cfg = load_config()
+    if not SECRET_FILE.exists():
+        write_secret(secrets.token_urlsafe(18))
+    if (cfg.get("network") or {}).get("auth"):
+        ensure_tls(cfg)
+    write_wayvnc_conf(cfg)
+    save_config(cfg)
+    print(json.dumps({"ok": True, "config": str(CONFIG_FILE), "secret": str(SECRET_FILE), "fingerprint": fingerprint()}, indent=2))
+    return 0
+
+
+def cmd_password(_args: argparse.Namespace) -> int:
+    secret = read_stdin_line()
+    if not secret:
+        print(json.dumps({"ok": False, "error": "password cannot be empty"}))
+        return 2
+    if secret != secret.strip() or "\n" in secret or "\r" in secret:
+        print(json.dumps({"ok": False, "error": "password cannot contain newlines or surrounding whitespace"}))
+        return 2
+    write_secret(secret)
+    cfg = load_config()
+    if (cfg.get("network") or {}).get("auth"):
+        ensure_tls(cfg)
+        write_wayvnc_conf(cfg)
+    active, _, _ = service_state()
+    if active:
+        ok, err = systemctl("restart")
+        if not ok:
+            print(json.dumps({"ok": False, "error": err}))
+            return 1
+    print(json.dumps({"ok": True, "status": status_payload()}, indent=2))
+    return 0
+
+
+def cmd_cert(args: argparse.Namespace) -> int:
+    if args.action != "regenerate":
+        print(json.dumps({"ok": False, "error": "usage: cert regenerate"}))
+        return 2
+    for path in (CERT_FILE, KEY_FILE):
+        if path.exists():
+            backup = path.with_suffix(path.suffix + ".bak")
+            try:
+                os.replace(path, backup)
+            except OSError:
+                pass
+    cfg = load_config()
+    ensure_tls(cfg)
+    write_wayvnc_conf(cfg)
+    active, _, _ = service_state()
+    if active:
+        systemctl("restart")
+    print(json.dumps({"ok": True, "fingerprint": fingerprint(), "status": status_payload()}, indent=2))
+    return 0
+
+
+def cmd_service(args: argparse.Namespace) -> int:
+    action = args.action
+    if action in {"autostart-on", "autostart-off"}:
+        action = "enable" if action.endswith("on") else "disable"
+    ok, err = systemctl(action)
+    if not ok:
+        print(json.dumps({"ok": False, "error": err}))
+        return 1
+    cfg = load_config()
+    if action in {"enable", "disable"}:
+        cfg["autostart"] = action == "enable"
+        save_config(cfg)
+    print(json.dumps({"ok": True, "status": status_payload()}, indent=2))
+    return 0
+
+
+def cmd_clients(_args: argparse.Namespace) -> int:
+    print(json.dumps({"clients": clients()}, indent=2))
+    return 0
+
+
+def cmd_outputs(_args: argparse.Namespace) -> int:
+    print(json.dumps({"monitors": monitors(all_monitors=True), "wayvncOutputs": output_list()}, indent=2))
+    return 0
+
+
+def cmd_output_set(args: argparse.Namespace) -> int:
+    if not NAME_RE.match(args.name):
+        print(json.dumps({"ok": False, "error": "invalid output name"}))
+        return 2
+    rc, out, err = wayvncctl(["output-set", args.name])
+    if rc != 0:
+        print(json.dumps({"ok": False, "error": (err or out).strip() or "output-set failed"}))
+        return 1
+    print(json.dumps({"ok": True, "output": args.name}))
+    return 0
+
+
+def cmd_desktop_name(args: argparse.Namespace) -> int:
+    if not args.name.strip():
+        print(json.dumps({"ok": False, "error": "desktop name cannot be empty"}))
+        return 2
+    rc, out, err = wayvncctl(["set-desktop-name", args.name])
+    if rc != 0:
+        print(json.dumps({"ok": False, "error": (err or out).strip() or "set-desktop-name failed"}))
+        return 1
+    cfg = load_config()
+    cfg["desktopName"] = args.name
+    save_config(cfg)
+    print(json.dumps({"ok": True, "desktopName": args.name}))
+    return 0
+
+
+def cmd_disconnect(args: argparse.Namespace) -> int:
+    rc, out, err = wayvncctl(["client-disconnect", args.id])
+    if rc != 0:
+        print(json.dumps({"ok": False, "error": (err or out).strip() or "client-disconnect failed"}))
+        return 1
+    print(json.dumps({"ok": True}))
+    return 0
+
+
+def cmd_log(args: argparse.Namespace) -> int:
+    rc, out, err = run(["journalctl", "--user", "-u", SERVICE, "-n", str(args.lines), "--no-pager"], timeout=10)
+    if rc != 0:
+        print((err or out).strip())
+        return 1
+    print(out)
+    return 0
+
+
+def cmd_validate(_args: argparse.Namespace) -> int:
+    cfg = load_config()
+    errors = validate(cfg, read_secret())
+    print(json.dumps({"ok": not errors, "errors": errors}, indent=2))
+    return 0 if not errors else 1
+
+
+def wait_for_hyprland(timeout: float = 30.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if monitors():
+            return True
+        time.sleep(1.0)
+    return False
+
+
+def cmd_run(_args: argparse.Namespace) -> int:
+    cfg = load_config()
+    errors = validate(cfg, read_secret())
+    if errors:
+        print(f"{APP}: refusing to start: {'; '.join(errors)}", file=sys.stderr)
+        return 1
+    if not shutil.which("wayvnc"):
+        print(f"{APP}: wayvnc is not installed", file=sys.stderr)
+        return 1
+    if not wait_for_hyprland():
+        print(f"{APP}: the Hyprland session did not expose any outputs", file=sys.stderr)
+        return 1
+    ensure_tls(cfg)
+    write_wayvnc_conf(cfg)
+    headless = None
+    if (cfg.get("capture") or {}).get("mode") == "headless":
+        headless = ensure_headless(cfg)
+    else:
+        # See cmd_apply: no stray virtual outputs in a physical capture mode.
+        for name in headless_names():
+            hyprctl(["output", "remove", name])
+    cmd = [shutil.which("wayvnc"), *wayvnc_args(cfg)]
+    stop_event = threading.Event()
+    watcher: threading.Thread | None = None
+    beh = cfg.get("behavior") or {}
+    if beh.get("lockOnDisconnect") or beh.get("inhibitIdle"):
+        watcher = threading.Thread(target=watch_clients, args=(cfg, stop_event), daemon=True)
+        watcher.start()
+    proc = subprocess.Popen(cmd)
+    rc = 0
+
+    def stop(_signum=None, _frame=None):
+        stop_event.set()
+        if proc.poll() is None:
+            proc.terminate()
+        if watcher is not None:
+            watcher.join(timeout=2)
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    try:
+        rc = proc.wait()
+    finally:
+        stop_event.set()
+        if watcher is not None:
+            watcher.join(timeout=2)
+        if headless:
+            disable_headless()
+    return rc
+
+
+def watch_clients(cfg: dict, stop_event: threading.Event) -> None:
+    beh = cfg.get("behavior") or {}
+    inhibitor: subprocess.Popen | None = None
+    active = False
+
+    def set_inhibitor(on: bool) -> None:
+        nonlocal inhibitor
+        if on and inhibitor is None and beh.get("inhibitIdle"):
+            try:
+                inhibitor = subprocess.Popen(
+                    [
+                        "systemd-inhibit",
+                        "--what=idle",
+                        "--who=end4pc-vnc",
+                        "--why=VNC client connected",
+                        "--mode=block",
+                        "sleep",
+                        "infinity",
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except OSError:
+                inhibitor = None
+        elif not on and inhibitor is not None:
+            inhibitor.terminate()
+            try:
+                inhibitor.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                inhibitor.kill()
+            inhibitor = None
+
+    try:
+        while not stop_event.is_set():
+            proc = subprocess.Popen(
+                ["wayvncctl", "--json", "--wait", "--reconnect", "event-receive"],
+                stdout=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                assert proc.stdout is not None
+                for line in proc.stdout:
+                    if stop_event.is_set():
+                        break
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        event = json.loads(line)
+                    except ValueError:
+                        continue
+                    params = event.get("params") or {}
+                    count = params.get("connection_count")
+                    if count is None:
+                        continue
+                    count = int(count)
+                    if count > 0 and not active:
+                        active = True
+                        set_inhibitor(True)
+                    elif count == 0 and active:
+                        active = False
+                        set_inhibitor(False)
+                        if beh.get("lockOnDisconnect") and not stop_event.is_set():
+                            run(["loginctl", "lock-session"], timeout=5)
+            finally:
+                if proc.poll() is None:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+            if stop_event.is_set():
+                break
+            time.sleep(1)
+    finally:
+        set_inhibitor(False)
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog=APP)
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("status", help="print the complete status as JSON")
+    p.set_defaults(func=cmd_status)
+
+    p = sub.add_parser("apply", help="merge a JSON patch, validate and apply it")
+    p.add_argument("--stdin", action="store_true", help="read the JSON patch from stdin (default)")
+    p.set_defaults(func=cmd_apply)
+
+    p = sub.add_parser("init", help="create config, secret and TLS certificate")
+    p.set_defaults(func=cmd_init)
+
+    p = sub.add_parser("password", help="set the VNC password from stdin")
+    p.add_argument("--stdin", action="store_true", help="read the password from stdin (default)")
+    p.set_defaults(func=cmd_password)
+
+    p = sub.add_parser("cert", help="manage the TLS certificate")
+    p.add_argument("action", choices=["regenerate"])
+    p.set_defaults(func=cmd_cert)
+
+    p = sub.add_parser("service", help="control the user service")
+    p.add_argument("action", choices=["start", "stop", "restart", "enable", "disable", "autostart-on", "autostart-off"])
+    p.set_defaults(func=cmd_service)
+
+    p = sub.add_parser("clients", help="list connected clients")
+    p.set_defaults(func=cmd_clients)
+
+    p = sub.add_parser("outputs", help="list outputs")
+    p.set_defaults(func=cmd_outputs)
+
+    p = sub.add_parser("output-set", help="switch the captured output live")
+    p.add_argument("name")
+    p.set_defaults(func=cmd_output_set)
+
+    p = sub.add_parser("desktop-name", help="set the desktop name live")
+    p.add_argument("name")
+    p.set_defaults(func=cmd_desktop_name)
+
+    p = sub.add_parser("disconnect", help="disconnect one client")
+    p.add_argument("id")
+    p.set_defaults(func=cmd_disconnect)
+
+    p = sub.add_parser("log", help="show the user service log")
+    p.add_argument("-n", "--lines", type=int, default=200)
+    p.set_defaults(func=cmd_log)
+
+    p = sub.add_parser("validate", help="validate the current config")
+    p.set_defaults(func=cmd_validate)
+
+    p = sub.add_parser("run", help="run wayvnc (systemd entry point)")
+    p.set_defaults(func=cmd_run)
+
+    args = parser.parse_args(argv)
+    try:
+        return int(args.func(args) or 0)
+    except KeyboardInterrupt:
+        return 130
+    except Exception as exc:  # keep the QML side informed
+        print(json.dumps({"ok": False, "error": str(exc)}))
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

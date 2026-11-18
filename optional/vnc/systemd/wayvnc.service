@@ -1,0 +1,19 @@
+[Unit]
+Description=WayVNC remote desktop for the active Hyprland session
+Documentation=man:wayvnc(1)
+After=graphical-session.target
+PartOf=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+StartLimitIntervalSec=30
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/end4pc-vnc run
+Restart=on-failure
+RestartSec=3
+KillMode=mixed
+TimeoutStopSec=10
+
+[Install]
+WantedBy=graphical-session.target
