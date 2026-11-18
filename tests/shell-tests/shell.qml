@@ -57,6 +57,8 @@ ShellRoot {
         "tst_dialog_search_field.qml",
         "tst_VolumeLevelMeter.qml",
         "tst_config_sync.qml",
+        "tst_projection.qml",
+        "tst_cast.qml",
         "tst_wallpaper_video.qml"
     ]
 

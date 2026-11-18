@@ -15,11 +15,26 @@ NestableObject {
     property var monitors: []
     property var _pendingChanges: ({})
 
+    // Windows-style projection state. The pre-projection layout is kept per
+    // output name so a mode switch can restore exactly what was there before,
+    // including after a compositor reload replaced the live monitor objects.
+    property string projectionMode: ""
+    property string projectionPlacement: "right"
+    property var _baseByName: ({})
+    property var _projectionQueue: []
+    property var _saveDone: null
+    property bool _applyingProjection: false
+    property string _lastProjectionSignature: ""
+
     readonly property string configuratorScriptPath: Quickshell.shellPath("scripts/hyprland/monitor_configurator.py")
     readonly property string capsScriptPath: Quickshell.shellPath("scripts/hyprland/monitor_caps.py")
+    readonly property string projectionScriptPath: Quickshell.shellPath("scripts/hyprland/projection_state.py")
     readonly property string monitorsLuaPath: FileUtils.trimFileProtocol(`${Directories.config}/hypr/monitors.lua`)
 
-    Component.onCompleted: fetchProc.running = true
+    Component.onCompleted: {
+        fetchProc.running = true
+        readStateProc.running = true
+    }
 
     Connections {
         target: Hyprland
@@ -78,6 +93,10 @@ NestableObject {
             if (m.transform && m.transform !== 0) setPairs["transform"] = m.transform
             else resetKeys.push("transform")
         }
+        if (changedKeys.has("mirror")) {
+            if (m.mirror && m.mirror !== "") setPairs["mirror"] = m.mirror
+            else resetKeys.push("mirror")
+        }
         if (changedKeys.has("bitdepth")) {
             if (m.bitdepth) setPairs["bitdepth"] = m.bitdepth
             else resetKeys.push("bitdepth")
@@ -98,45 +117,128 @@ NestableObject {
         return { setPairs, resetKeys }
     }
 
-    function save(index) {
+    function save(index, onDone) {
         const m = root.monitors[index]
-        if (!m || !m.name) return
+        if (!m || !m.name) {
+            if (onDone) onDone()
+            return
+        }
 
         const changed = root._pendingChanges[index]
-        if (!changed) return
+        if (!changed) {
+            if (onDone) onDone()
+            return
+        }
         const changedKeys = new Set(Object.keys(changed))
         const { setPairs, resetKeys } = root._fieldsToWrite(m, changedKeys)
 
-        if (Object.keys(setPairs).length === 0 && resetKeys.length === 0) return
+        let pending = Object.assign({}, root._pendingChanges)
+        delete pending[index]
+        root._pendingChanges = pending
+
+        if (Object.keys(setPairs).length === 0 && resetKeys.length === 0) {
+            if (onDone) onDone()
+            return
+        }
 
         let args = ["python3", root.configuratorScriptPath, "--file", root.monitorsLuaPath, "--output", m.name]
         for (const key in setPairs) args.push("--set", key, String(setPairs[key]))
         for (const key of resetKeys) args.push("--reset", key)
 
+        root._saveDone = onDone ?? null
         saveProc.command = args
         saveProc.running = true
-
-        let pending = Object.assign({}, root._pendingChanges)
-        delete pending[index]
-        root._pendingChanges = pending
     }
 
     function applyMonitor(m) {
-        if (!m.name) return
+        if (!m || !m.name) return
 
         const base = `${m.name},${m.currentMode},${m.x}x${m.y},${m.scale}`
+        const transform = (m.transform && m.transform !== 0) ? `,transform,${m.transform}` : ""
+        const mirror = (m.mirror && m.mirror !== "") ? `,mirror,${m.mirror}` : ""
         applyProc.command = ["hyprctl", "keyword", "monitor",
-            m.disabled
-                ? `${m.name},disable`
-                : (m.transform && m.transform !== 0)
-                    ? `${base},transform,${m.transform}`
-                    : base]
+            m.disabled ? `${m.name},disable` : `${base}${transform}${mirror}`]
         applyProc.running = true
     }
 
     function applyAndSave(index) {
         root.applyMonitor(root.monitors[index])
         root.save(index)
+    }
+
+    // ---- Windows-style projection -------------------------------------
+
+    function snapshotLayout() {
+        const bases = Object.assign({}, root._baseByName)
+        for (const m of root.monitors) {
+            if (!m || !m.name || bases[m.name]) continue
+            bases[m.name] = {
+                baseMode: m.currentMode,
+                baseX: m.x,
+                baseY: m.y,
+                baseScale: m.scale,
+                baseTransform: m.transform
+            }
+        }
+        root._baseByName = bases
+        return bases
+    }
+
+    function applyProjection(mode, placement) {
+        if (!mode || mode === "") return
+        const patches = ProjectionUtils.project(root.monitors, mode, placement)
+        if (patches.length === 0) return
+        root._applyingProjection = true
+        root._projectionQueue = patches.slice()
+        root._applyNextProjection()
+    }
+
+    function _applyNextProjection() {
+        if (root._projectionQueue.length === 0) {
+            root._applyingProjection = false
+            root._lastProjectionSignature = root._signature()
+            reloadProc.running = true
+            return
+        }
+        const patch = root._projectionQueue.shift()
+        const index = root.monitors.findIndex(m => m.name === patch.name)
+        if (index < 0) {
+            root._applyNextProjection()
+            return
+        }
+        root.updateMonitor(index, patch.changes)
+        root.applyMonitor(root.monitors[index])
+        root.save(index, () => root._applyNextProjection())
+    }
+
+    function setProjection(mode, placement) {
+        root.projectionMode = mode
+        root.projectionPlacement = placement || "right"
+        const bases = root.snapshotLayout()
+        writeStateProc.command = ["python3", root.projectionScriptPath, "--set",
+            mode, root.projectionPlacement, JSON.stringify(bases)]
+        writeStateProc.running = true
+        root.applyProjection(mode, root.projectionPlacement)
+    }
+
+    function clearProjection() {
+        root.projectionMode = ""
+        writeStateProc.command = ["python3", root.projectionScriptPath, "--set", "", root.projectionPlacement, "{}"]
+        writeStateProc.running = true
+    }
+
+    function _signature() {
+        return root.projectionMode + "|" + root.projectionPlacement + "|" +
+            root.monitors.map(m =>
+                `${m.name}:${m.currentMode}:${m.x}:${m.y}:${m.disabled}:${m.mirror ?? ""}`).join(",")
+    }
+
+    // A plug/unplug or a compositor reload must restore the chosen mode, but
+    // the reload that follows our own apply must not start an apply loop.
+    function _maybeRestoreProjection() {
+        if (!root.projectionMode || root.monitors.length === 0 || root._applyingProjection) return
+        if (root._signature() === root._lastProjectionSignature) return
+        restoreTimer.restart()
     }
 
     function saveHdr(index) {
@@ -158,6 +260,7 @@ NestableObject {
             onStreamFinished: {
                 try {
                     root.monitors = JSON.parse(text).map(m => ({
+                        mirror:        m.mirrorOf ?? m.mirror ?? "",
                         name:          m.name,
                         description:   m.description,
                         width:         m.width,
@@ -184,6 +287,11 @@ NestableObject {
                         hdrSupported: null,
                         maxBpc:       null,
                     }))
+                    // Reattach the layout captured before the active
+                    // projection mode overwrote the live values.
+                    root.monitors = root.monitors.map(m =>
+                        Object.assign({}, m, root._baseByName[m.name] ?? {}))
+                    root._maybeRestoreProjection()
                     if (root.monitors.length > 0) {
                         capsProc.command = ["python3", root.capsScriptPath].concat(root.monitors.map(mon => mon.name))
                         capsProc.running = true
@@ -243,11 +351,50 @@ NestableObject {
 
     Process {
         id: saveProc
-        onRunningChanged: if (!running) reloadProc.running = true
+        onRunningChanged: {
+            if (running) return
+            if (root._saveDone) {
+                const done = root._saveDone
+                root._saveDone = null
+                done()
+            } else {
+                reloadProc.running = true
+            }
+        }
     }
 
     Process {
         id: reloadProc
         command: ["hyprctl", "reload"]
+    }
+
+    Process {
+        id: readStateProc
+        command: ["python3", root.projectionScriptPath, "--get"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const saved = JSON.parse(text)
+                    root.projectionMode = saved.mode ?? ""
+                    root.projectionPlacement = saved.placement ?? "right"
+                    root._baseByName = saved.bases ?? {}
+                    root._maybeRestoreProjection()
+                } catch (e) {
+                    console.log("[MonitorConfig] Error reading projection state:", e)
+                }
+            }
+        }
+    }
+
+    Process { id: writeStateProc }
+
+    Timer {
+        id: restoreTimer
+        interval: 800
+        repeat: false
+        onTriggered: {
+            root._lastProjectionSignature = root._signature()
+            root.applyProjection(root.projectionMode, root.projectionPlacement)
+        }
     }
 }

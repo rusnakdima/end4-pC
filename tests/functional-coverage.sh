@@ -59,6 +59,9 @@ declare -A EXPLICIT_MAP=(
     [HyprlandKeybinds]="tst_keybinds.qml"
     [ManagedKeybinds]="tst_managed_keybinds.qml"
     [WallpaperVideo]="tst_wallpaper_video.qml"
+    [ProjectionUtils]="tst_projection.qml"
+    [ProjectionConfig]="tst_projection.qml"
+    [Cast]="tst_cast.qml"
     [XkbRules]="tst_xkbrules.qml"
 )
 

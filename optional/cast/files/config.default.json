@@ -1,0 +1,8 @@
+{
+  "audio": true,
+  "codec": "auto",
+  "interface": "",
+  "mode": "mirror",
+  "networkMode": "local",
+  "target": ""
+}

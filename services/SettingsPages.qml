@@ -27,11 +27,13 @@ Singleton {
             { id: "keyboard",   name: Translation.tr("Keyboard"),   icon: "keyboard",       file: "KeyboardConfig.qml" },
             { id: "services",   name: Translation.tr("Services"),   icon: "settings",       file: "ServicesConfig.qml" },
             { id: "vnc",        name: Translation.tr("VNC"),        icon: "screen_share",   file: "VncConfig.qml" },
+            { id: "cast",       name: Translation.tr("Cast"),       icon: "cast",           file: "CastConfig.qml" },
         ];
         if (WM.compositor === "hyprland") {
             // The Hyprland pane used to be one scrolling page; it is split
             // by topic so the rail carries the groups as separate tabs.
             list.push({ id: "hyprland-displays", name: Translation.tr("Displays"), icon: "monitor", file: "HyprlandDisplays.qml" });
+            list.push({ id: "projection", name: Translation.tr("Projection"), icon: "desktop_windows", file: "ProjectionConfig.qml" });
             list.push({ id: "hyprland-layout", name: Translation.tr("Layout"), icon: "auto_awesome_mosaic", file: "HyprlandLayout.qml" });
             list.push({ id: "hyprland-input", name: Translation.tr("Input"), icon: "trackpad_input", file: "HyprlandInput.qml" });
             list.push({ id: "hyprland-decoration", name: Translation.tr("Decoration"), icon: "deblur", file: "HyprlandDecoration.qml" });

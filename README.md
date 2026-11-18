@@ -80,6 +80,23 @@ sudo ./setup-hotspot.sh        # install (idempotent)  ·  ./setup-hotspot.sh --
 
 Full guide — hardware paths (onboard MT7922 vs AIC8800D80 dongle), troubleshooting — in [`scripts/hotspot/README.md`](scripts/hotspot/README.md).
 
+### 🖥️ Display projection & casting
+
+Two new Settings panes:
+
+- **Projection** (Hyprland) — Windows-style *PC screen only*, *Duplicate*, *Extend* and *Second screen only* for wired monitors, with placement, per-display format and automatic restore when a cable is plugged in. No extra setup: it uses Hyprland's native `mirror` rule and the existing `monitors.lua`.
+- **Cast** — set up, discover, connect and configure casting the desktop to a TV. **Local** uses Miracast over Wi‑Fi Direct (waycast, mirror or extend, audio); **LAN & Tailscale** uses DLNA/Cast by address (fluxcast). Miracast is Wi‑Fi Direct P2P and negotiated at up to 1080p, so it cannot traverse a VPN — use the remote mode for a TV on another network.
+
+The Cast helper needs one-time provisioning:
+
+```bash
+cd ~/.config/quickshell/end4-pC/optional/cast
+./install-user.sh --check       # readiness report
+./install-user.sh               # install helper + backends (idempotent)
+```
+
+The installer prints the optional `sudo` steps for the Wi‑Fi Direct supplicant config and firewall port; it never runs them for you. Full guide in [`optional/cast/README.md`](optional/cast/README.md).
+
 ### 🎨 Keyboard RGB (colour from Settings)
 
 The Settings → Keyboard colour palette, brightness slider and *Match the

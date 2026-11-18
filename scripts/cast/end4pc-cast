@@ -1,0 +1,854 @@
+#!/usr/bin/env python3
+"""end4pc-cast - user-level controller for the end4-pC "Cast / Remote TV" feature.
+
+The helper is the single writer of the Cast configuration and is the only
+process that launches/stops the casting backend.  The QML service calls it and
+parses stdout as one JSON object, so *every* code path - including errors and
+missing backends - must produce valid JSON and never a traceback on stdout.
+
+Backends:
+  * waycast  - local Miracast / Wi-Fi Direct (``waycast daemon ...``)
+  * fluxcast - remote LAN / Tailscale DLNA or Google Cast
+
+The backend is selected from ``config.networkMode`` (local -> waycast,
+remote -> fluxcast).  All state lives under ~/.config/end4-pC/cast.
+
+Only the Python standard library is used.  `status` is fast and side-effect
+free; it must work even when neither backend nor any of the optional tools are
+installed (the doctor array then reports ok:false with actionable details).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+APP = "end4pc-cast"
+HELPER_VERSION = 1
+
+# ---------------------------------------------------------------------------
+# paths (XDG aware, with sane fallbacks)
+# ---------------------------------------------------------------------------
+
+HOME = Path(os.environ.get("HOME") or Path.home())
+XDG_CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME") or (HOME / ".config"))
+XDG_DATA_HOME = Path(os.environ.get("XDG_DATA_HOME") or (HOME / ".local" / "share"))
+CAST_DIR = XDG_CONFIG_HOME / "end4-pC" / "cast"
+CONFIG_FILE = CAST_DIR / "config.json"
+SESSION_FILE = CAST_DIR / "session.json"
+SINKS_FILE = CAST_DIR / "sinks.json"
+LOG_FILE = CAST_DIR / "cast.log"
+WAYCAST_BUILD_DIR = XDG_DATA_HOME / "end4pc-cast" / "waycast"
+FLUXCAST_BUILD_DIR = XDG_DATA_HOME / "end4pc-cast" / "fluxcast"
+
+# The exact six public config fields of the JSON contract.  Extra keys may be
+# passed in an apply patch (e.g. "sink", "protocol") and are persisted, but
+# they are filtered out of the status payload so the contract stays strict.
+DEFAULTS = {
+    "networkMode": "local",   # local (Miracast/Wi-Fi Direct) | remote (LAN/Tailscale)
+    "mode": "mirror",         # mirror | extend
+    "codec": "auto",          # auto | h264 | h264-sw
+    "audio": True,
+    "target": "",             # manual TV address for remote mode
+    "interface": "",          # optional Wi-Fi interface
+}
+CONFIG_KEYS = tuple(DEFAULTS)
+
+VALID = {
+    "networkMode": {"local", "remote"},
+    "mode": {"mirror", "extend"},
+    "codec": {"auto", "h264", "h264-sw"},
+}
+
+IP_RE = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,}:[0-9a-fA-F:]+$")
+MAC_RE = re.compile(r"^(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$")
+
+
+# ---------------------------------------------------------------------------
+# small helpers
+# ---------------------------------------------------------------------------
+
+def deep_merge(base: dict, patch: dict) -> dict:
+    """Recursively merge ``patch`` into a copy of ``base``."""
+    out = dict(base)
+    for key, value in (patch or {}).items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = deep_merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def atomic_write_json(path: Path, obj: object, mode: int = 0o600) -> None:
+    """Write JSON via tempfile + os.replace so readers never see a partial file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(obj, fh, indent=2, sort_keys=True)
+            fh.write("\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
+def read_json(path: Path, default: object) -> object:
+    """Read a JSON file, returning ``default`` on any error."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8") or "null")
+    except (OSError, ValueError):
+        return default
+
+
+def normalize_config(cfg: dict) -> dict:
+    """Coerce the six public fields to the values allowed by the contract.
+
+    Unknown/extra keys are preserved so callers may store hints such as
+    ``sink`` or ``protocol``; only the public fields are sanitised here.
+    """
+    out = dict(cfg or {})
+    # The Settings pane stages stream settings under `stream`; flatten them
+    # into the flat public config so both UI and CLI drive the same fields.
+    stream = out.pop("stream", None)
+    if isinstance(stream, dict):
+        for key, value in stream.items():
+            if key in {"mode", "codec", "audio"}:
+                out[key] = value
+    for key, default in DEFAULTS.items():
+        value = out.get(key, default)
+        if key in VALID and value not in VALID[key]:
+            value = default
+        if key == "audio":
+            value = bool(value) if isinstance(value, bool) else str(value).lower() in {"1", "true", "yes", "on"}
+        if key in {"target", "interface", "codec", "mode", "networkMode"}:
+            value = str(value or "")
+        out[key] = value
+    return out
+
+
+def load_config() -> dict:
+    raw = read_json(CONFIG_FILE, {})
+    return normalize_config(deep_merge(DEFAULTS, raw if isinstance(raw, dict) else {}))
+
+
+def public_config(cfg: dict) -> dict:
+    """Return the six contract fields plus the selected sink (the UI stages it)."""
+    out = {key: cfg.get(key, DEFAULTS[key]) for key in CONFIG_KEYS}
+    out["sink"] = str(cfg.get("sink", "") or "")
+    return out
+
+
+def run(cmd: list[str], timeout: float = 5.0) -> tuple[int, str, str]:
+    """Run a command defensively; never raise for missing tools/timeouts."""
+    try:
+        proc = subprocess.run(
+            cmd,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            env=os.environ.copy(),
+        )
+        return proc.returncode, proc.stdout or "", proc.stderr or ""
+    except FileNotFoundError:
+        return 127, "", f"{cmd[0]}: not found"
+    except subprocess.TimeoutExpired:
+        return 124, "", f"{cmd[0]}: timed out"
+    except OSError as exc:
+        return 126, "", str(exc)
+
+
+def first_line(text: str, limit: int = 160) -> str:
+    for line in (text or "").splitlines():
+        if line.strip():
+            return line.strip()[:limit]
+    return ""
+
+
+# ---------------------------------------------------------------------------
+# backend discovery / versions
+# ---------------------------------------------------------------------------
+
+def find_backend(name: str) -> str:
+    """Return an executable path for a backend, or "" when not installed."""
+    path = shutil.which(name)
+    if path:
+        return path
+    build_dir = WAYCAST_BUILD_DIR if name == "waycast" else FLUXCAST_BUILD_DIR
+    candidates = [
+        build_dir / "target" / "release" / name,
+        build_dir / "bin" / name,
+        build_dir / name,
+    ]
+    for candidate in candidates:
+        if candidate.is_file() and os.access(str(candidate), os.X_OK):
+            return str(candidate)
+    return ""
+
+
+def backend_info(name: str) -> dict:
+    """Report {"installed": bool, "version": str} for a backend."""
+    path = find_backend(name)
+    if not path:
+        return {"installed": False, "version": ""}
+    rc, out, err = run([path, "--version"], timeout=3)
+    version = first_line(out) or first_line(err)
+    if rc != 0 and not version:
+        version = ""
+    return {"installed": True, "version": version}
+
+
+def select_backend(cfg: dict) -> str:
+    """Derive the backend from the network mode (the only documented selector)."""
+    return "waycast" if cfg.get("networkMode") == "local" else "fluxcast"
+
+
+def supported_flags(binary: str) -> set[str]:
+    """Collect --flags/-f tokens from a backend's --help output."""
+    if not binary:
+        return set()
+    _rc, out, err = run([binary, "--help"], timeout=4)
+    text = f"{out}\n{err}"
+    return set(re.findall(r"(?<![\w-])(--?[A-Za-z][A-Za-z0-9-]*)", text))
+
+
+# ---------------------------------------------------------------------------
+# session tracking
+# ---------------------------------------------------------------------------
+
+def inactive_session(mode: str = "mirror") -> dict:
+    return {
+        "active": False,
+        "backend": "",
+        "sink": "",
+        "mode": mode if mode in VALID["mode"] else "mirror",
+        "startedAt": "",
+        "pid": 0,
+    }
+
+
+def load_session() -> dict:
+    raw = read_json(SESSION_FILE, {})
+    base = inactive_session()
+    if isinstance(raw, dict):
+        base.update(raw)
+    return base
+
+
+def process_alive(pid: int, backend: str = "") -> bool:
+    """Check liveness, verifying /proc cmdline when available."""
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except (ProcessLookupError, PermissionError, OSError):
+        return False
+    try:
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "ignore")
+        if cmdline:  # a live process; zombies have an empty cmdline
+            if backend and backend not in cmdline:
+                return False
+            return True
+        return False
+    except OSError:
+        return True  # /proc unavailable: trust os.kill(pid, 0)
+
+
+# ---------------------------------------------------------------------------
+# log + sink cache
+# ---------------------------------------------------------------------------
+
+def read_log_tail(n: int = 8) -> str:
+    try:
+        lines = LOG_FILE.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    if n <= 0:
+        return ""
+    return "\n".join(lines[-n:])
+
+
+def load_sinks() -> list[dict]:
+    raw = read_json(SINKS_FILE, [])
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for item in raw:
+        if isinstance(item, dict):
+            out.append({
+                "name": str(item.get("name") or "").strip(),
+                "address": str(item.get("address") or "").strip(),
+                "type": item.get("type") if item.get("type") in {"wfd", "dlna", "cast"} else "wfd",
+            })
+    return out
+
+
+def dedupe_sinks(sinks: list[dict]) -> list[dict]:
+    seen = set()
+    out = []
+    for sink in sinks:
+        key = (sink.get("name", ""), sink.get("address", ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(sink)
+    return out
+
+
+def normalize_sink(name: object, address: object, type_: object) -> dict:
+    kind = str(type_ or "").lower()
+    if "cast" in kind:
+        kind = "cast"
+    elif "dlna" in kind:
+        kind = "dlna"
+    else:
+        kind = "wfd"
+    return {
+        "name": str(name or "").strip(),
+        "address": str(address or "").strip(),
+        "type": kind,
+    }
+
+
+def parse_sinks(text: str, default_type: str = "wfd") -> list[dict]:
+    """Parse backend/Avahi discovery output defensively.
+
+    Accepts a JSON array, a JSON object with sinks/results/devices, or plain
+    text lines (Avahi's ``+;iface;IPv4;Name;_svc._tcp;local;host;ip;port`` and
+    simple ``Name address``/``Name | address`` forms).
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+    sinks: list[dict] = []
+
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict):
+            for key in ("sinks", "results", "devices", "targets"):
+                if isinstance(data.get(key), list):
+                    data = data[key]
+                    break
+        if isinstance(data, list):
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                name = item.get("name") or item.get("friendlyName") or item.get("device") or ""
+                addr = item.get("address") or item.get("ip") or item.get("host") or ""
+                typ = item.get("type") or item.get("protocol") or default_type
+                sinks.append(normalize_sink(name, addr, typ))
+            if sinks:
+                return dedupe_sinks(sinks)
+    except ValueError:
+        pass  # fall through to line parsing
+
+    for line in text.splitlines():
+        line = line.strip().lstrip("+- ").strip()
+        if not line:
+            continue
+        parts = [p.strip() for p in re.split(r"[|;\t]", line) if p.strip()]
+        if not parts:
+            continue
+        # Avahi-browse -r output: +;eth0;IPv4;Name;_dlna._tcp;local;host;ip;port
+        if len(parts) >= 8 and "_" in parts[4]:
+            service = parts[4].lower()
+            typ = "cast" if "googlecast" in service or "cast" in service else "dlna"
+            sinks.append(normalize_sink(parts[3], parts[7], typ))
+            continue
+        name = parts[0]
+        addr = ""
+        for candidate in parts[1:]:
+            if IP_RE.match(candidate) or MAC_RE.match(candidate):
+                addr = candidate
+                break
+        if not addr and len(parts) >= 2:
+            addr = parts[1]
+        sinks.append(normalize_sink(name, addr, default_type))
+    return dedupe_sinks(sinks)
+
+
+# ---------------------------------------------------------------------------
+# doctor checks (read-only, fast, actionable)
+# ---------------------------------------------------------------------------
+
+def doctor_checks() -> list[dict]:
+    """Return the health checks consumed by the Settings page.
+
+    Every check is defensive: missing tools become ok:false with a detail that
+    tells the user what to install or enable.
+    """
+    checks: list[dict] = []
+
+    def add(id_: str, label: str, ok: bool, detail: str) -> None:
+        checks.append({"id": id_, "label": label, "ok": bool(ok), "detail": str(detail)})
+
+    # 1. Hyprland / wlroots ---------------------------------------------------
+    display = os.environ.get("WAYLAND_DISPLAY", "")
+    signature = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+    hyprctl = shutil.which("hyprctl")
+    hypr_ok = bool(display and (signature or hyprctl))
+    if hypr_ok:
+        add("hyprland", "Hyprland / wlroots", True,
+            f"Wayland display '{display}' detected; desktop capture should work.")
+    else:
+        add("hyprland", "Hyprland / wlroots", False,
+            "No Wayland/Hyprland session detected. Start the helper from inside "
+            "the Hyprland session (WAYLAND_DISPLAY and HYPRLAND_INSTANCE_SIGNATURE).")
+
+    # 2. xdg-desktop-portal --------------------------------------------------
+    portal = shutil.which("xdg-desktop-portal") or shutil.which("xdg-desktop-portal-hyprland")
+    add("portal", "xdg-desktop-portal", bool(portal),
+        f"Using '{portal}'." if portal else
+        "xdg-desktop-portal not found. Install xdg-desktop-portal and "
+        "xdg-desktop-portal-hyprland and re-login.")
+
+    # 3. Wi-Fi Direct (P2P) --------------------------------------------------
+    iw = shutil.which("iw")
+    p2p_ok = False
+    p2p_detail = "iw not found. Install 'iw' and a Wi-Fi device with P2P support."
+    if iw:
+        rc, dev_out, _ = run([iw, "dev"], timeout=2)
+        p2p_ok = rc == 0 and ("interface p2p" in dev_out.lower() or "type p2p" in dev_out.lower())
+        if not p2p_ok and rc == 0:
+            rc2, list_out, _ = run([iw, "list"], timeout=3)
+            p2p_ok = rc2 == 0 and "p2p" in list_out.lower()
+        p2p_detail = (
+            "A Wi-Fi P2P device is available (check `iw dev` / `iw list`)."
+            if p2p_ok else
+            "No P2P-capable Wi-Fi device found in `iw dev`/`iw list`. "
+            "Use an external Wi-Fi adapter that supports Wi-Fi Direct, or "
+            "switch to remote (DLNA/Cast) mode."
+        )
+    add("p2p", "Wi-Fi Direct", p2p_ok, p2p_detail)
+
+    # 4/5. backends ----------------------------------------------------------
+    wc = backend_info("waycast")
+    add("waycast", "waycast (Miracast)", wc["installed"],
+        f"waycast {wc['version']}".strip() if wc["installed"] else
+        "waycast not found. Install it via `optional/cast/install-user.sh "
+        "--build-waycast`, your package manager, or a release binary.")
+
+    fc = backend_info("fluxcast")
+    add("fluxcast", "fluxcast (DLNA / Cast)", fc["installed"],
+        f"fluxcast {fc['version']}".strip() if fc["installed"] else
+        "fluxcast not found. Install it on PATH or under "
+        "~/.local/share/end4pc-cast/fluxcast for remote DLNA/Cast casting.")
+
+    # 6. encoder ------------------------------------------------------------
+    ffmpeg = shutil.which("ffmpeg")
+    wf = shutil.which("wf-recorder")
+    add("encoder", "ffmpeg / wf-recorder", bool(ffmpeg or wf),
+        f"Using '{ffmpeg or wf}'." if (ffmpeg or wf) else
+        "No screen encoder found. Install 'ffmpeg' (or 'wf-recorder') for "
+        "H.264 capture.")
+
+    # 7. GStreamer H.264 -----------------------------------------------------
+    gst_launch = shutil.which("gst-launch-1.0")
+    gst_inspect = shutil.which("gst-inspect-1.0")
+    gst_ok = False
+    gst_detail = "GStreamer not found. Install gstreamer and gst-plugins-ugly (x264enc) or gst-plugin-openh264."
+    if gst_launch and gst_inspect:
+        for plugin in ("x264enc", "openh264enc"):
+            rc, _out, _err = run([gst_inspect, plugin], timeout=2)
+            if rc == 0:
+                gst_ok = True
+                gst_detail = f"GStreamer H.264 encoder '{plugin}' is available."
+                break
+        if not gst_ok:
+            gst_detail = "gst-launch-1.0 is present but no H.264 encoder was found. Install gst-plugins-ugly (x264enc) or gst-plugin-openh264."
+    add("gstreamer", "GStreamer H.264", gst_ok, gst_detail)
+
+    # 8. audio --------------------------------------------------------------
+    pactl = shutil.which("pactl")
+    add("audio", "Audio (pactl)", bool(pactl),
+        f"Using '{pactl}' for audio routing." if pactl else
+        "pactl not found. Install pipewire-pulse (or pulseaudio) so cast audio "
+        "can be routed; otherwise disable audio in Settings.")
+
+    return checks
+
+
+# ---------------------------------------------------------------------------
+# status payload
+# ---------------------------------------------------------------------------
+
+def status_payload(error: str = "", ok: bool = True) -> dict:
+    """Build the complete contract object. Never writes anything."""
+    cfg = load_config()
+    raw_session = load_session()
+    pid = int(raw_session.get("pid") or 0)
+    backend = str(raw_session.get("backend") or "")
+    active = process_alive(pid, backend)
+    if active:
+        session = {
+            "active": True,
+            "backend": backend,
+            "sink": str(raw_session.get("sink") or ""),
+            "mode": raw_session.get("mode") if raw_session.get("mode") in VALID["mode"] else cfg["mode"],
+            "startedAt": str(raw_session.get("startedAt") or ""),
+            "pid": pid,
+        }
+    else:
+        session = inactive_session(cfg["mode"])
+
+    return {
+        "ok": bool(ok),
+        "error": str(error or ""),
+        "helperVersion": HELPER_VERSION,
+        "config": public_config(cfg),
+        "backends": {
+            "waycast": backend_info("waycast"),
+            "fluxcast": backend_info("fluxcast"),
+        },
+        "session": session,
+        "sinks": load_sinks(),
+        "doctor": doctor_checks(),
+        "logTail": read_log_tail(8),
+    }
+
+
+def emit(payload: dict) -> None:
+    """Print exactly one JSON object to stdout."""
+    print(json.dumps(payload, ensure_ascii=False))
+
+
+# ---------------------------------------------------------------------------
+# start / stop internals (shared by start and restart)
+# ---------------------------------------------------------------------------
+
+def selected_sink(cfg: dict) -> str:
+    """Pick the sink to cast to: explicit config, then cached, then target."""
+    explicit = str(cfg.get("sink") or "").strip()
+    if explicit:
+        return explicit
+    sinks = load_sinks()
+    if sinks:
+        return sinks[0].get("address") or sinks[0].get("name") or ""
+    return str(cfg.get("target") or "").strip()
+
+
+def sink_type(sink: str) -> str:
+    for item in load_sinks():
+        if sink and (item.get("name") == sink or item.get("address") == sink):
+            return item.get("type", "wfd")
+    return "wfd"
+
+
+def build_waycast_args(cfg: dict, sink: str) -> list[str]:
+    """waycast daemon --sink <sink> [optional flags from config]."""
+    args = ["daemon", "--sink", sink]
+    if cfg.get("mode") == "extend":
+        args.append("--extend")
+    if cfg.get("codec") in {"h264", "h264-sw"}:
+        args += ["--codec", cfg["codec"]]
+    if not cfg.get("audio"):
+        args.append("--no-audio")
+    iface = str(cfg.get("interface") or "").strip()
+    if iface:
+        args += ["--interface", iface]
+    return args
+
+
+def build_fluxcast_args(cfg: dict, sink: str) -> tuple[list[str], str]:
+    """Build fluxcast args; only pass a target flag we saw in --help.
+
+    Returns (args, note).  ``--protocol``/``--transport`` are part of the
+    documented contract and are always passed; target flags are detected from
+    ``fluxcast --help`` so we never invent an unsupported one.
+    """
+    binary = find_backend("fluxcast")
+    flags = supported_flags(binary)
+    protocol = str(cfg.get("protocol") or "").strip().lower()
+    if protocol not in {"dlna", "cast"}:
+        protocol = "cast" if sink_type(sink) == "cast" else "dlna"
+
+    args = ["--protocol", protocol]
+    if protocol == "dlna":
+        args += ["--transport", "hls"]
+
+    note = ""
+    target = str(cfg.get("target") or "").strip() or sink
+    if target:
+        for flag in ("--target", "--device", "--url", "--host", "--address", "--sink"):
+            if flag in flags:
+                args += [flag, target]
+                break
+        else:
+            note = "fluxcast target not passed (no supported target flag found in --help)"
+    return args, note
+
+
+def start_session() -> tuple[bool, str]:
+    """Launch the selected backend, track its PID and redirect output to log."""
+    cfg = load_config()
+    backend = select_backend(cfg)
+    binary = find_backend(backend)
+    if not binary:
+        return False, f"{backend} is not installed; cannot start cast session"
+    sink = selected_sink(cfg)
+    if not sink:
+        return False, "no sink selected - run 'discover' first or set target/sink via apply"
+
+    if backend == "waycast":
+        args = [binary, *build_waycast_args(cfg, sink)]
+        note = ""
+    else:
+        fc_args, note = build_fluxcast_args(cfg, sink)
+        args = [binary, *fc_args]
+
+    CAST_DIR.mkdir(parents=True, exist_ok=True)
+    started = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    try:
+        with open(LOG_FILE, "ab", buffering=0) as log:
+            log.write(f"\n--- {started} end4pc-cast start: {' '.join(args)} ---\n".encode("utf-8", "replace"))
+            proc = subprocess.Popen(
+                args,
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+                env=os.environ.copy(),
+            )
+    except OSError as exc:
+        return False, f"failed to start {backend}: {exc}"
+
+    session = {
+        "active": True,
+        "backend": backend,
+        "sink": sink,
+        "mode": cfg["mode"],
+        "startedAt": started,
+        "pid": proc.pid,
+    }
+    atomic_write_json(SESSION_FILE, session)
+    return True, note
+
+
+def stop_session() -> str:
+    """Terminate the tracked backend process and clear the session file."""
+    session = load_session()
+    pid = int(session.get("pid") or 0)
+    backend = str(session.get("backend") or "")
+    note = ""
+    if pid > 0:
+        if not process_alive(pid, backend):
+            note = "tracked process was not running"
+        else:
+            try:
+                os.kill(pid, signal.SIGTERM)
+                deadline = time.monotonic() + 3.0
+                while time.monotonic() < deadline and process_alive(pid, backend):
+                    time.sleep(0.1)
+                if process_alive(pid, backend):
+                    os.kill(pid, signal.SIGKILL)
+                    note = "backend required SIGKILL"
+            except (ProcessLookupError, PermissionError, OSError) as exc:
+                note = f"could not signal tracked process: {exc}"
+    atomic_write_json(SESSION_FILE, inactive_session(load_config()["mode"]))
+    return note
+
+
+# ---------------------------------------------------------------------------
+# discovery internals
+# ---------------------------------------------------------------------------
+
+def discover_local() -> tuple[list[dict], str]:
+    binary = find_backend("waycast")
+    if not binary:
+        return [], "waycast is not installed; local Wi-Fi Direct discovery unavailable"
+    rc, out, err = run([binary, "discover", "--timeout", "10"], timeout=15)
+    if rc != 0:
+        return [], f"waycast discover failed: {first_line(err or out, 200) or 'unknown error'}"
+    sinks = parse_sinks(out, "wfd")
+    return sinks, "" if sinks else "no Wi-Fi Direct sinks found"
+
+
+def discover_remote() -> tuple[list[dict], str]:
+    sinks: list[dict] = []
+    notes: list[str] = []
+    avahi = shutil.which("avahi-browse")
+    if avahi:
+        combined = ""
+        for service in ("_dlna._tcp", "_googlecast._tcp", "_airplay._tcp"):
+            rc, out, _err = run([avahi, "-art", service], timeout=8)
+            if rc == 0:
+                combined += out + "\n"
+        sinks.extend(parse_sinks(combined, "dlna"))
+        if not sinks:
+            notes.append("avahi-browse found no DLNA/Cast services")
+    else:
+        notes.append("avahi-browse not found; install avahi-utils for LAN discovery")
+
+    flux = find_backend("fluxcast")
+    if flux:
+        rc, out, err = run([flux, "discover", "--timeout", "10"], timeout=15)
+        if rc == 0:
+            sinks.extend(parse_sinks(out, "cast"))
+        else:
+            notes.append(f"fluxcast discover failed: {first_line(err or out, 160) or 'unknown error'}")
+    else:
+        notes.append("fluxcast is not installed; remote Cast discovery is limited")
+    return dedupe_sinks(sinks), "; ".join(notes)
+
+
+# ---------------------------------------------------------------------------
+# commands
+# ---------------------------------------------------------------------------
+
+def cmd_status(_args: argparse.Namespace) -> int:
+    emit(status_payload())
+    return 0
+
+
+def cmd_apply(args: argparse.Namespace) -> int:
+    raw = args.patch or ""
+    if args.stdin or not raw:
+        if sys.stdin.isatty():
+            emit(status_payload(error="no JSON patch supplied (pass it as an argument or on stdin)", ok=False))
+            return 0
+        raw = sys.stdin.read()
+    raw = raw.strip()
+    if not raw:
+        emit(status_payload(error="empty JSON patch", ok=False))
+        return 0
+    try:
+        patch = json.loads(raw)
+    except ValueError as exc:
+        emit(status_payload(error=f"invalid JSON: {exc}", ok=False))
+        return 0
+    if not isinstance(patch, dict):
+        emit(status_payload(error="JSON patch must be an object", ok=False))
+        return 0
+    try:
+        cfg = normalize_config(deep_merge(load_config(), patch))
+        atomic_write_json(CONFIG_FILE, cfg)
+    except OSError as exc:
+        emit(status_payload(error=f"cannot persist config: {exc}", ok=False))
+        return 0
+    emit(status_payload())
+    return 0
+
+
+def cmd_discover(args: argparse.Namespace) -> int:
+    mode = getattr(args, "mode_pos", "") or args.network_mode or load_config().get("networkMode", "local")
+    if mode == "local":
+        sinks, note = discover_local()
+    else:
+        sinks, note = discover_remote()
+    try:
+        atomic_write_json(SINKS_FILE, sinks)
+    except OSError as exc:
+        note = f"{note}; cannot cache sinks: {exc}".strip("; ")
+    emit(status_payload(error=note))
+    return 0
+
+
+def cmd_start(_args: argparse.Namespace) -> int:
+    ok, note = start_session()
+    emit(status_payload(error=note, ok=ok))
+    return 0
+
+
+def cmd_stop(_args: argparse.Namespace) -> int:
+    note = stop_session()
+    emit(status_payload(error=note))
+    return 0
+
+
+def cmd_restart(_args: argparse.Namespace) -> int:
+    note = stop_session()
+    ok, start_note = start_session()
+    parts = [p for p in (note, start_note) if p]
+    emit(status_payload(error="; ".join(parts), ok=ok))
+    return 0
+
+
+def cmd_log(args: argparse.Namespace) -> int:
+    requested = getattr(args, "lines_pos", "") or args.lines
+    try:
+        n = max(1, min(int(requested), 10000))
+    except (TypeError, ValueError):
+        n = 200
+    text = read_log_tail(n)
+    emit({"ok": True, "error": "" if text else "no cast log yet", "text": text})
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# argument parsing (always JSON, even on usage errors)
+# ---------------------------------------------------------------------------
+
+class JsonCLIError(Exception):
+    """Raised instead of argparse's SystemExit(2) so we can emit JSON."""
+
+
+class JsonArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:  # pragma: no cover - defensive
+        raise JsonCLIError(message)
+
+
+def build_parser() -> JsonArgumentParser:
+    parser = JsonArgumentParser(prog=APP, description="Manage the end4-pC Cast session (JSON CLI).")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("status", help="print the full status JSON (fast, read-only)").set_defaults(func=cmd_status)
+
+    p = sub.add_parser("apply", help="merge a JSON patch into the config and print status")
+    p.add_argument("patch", nargs="?", default="", help="JSON object patch (or read from stdin)")
+    p.add_argument("--stdin", action="store_true", help="read the patch from stdin")
+    p.set_defaults(func=cmd_apply)
+
+    p = sub.add_parser("discover", help="discover TVs and cache the sink list")
+    p.add_argument("mode_pos", nargs="?", default="", help="local or remote (same as --network-mode)")
+    p.add_argument("--network-mode", choices=["local", "remote"], default=None)
+    p.set_defaults(func=cmd_discover)
+
+    sub.add_parser("start", help="start the selected backend").set_defaults(func=cmd_start)
+    sub.add_parser("stop", help="stop the tracked backend").set_defaults(func=cmd_stop)
+    sub.add_parser("restart", help="stop then start the backend").set_defaults(func=cmd_restart)
+
+    p = sub.add_parser("log", help="print the last N lines of cast.log as JSON")
+    p.add_argument("lines_pos", nargs="?", default="", help="number of lines (same as -n)")
+    p.add_argument("-n", "--lines", type=int, default=200)
+    p.set_defaults(func=cmd_log)
+
+    return parser
+
+
+def main(argv: list[str]) -> int:
+    parser = build_parser()
+    try:
+        args = parser.parse_args(argv)
+        return int(args.func(args) or 0)
+    except JsonCLIError as exc:
+        emit(status_payload(error=f"argument error: {exc}", ok=False))
+        return 0
+    except SystemExit as exc:  # e.g. --help (0) already printed help to stdout
+        return int(exc.code or 0)
+    except KeyboardInterrupt:
+        emit(status_payload(error="interrupted", ok=False))
+        return 0
+    except Exception as exc:  # last resort: never leak a traceback to stdout
+        emit(status_payload(error=f"internal error: {exc}", ok=False))
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
