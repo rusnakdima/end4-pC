@@ -45,6 +45,65 @@ Singleton {
     property bool workspaceShowNumbers: false
     property var settingsTarget: null
 
+    // The theme's own WlSessionLock is the lock screen. A Quickshell reload or
+    // a full qs restart destroys its lock surface; Hyprland then paints its
+    // "lock screen died" fallback. misc:allow_session_lock_restore is enabled,
+    // so the reloaded shell can take the lock back, but it has to remember that
+    // the session is locked. This marker lives in the runtime dir (tmpfs) and
+    // records the Hyprland instance, so a reboot or a compositor restart does
+    // not inherit a stale lock.
+    property bool lockStateInitialized: false
+    readonly property string lockStatePath: `${Quickshell.env("XDG_RUNTIME_DIR") ?? "/tmp"}/end4-pC-locked`
+    readonly property string lockStateSession: Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") ?? "1"
+
+    function initLockState(): void {
+        if (root.lockStateInitialized || !Config.ready) return
+        root.lockStateInitialized = true
+        if (Config.options.lock.useHyprlock) return
+        const saved = lockStateFile.text().trim()
+        if (saved !== "" && saved === root.lockStateSession) root.screenLocked = true
+    }
+    function writeLockState(locked: bool): void {
+        lockStateFile.setText(locked ? root.lockStateSession : " ")
+    }
+    FileView {
+        id: lockStateFile
+        path: root.lockStatePath
+        blockLoading: true
+        blockWrites: true
+        atomicWrites: true
+        watchChanges: false
+        printErrors: false
+    }
+    Connections {
+        target: Config
+        function onReadyChanged(): void { root.initLockState() }
+    }
+    Component.onCompleted: root.initLockState()
+
+    onScreenLockedChanged: {
+        root.writeLockState(root.screenLocked)
+    }
+
+    // Reloads while locked are safe: the marker above makes the reloaded shell
+    // acquire the theme lock again. Do not defer them, or verification reloads
+    // while locked would silently do nothing.
+    function requestShellReload(): void {
+        Quickshell.reload(true);
+    }
+
+    // Lock with the theme's own lock screen. hyprlock remains an opt-in
+    // fallback (Settings > Use Hyprlock), but the theme lock is the default.
+    function lock(): void {
+        if (Config.options.lock.useHyprlock) {
+            Quickshell.execDetached(["bash", "-c", "pidof hyprlock || hyprlock"]);
+            return;
+        }
+        // Write before changing the state so an immediate reload cannot lose it.
+        root.writeLockState(true)
+        root.screenLocked = true
+    }
+
     function openSettingsAt(pageId, label, section, subsection) {
         root.settingsOpen = true;
         Qt.callLater(() => {

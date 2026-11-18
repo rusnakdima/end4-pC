@@ -120,7 +120,9 @@ def lua_quote(value: str) -> str:
 
 def to_lua_value(key, value):
     if key in BOOL_KEYS:
-        return "false" if value == "0" else "true"
+        # QML sends JS booleans as "false"/"true"; presets may send 0/1.
+        # Only explicit falsy spellings are false - "false" is not truthy.
+        return "false" if str(value).strip().lower() in ("", "0", "false", "no", "off") else "true"
     try:
         return str(int(value))
     except ValueError:

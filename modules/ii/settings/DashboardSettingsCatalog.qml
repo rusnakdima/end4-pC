@@ -6,7 +6,7 @@ import qs.modules.common
 
 QtObject {
     function hyprToggle(key) {
-        return { type: "switch", get: () => Boolean(HyprlandOptions.get(key, false)), set: v => HyprlandOptions.apply(key, v) };
+        return { type: "switch", get: () => HyprlandOptions.asBool(HyprlandOptions.get(key, false)), set: v => HyprlandOptions.apply(key, v) };
     }
 
     function hyprSelect(key, fallback, options) {

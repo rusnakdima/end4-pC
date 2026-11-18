@@ -6,6 +6,7 @@ import QtQuick.Controls
 
 RippleButton {
     id: root
+    signal userToggled(bool value)
     property string buttonIcon
     property alias iconSize: iconWidget.iconSize
     colBackgroundHover: "transparent"
@@ -17,7 +18,10 @@ RippleButton {
     implicitHeight: contentItem.implicitHeight + 8 
     font.pixelSize: Appearance.font.pixelSize.small
     
-    onClicked: checked = !checked
+    onClicked: {
+        checked = !checked
+        root.userToggled(root.checked)
+    }
 
     contentItem: RowLayout {
         spacing: 10

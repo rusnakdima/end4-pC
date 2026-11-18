@@ -16,14 +16,6 @@ Item {
         objects: [root.node]
     }
 
-    // Live signal level for the meter. Binds the node only while the row is
-    // on screen, so a closed mixer keeps no capture streams running.
-    PwNodePeakMonitor {
-        id: peakMonitor
-        node: root.node
-        enabled: root.visible
-    }
-
     implicitHeight: rowLayout.implicitHeight
 
     RowLayout {
@@ -127,14 +119,6 @@ Item {
                 configuration: StyledSlider.Configuration.S
             }
 
-            // Level meter under the slider (pavucontrol convention)
-            VolumeLevelMeter {
-                Layout.fillWidth: true
-                // The column's spacing is -4; net a4 px gap under the slider
-                Layout.topMargin: 8
-                peak: peakMonitor.peak
-                muted: root.node?.audio.muted ?? false
-            }
         }
     }
 }

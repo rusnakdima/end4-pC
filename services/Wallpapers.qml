@@ -1,3 +1,4 @@
+import qs
 import qs.modules.common
 import qs.modules.common.models
 import qs.modules.common.functions
@@ -779,7 +780,7 @@ Singleton {
         // the running scanner does not pick up until the engine restarts.
         //   qs -c end4-pC ipc call wallpapers reloadShell
         function reloadShell(): void {
-            Quickshell.reload(true);
+            GlobalStates.requestShellReload();
         }
 
         function moveWallpaper(fromIndex: int, toIndex: int): void {

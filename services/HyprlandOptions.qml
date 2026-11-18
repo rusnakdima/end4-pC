@@ -27,6 +27,17 @@ Singleton {
 
     property var values: ({})
 
+    // Normalize the several boolean spellings Hyprland and old presets use.
+    function asBool(value) {
+        if (typeof value === "boolean") return value
+        if (typeof value === "number") return value !== 0
+        if (typeof value === "string") {
+            const v = value.trim().toLowerCase()
+            return v === "true" || v === "1" || v === "yes" || v === "on"
+        }
+        return false
+    }
+
     function get(key, fallback) {
         // The stored mirror is the truth the shell restarts with and the
         // one an external edit changes, so it wins over the values this
@@ -68,7 +79,12 @@ Singleton {
         const list = Config.options?.hyprland?.hyprOptions ?? []
         for (const entry of list) {
             if (!entry || !entry.key || !root.keys.includes(entry.key)) continue
-            HyprlandConfig.set(entry.key, entry.value)
+            // The configurator understands 0/1 for every BOOL_KEY. Sending
+            // the JS boolean stringifies to "false", which older versions
+            // turned into true.
+            const raw = entry.value
+            const sent = typeof raw === "boolean" ? (raw ? 1 : 0) : raw
+            HyprlandConfig.set(entry.key, sent)
         }
     }
 

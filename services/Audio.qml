@@ -26,7 +26,9 @@ Singleton {
         return (node?.nickname || node?.description || (node ? String(node.name) : "") || Translation.tr("Unknown"));
     }
     function appNodeDisplayName(node) {
-        return (node.properties["application.name"] || node.description || node.name)
+        if (!node) return Translation.tr("Unknown");
+        const props = node.properties || ({});
+        return (props["application.name"] || node.description || node.name || Translation.tr("Unknown"))
     }
 
     // Lists

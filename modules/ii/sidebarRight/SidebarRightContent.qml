@@ -405,7 +405,7 @@ Item {
                             buttonIcon: "restart_alt"
                             onClicked: {
                                 Quickshell.execDetached(["hyprctl", "reload"])
-                                Quickshell.reload(true);
+                                GlobalStates.requestShellReload();
                             }
                             StyledToolTip {
                                 text: Translation.tr("Reload Hyprland & Quickshell")
@@ -788,7 +788,7 @@ Item {
                     } else {
                         Quickshell.execDetached(["hyprctl", "reload"]);
                     }
-                    Quickshell.reload(true);
+                    GlobalStates.requestShellReload();
                 }
                 StyledToolTip {
                     text: WM.compositor === "niri"

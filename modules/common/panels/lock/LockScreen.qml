@@ -88,19 +88,19 @@ Scope {
 
     WlSessionLock {
         id: lock
-        locked: GlobalStates.screenLocked
+        // With hyprlock enabled this surface must never become active: a
+        // Quickshell reload destroys it and Hyprland shows its dead-lock
+        // screen. Hyprlock is the independent lock client in that mode.
+        locked: GlobalStates.screenLocked && !Config.options.lock.useHyprlock
         surface: root.sessionLockSurface
         onSecureChanged: {
+            console.log(`[Lock] session lock secure: ${lock.secure}`);
             if (lock.secure) GlobalStates.startupLockPending = false;
         }
     }
 
     function lock() {
-        if (Config.options.lock.useHyprlock) {
-            Quickshell.execDetached(["bash", "-c", "pidof hyprlock || hyprlock"]);
-            return;
-        }
-        GlobalStates.screenLocked = true;
+        GlobalStates.lock();
     }
 
     IpcHandler {

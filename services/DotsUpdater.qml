@@ -17,6 +17,10 @@ Singleton {
     }
 
     function runUpdateDots() {
+        if (GlobalStates.screenLocked) {
+            Quickshell.execDetached(["notify-send", "-a", "end4-pC", "Unlock the session before updating end4-pC."])
+            return
+        }
         const updateScript = `
             set -e
             DIR="$HOME/.config/quickshell"

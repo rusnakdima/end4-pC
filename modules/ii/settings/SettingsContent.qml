@@ -402,7 +402,11 @@ Item {
                             required property var index
                             source: modelData.component
 
-                            active: Config.ready && (root.currentPage === index || item !== null || index <= root.preloadUpTo)
+                            // Loader.item is null until the page is active, so
+                            // binding active to it is a feedback loop. Keep a
+                            // separate "already loaded" flag instead.
+                            property bool everLoaded: false
+                            active: Config.ready && (root.currentPage === index || everLoaded || index <= root.preloadUpTo)
 
                             anchors.fill: parent
 
@@ -416,6 +420,9 @@ Item {
                                 if (root.currentPage === index) {
                                     GlobalStates.currentPageInstance = item;
                                 }
+                                // Defer the flag: writing it inside onLoaded
+                                // re-enters the active binding synchronously.
+                                Qt.callLater(() => { everLoaded = true; });
                             }
 
                             onIsActiveChanged: {
@@ -437,9 +444,12 @@ Item {
 
                     Loader {
                         id: profileLoader
-                        active: root.showingProfile || item !== null
+                        property bool everLoaded: false
+                        active: root.showingProfile || everLoaded
                         anchors.fill: parent
                         source: Qt.resolvedUrl("pages/Profile.qml")
+
+                        onLoaded: Qt.callLater(() => { everLoaded = true; })
 
                         property bool isActive: root.showingProfile
                         opacity: isActive ? 1 : 0
