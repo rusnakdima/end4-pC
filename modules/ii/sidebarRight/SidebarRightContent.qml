@@ -306,6 +306,10 @@ Item {
                                     ? "desktop"
                                     : ""
                                 playing: !LiveWallpaper.paused
+                                // Reuse the generated still: a banner decoder
+                                // would decode the desktop clip a second time
+                                // and stutter the panel every time it opens.
+                                allowLive: false
                                 stillSourceSize: Qt.size(wallpaperRect.width * 2, wallpaperRect.height * 2)
                                 cacheStill: true
                                 antialiasing: true

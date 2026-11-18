@@ -49,6 +49,9 @@ ContentPage {
                 source: card.rawPath
                 syncGroup: card.syncGroup
                 playing: !LiveWallpaper.paused
+                // One decoder per clip: the desktop owns it. Settings cards
+                // show the same poster without starting their own players.
+                allowLive: false
                 stillSourceSize: Qt.size(card.fixedWidth * 1.5, card.fixedHeight * 1.5)
                 fillMode: Image.PreserveAspectCrop
             }

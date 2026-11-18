@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import qs.modules.common.functions
+import qs.modules.common.widgets
 import qs.services
 
 /**
@@ -11,6 +12,21 @@ TestCase {
     id: testCase
     name: "WallpaperVideo"
     when: true
+
+    // Panel previews must reuse the poster instead of opening a second
+    // decoder for the clip that is already playing on the desktop.
+    WallpaperMedia {
+        id: stillOnly
+        source: "/tmp/wallpaper-video-not-a-real-file.mp4"
+        allowLive: false
+        showStill: false
+    }
+
+    function test_a_poster_only_surface_never_decodes() {
+        compare(stillOnly.wantsVideo, false);
+        verify(!stillOnly.videoReady);
+        compare(stillOnly.playbackPath, "");
+    }
 
     function test_small_drift_is_left_alone() {
         // A decoder a few frames behind is normal. Seeking it every 100 ms is

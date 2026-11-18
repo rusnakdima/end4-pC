@@ -436,6 +436,10 @@ ContentPage {
                         ? "desktop"
                         : ""
                     playing: !LiveWallpaper.paused
+                    // The clip is already decoding in the desktop layer.
+                    // Opening Settings must not start a second decoder here,
+                    // so this card reuses the generated poster instead.
+                    allowLive: false
                     stillSourceSize.height: 1080
                     fillMode: Image.PreserveAspectCrop
                     // Reopening Settings must not decode the same wallpaper

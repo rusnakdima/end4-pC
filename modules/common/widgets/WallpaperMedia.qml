@@ -42,6 +42,13 @@ Item {
     property bool playing: true
     // Set false where the caller already paints the still (picker cells).
     property bool showStill: true
+    // False means "reuse the poster": never open a decoder or prefetch a
+    // proxy here. Panel previews use this so opening Settings cannot start a
+    // second decode of the clip that is already playing on the desktop —
+    // QML cannot share one QVideoSink between separate layer windows.
+    property bool allowLive: true
+    // True when this surface actually wants live frames from the clip.
+    readonly property bool wantsVideo: media.isVideo && media.allowLive
     // Image.PreserveAspectCrop / PreserveAspectFit / Stretch. The values are
     // the same as VideoOutput's fill modes.
     property int fillMode: Image.PreserveAspectCrop
@@ -50,7 +57,7 @@ Item {
     property bool cacheStill: true
 
     readonly property bool isVideo: media.source.length > 0 && Images.isVideoPath(media.source)
-    readonly property bool videoReady: media.isVideo && video.hasVideo
+    readonly property bool videoReady: media.wantsVideo && video.hasVideo
         && video.error === MediaPlayer.NoError
     // Exposed so a caller can tell whether the clip is actually moving, and
     // so the tests do not have to reach into the private Video.
@@ -119,7 +126,7 @@ Item {
     function updateProxy(): void {
         proxyProc.running = false;
         media.playbackPath = "";
-        if (!media.isVideo || !media.useProxy || media.source.length === 0 || !media.active) return;
+        if (!media.wantsVideo || !media.useProxy || media.source.length === 0 || !media.active) return;
         proxyProc.sourcePath = media.source;
         proxyProc.command = ["bash", Directories.videoWallpaperScriptPath, "--prefetch", media.source];
         proxyProc.running = true;
@@ -226,8 +233,8 @@ Item {
         anchors.fill: parent
         // hasVideo is false until the clip has been opened, so the still (or
         // the caller's own thumbnail) stays visible instead of a black frame.
-        visible: media.isVideo && media.active && media.videoReady
-        source: media.isVideo ? media.mediaUrl : ""
+        visible: media.wantsVideo && media.active && media.videoReady
+        source: media.wantsVideo ? media.mediaUrl : ""
         autoPlay: media.active
         loops: MediaPlayer.Infinite
         muted: true
