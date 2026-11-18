@@ -62,24 +62,28 @@ The installer generates a random VNC password in
 **Settings → VNC → Network & Security** before connecting, or read that file
 locally and replace it from Settings.
 
-The service binds to `127.0.0.1:5900` by default. Connect through SSH:
+The bind address is selected in **Settings → VNC → Network & Security**:
 
-```bash
-ssh -L 5900:127.0.0.1:5900 user@host
-```
+| Button | Bind address | Use |
+|---|---|---|
+| Localhost | `127.0.0.1` | Default. Reach the desktop from anywhere through an SSH tunnel: `ssh -L 5900:127.0.0.1:5900 user@host`, then connect a VNC client to `localhost:5900`. |
+| LAN + VPN | `0.0.0.0` | Reachable from the local network **and** over Tailscale/VPN at the same time. |
+| Tailscale | detected `100.x` address | Private tailnet only; not visible on the LAN. |
 
-Then point the VNC client at `localhost:5900` and accept the certificate
-fingerprint shown in Settings → VNC → Network & Security.
+In every case, accept the self-signed certificate fingerprint shown in
+Settings → VNC → Network & Security on first connect.
 
 ## Security
 
-- TLS authentication and a VNC password are enabled by default.
+- TLS authentication and a VNC password are enabled by default, also when
+  binding to `0.0.0.0`. Keep them enabled on any non-loopback bind.
 - The password is stored in `vnc.secret` with mode `600`; it is never printed by
   `status` and never returned to the Settings page.
 - If authentication is disabled, the controller refuses any bind address that
   is not loopback.
-- Do not expose port 5900 directly to the LAN/WAN. Prefer an SSH tunnel or a
-  Tailscale bind (the Settings page lists the detected Tailscale address).
+- `0.0.0.0` exposes port 5900 on every interface, including Wi‑Fi. Use a strong
+  password and, on an untrusted LAN, restrict port 5900 with a firewall. Prefer
+  the Tailscale bind or an SSH tunnel when the LAN is not trusted.
 - The self-signed certificate is intentionally local; compare its SHA256
   fingerprint on first connect.
 

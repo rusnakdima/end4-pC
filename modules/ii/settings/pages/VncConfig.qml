@@ -395,6 +395,15 @@ ContentPage {
                     }
 
                     RippleButtonWithIcon {
+                        mainText: Translation.tr("LAN + VPN")
+                        materialIcon: "public"
+                        onClicked: {
+                            page.set("network.address", "0.0.0.0")
+                            addressField.text = "0.0.0.0"
+                        }
+                    }
+
+                    RippleButtonWithIcon {
                         mainText: Translation.tr("Tailscale")
                         materialIcon: "vpn_lock"
                         visible: page.tailscaleAddress !== ""
@@ -403,6 +412,15 @@ ContentPage {
                             addressField.text = page.tailscaleAddress
                         }
                     }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    visible: page.get("network.address", "127.0.0.1") === "0.0.0.0"
+                    text: Translation.tr("All interfaces: reachable from the local network and over Tailscale/VPN. Keep TLS authentication and a strong password enabled, or restrict access with a firewall.")
+                    color: Appearance.colors.colSubtext
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    wrapMode: Text.Wrap
                 }
 
                 ConfigSpinBox {
