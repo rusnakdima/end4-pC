@@ -12,6 +12,7 @@
 #   ./optional/cast/install-user.sh --check            # report readiness, change nothing
 #   ./optional/cast/install-user.sh --build-waycast    # build waycast from source via cargo
 #   ./optional/cast/install-user.sh --build-waycast /path/to/waycast-src
+#   ./optional/cast/install-user.sh --install-backends # install waycast + fluxcast into ~/.local
 #   ./optional/cast/install-user.sh --uninstall        # delegate to uninstall-user.sh
 #   ./optional/cast/install-user.sh -h|--help          # this text
 #
@@ -30,9 +31,13 @@ CONFIG_ROOT="${XDG_CONFIG_HOME:-${HOME}/.config}"
 CONFIG_DIR="${CONFIG_ROOT}/end4-pC/cast"
 DATA_ROOT="${XDG_DATA_HOME:-${HOME}/.local/share}"
 WAYCAST_BUILD_DIR="${DATA_ROOT}/end4pc-cast/waycast"
+WAYCAST_SRC_DIR="${DATA_ROOT}/end4pc-cast/waycast-src"
+FLUXCAST_DIR="${DATA_ROOT}/end4pc-cast/fluxcast"
+FLUXCAST_VENV="${DATA_ROOT}/end4pc-cast/fluxcast-venv"
 
 MODE="install"
 BUILD_WAYCAST=0
+INSTALL_BACKENDS=0
 WAYCAST_SRC="${WAYCAST_SRC:-}"
 FAILS=0
 
@@ -54,6 +59,7 @@ while [ $# -gt 0 ]; do
                 WAYCAST_SRC="$1"; shift
             fi
             ;;
+        --install-backends) INSTALL_BACKENDS=1; shift ;;
         -h|--help)   usage ;;
         *) echo "unknown option: $1 (see --help)" >&2; exit 2 ;;
     esac
@@ -141,6 +147,44 @@ do_build_waycast() {
 }
 
 # ---------------------------------------------------------------------------
+# install both casting backends into user-owned directories (no sudo)
+# ---------------------------------------------------------------------------
+do_install_fluxcast() {
+    if [ -x "$FLUXCAST_DIR/bin/fluxcast" ]; then
+        ok "fluxcast already installed: $FLUXCAST_DIR/bin/fluxcast"
+        return 0
+    fi
+    command -v python3 >/dev/null 2>&1 || { fail "python3 required for fluxcast"; return 1; }
+    log "creating fluxcast virtualenv"
+    python3 -m venv "$FLUXCAST_VENV" || { fail "could not create fluxcast venv"; return 1; }
+    "$FLUXCAST_VENV/bin/pip" install --quiet fluxcast \
+        || { fail "could not install fluxcast from PyPI"; return 1; }
+    mkdir -p "$FLUXCAST_DIR/bin"
+    cat > "$FLUXCAST_DIR/bin/fluxcast" <<EOF
+#!/usr/bin/env bash
+exec "${FLUXCAST_VENV}/bin/fluxcast" "\$@"
+EOF
+    chmod +x "$FLUXCAST_DIR/bin/fluxcast"
+    ok "fluxcast: $FLUXCAST_DIR/bin/fluxcast"
+}
+
+do_install_waycast_source() {
+    if [ -x "$WAYCAST_BUILD_DIR/waycast" ]; then
+        ok "waycast already installed: $WAYCAST_BUILD_DIR/waycast"
+        return 0
+    fi
+    command -v git >/dev/null 2>&1 || { fail "git required to fetch waycast"; return 1; }
+    command -v cargo >/dev/null 2>&1 || { fail "cargo required to build waycast"; return 1; }
+    if [ ! -f "$WAYCAST_SRC_DIR/Cargo.toml" ]; then
+        log "cloning waycast into $WAYCAST_SRC_DIR"
+        git clone --depth 1 https://github.com/alchemy/waycast.git "$WAYCAST_SRC_DIR" \
+            || { fail "could not clone waycast"; return 1; }
+    fi
+    WAYCAST_SRC="$WAYCAST_SRC_DIR"
+    do_build_waycast
+}
+
+# ---------------------------------------------------------------------------
 # install
 # ---------------------------------------------------------------------------
 do_install() {
@@ -179,6 +223,10 @@ do_install() {
 
     if [ "$BUILD_WAYCAST" -eq 1 ]; then
         do_build_waycast || true
+    fi
+    if [ "$INSTALL_BACKENDS" -eq 1 ]; then
+        do_install_fluxcast || true
+        do_install_waycast_source || true
     fi
 
     # Bring the graphical session variables into the systemd --user environment

@@ -91,9 +91,14 @@ The Cast helper needs one-time provisioning:
 
 ```bash
 cd ~/.config/quickshell/end4-pC/optional/cast
-./install-user.sh --check       # readiness report
-./install-user.sh               # install helper + backends (idempotent)
+./install-user.sh --check            # readiness report
+./install-user.sh --install-backends # install helper + waycast + fluxcast into ~/.local
 ```
+
+Both backends are optional. With them installed, the Cast pane scans Miracast
+devices over Wi‑Fi Direct (e.g. a Sony Bravia) and Google Cast/DLNA devices on
+the LAN (e.g. an Android TV). The device list has a one-click **Connect**;
+stream quality (720p/20 fps by default) is configurable in the same pane.
 
 The installer prints the optional `sudo` steps for the Wi‑Fi Direct supplicant config and firewall port; it never runs them for you. Full guide in [`optional/cast/README.md`](optional/cast/README.md).
 

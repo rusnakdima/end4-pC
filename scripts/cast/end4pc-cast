@@ -61,6 +61,9 @@ DEFAULTS = {
     "audio": True,
     "target": "",             # manual TV address for remote mode
     "interface": "",          # optional Wi-Fi interface
+    "outputRes": "1280x720",  # lighter default avoids TV-side HLS buffer errors
+    "fps": 20,
+    "bitrate": "2M",
 }
 CONFIG_KEYS = tuple(DEFAULTS)
 
@@ -68,6 +71,14 @@ VALID = {
     "networkMode": {"local", "remote"},
     "mode": {"mirror", "extend"},
     "codec": {"auto", "h264", "h264-sw"},
+    "outputRes": {"1280x720", "1920x1080", "960x540", "native"},
+}
+
+RESOLUTION_MAP = {
+    "native": "",
+    "960x540": "960x540",
+    "1280x720": "1280x720",
+    "1920x1080": "1920x1080",
 }
 
 IP_RE = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,}:[0-9a-fA-F:]+$")
@@ -137,7 +148,12 @@ def normalize_config(cfg: dict) -> dict:
             value = default
         if key == "audio":
             value = bool(value) if isinstance(value, bool) else str(value).lower() in {"1", "true", "yes", "on"}
-        if key in {"target", "interface", "codec", "mode", "networkMode"}:
+        if key == "fps":
+            try:
+                value = max(10, min(60, int(value)))
+            except (TypeError, ValueError):
+                value = DEFAULTS["fps"]
+        if key in {"target", "interface", "codec", "mode", "networkMode", "bitrate"}:
             value = str(value or "")
         out[key] = value
     return out
@@ -208,10 +224,10 @@ def backend_info(name: str) -> dict:
     path = find_backend(name)
     if not path:
         return {"installed": False, "version": ""}
-    rc, out, err = run([path, "--version"], timeout=3)
-    version = first_line(out) or first_line(err)
-    if rc != 0 and not version:
-        version = ""
+    rc, out, _err = run([path, "--version"], timeout=3)
+    # Some backends (waycast) have no --version flag; never show the usage
+    # error text as a version string.
+    version = first_line(out) if rc == 0 else ""
     return {"installed": True, "version": version}
 
 
@@ -360,17 +376,34 @@ def parse_sinks(text: str, default_type: str = "wfd") -> list[dict]:
         pass  # fall through to line parsing
 
     for line in text.splitlines():
-        line = line.strip().lstrip("+- ").strip()
+        line = line.strip()
+        if line[:1] in {"+", "-", "="}:
+            line = line[1:].lstrip("; ")
+        line = line.strip()
         if not line:
             continue
         parts = [p.strip() for p in re.split(r"[|;\t]", line) if p.strip()]
         if not parts:
             continue
-        # Avahi-browse -r output: +;eth0;IPv4;Name;_dlna._tcp;local;host;ip;port
-        if len(parts) >= 8 and "_" in parts[4]:
-            service = parts[4].lower()
+        # avahi-browse -rtp: eth0;IPv4;Name;_svc._tcp;local;host;ip;port;txt
+        service_index = next((i for i, part in enumerate(parts) if "_tcp" in part.lower()), -1)
+        if service_index >= 2:
+            service = parts[service_index].lower()
             typ = "cast" if "googlecast" in service or "cast" in service else "dlna"
-            sinks.append(normalize_sink(parts[3], parts[7], typ))
+            name = parts[service_index - 1]
+            address = next((p for p in parts[service_index + 1:] if IP_RE.match(p)), "")
+            # The TXT record carries `fn=` (friendly name), much nicer in the
+            # pane than the service instance ID.
+            for extra in parts[service_index + 1:]:
+                match = re.search(r'\bfn=([^\s"]+)', extra)
+                if match:
+                    name = match.group(1)
+                    break
+            # Link-local IPv6 is not a useful cast target; the same service is
+            # normally also announced over IPv4.
+            if not address or address.lower().startswith("fe80:"):
+                continue
+            sinks.append(normalize_sink(name, address, typ))
             continue
         name = parts[0]
         addr = ""
@@ -566,6 +599,26 @@ def build_waycast_args(cfg: dict, sink: str) -> list[str]:
     return args
 
 
+def primary_monitor() -> str:
+    """Return the focused Hyprland output, or the first one, without prompting."""
+    hyprctl = shutil.which("hyprctl")
+    if not hyprctl:
+        return ""
+    rc, out, _err = run([hyprctl, "monitors", "-j"], timeout=4)
+    if rc != 0:
+        return ""
+    try:
+        monitors = json.loads(out)
+    except (ValueError, TypeError):
+        return ""
+    if not isinstance(monitors, list) or not monitors:
+        return ""
+    for monitor in monitors:
+        if isinstance(monitor, dict) and monitor.get("focused"):
+            return str(monitor.get("name", ""))
+    return str(monitors[0].get("name", "")) if isinstance(monitors[0], dict) else ""
+
+
 def build_fluxcast_args(cfg: dict, sink: str) -> tuple[list[str], str]:
     """Build fluxcast args; only pass a target flag we saw in --help.
 
@@ -583,10 +636,30 @@ def build_fluxcast_args(cfg: dict, sink: str) -> tuple[list[str], str]:
     if protocol == "dlna":
         args += ["--transport", "hls"]
 
+    # fluxcast otherwise prompts for a monitor on stdin, which is closed when
+    # the helper owns the process. Pin it to the active Hyprland output.
+    if "--monitor" in flags:
+        monitor = str(cfg.get("monitor") or "").strip() or primary_monitor()
+        if monitor:
+            args += ["--monitor", monitor]
+
+    # Quality presets. A full 1080p30 HLS stream makes Android TV's Cast
+    # receiver drop the session; 720p20/2M is the tested-safe default.
+    for flag, key in (("--fps", "fps"), ("--bitrate", "bitrate")):
+        if flag in flags and cfg.get(key):
+            args += [flag, str(cfg[key])]
+    resolution = str(cfg.get("outputRes") or "1280x720")
+    if "--output-res" in flags and RESOLUTION_MAP.get(resolution, resolution):
+        args += ["--output-res", RESOLUTION_MAP.get(resolution, resolution)]
+
     note = ""
     target = str(cfg.get("target") or "").strip() or sink
     if target:
-        for flag in ("--target", "--device", "--url", "--host", "--address", "--sink"):
+        # --host is the *bind* address in fluxcast, not a target, so it is
+        # deliberately excluded here. prefer the cast-specific --tv-ip.
+        candidates = ("--tv-ip", "--device-name") if protocol == "cast" else ("--device-name",)
+        candidates += ("--target", "--device", "--url", "--address", "--sink")
+        for flag in candidates:
             if flag in flags:
                 args += [flag, target]
                 break
@@ -669,6 +742,20 @@ def stop_session() -> str:
 # discovery internals
 # ---------------------------------------------------------------------------
 
+def parse_waycast_sinks(text: str) -> list[dict]:
+    """Parse waycast's ASCII table: rows look like `| Name | AA:BB:... |`."""
+    sinks: list[dict] = []
+    for line in (text or "").splitlines():
+        tokens = [part.strip() for part in line.split() if part.strip() != "|"]
+        for index, token in enumerate(tokens):
+            if MAC_RE.match(token) and index > 0:
+                name = " ".join(tokens[:index]).strip()
+                if name and name.lower() not in {"name", "sinks", "address"}:
+                    sinks.append(normalize_sink(name, token, "wfd"))
+                break
+    return dedupe_sinks(sinks)
+
+
 def discover_local() -> tuple[list[dict], str]:
     binary = find_backend("waycast")
     if not binary:
@@ -676,7 +763,9 @@ def discover_local() -> tuple[list[dict], str]:
     rc, out, err = run([binary, "discover", "--timeout", "10"], timeout=15)
     if rc != 0:
         return [], f"waycast discover failed: {first_line(err or out, 200) or 'unknown error'}"
-    sinks = parse_sinks(out, "wfd")
+    sinks = parse_waycast_sinks(out)
+    if not sinks:
+        sinks = parse_sinks(out, "wfd")
     return sinks, "" if sinks else "no Wi-Fi Direct sinks found"
 
 
@@ -685,25 +774,29 @@ def discover_remote() -> tuple[list[dict], str]:
     notes: list[str] = []
     avahi = shutil.which("avahi-browse")
     if avahi:
-        combined = ""
-        for service in ("_dlna._tcp", "_googlecast._tcp", "_airplay._tcp"):
-            rc, out, _err = run([avahi, "-art", service], timeout=8)
+        # -a means "all types" and conflicts with an explicit service type;
+        # -rt resolves records and terminates after the first batch.
+        dlna_out = ""
+        cast_out = ""
+        for service in ("_dlna._tcp",):
+            rc, out, _err = run([avahi, "-rtp", service], timeout=8)
             if rc == 0:
-                combined += out + "\n"
-        sinks.extend(parse_sinks(combined, "dlna"))
+                dlna_out += out + "\n"
+        for service in ("_googlecast._tcp", "_airplay._tcp", "_androidtvremote2._tcp"):
+            rc, out, _err = run([avahi, "-rtp", service], timeout=8)
+            if rc == 0:
+                cast_out += out + "\n"
+        sinks.extend(parse_sinks(dlna_out, "dlna"))
+        sinks.extend(parse_sinks(cast_out, "cast"))
         if not sinks:
             notes.append("avahi-browse found no DLNA/Cast services")
     else:
         notes.append("avahi-browse not found; install avahi-utils for LAN discovery")
 
-    flux = find_backend("fluxcast")
-    if flux:
-        rc, out, err = run([flux, "discover", "--timeout", "10"], timeout=15)
-        if rc == 0:
-            sinks.extend(parse_sinks(out, "cast"))
-        else:
-            notes.append(f"fluxcast discover failed: {first_line(err or out, 160) or 'unknown error'}")
-    else:
+    # fluxcast 0.3.x has no `discover` subcommand; Avahi is the discovery
+    # source for both DLNA and Google Cast. Keep a note when it is absent so
+    # the pane can explain why casting itself will not start.
+    if not find_backend("fluxcast"):
         notes.append("fluxcast is not installed; remote Cast discovery is limited")
     return dedupe_sinks(sinks), "; ".join(notes)
 

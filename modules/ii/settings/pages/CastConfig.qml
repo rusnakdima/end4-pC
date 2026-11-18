@@ -35,12 +35,38 @@ ContentPage {
         { displayName: "h264-sw", value: "h264-sw" }
     ]
 
+    readonly property var resolutionOptions: [
+        { displayName: "960 × 540", value: "960x540" },
+        { displayName: "1280 × 720", value: "1280x720" },
+        { displayName: "1920 × 1080", value: "1920x1080" },
+        { displayName: Translation.tr("Native"), value: "native" }
+    ]
+
+    readonly property var fpsOptions: [
+        { displayName: "15", value: 15 },
+        { displayName: "20", value: 20 },
+        { displayName: "25", value: 25 },
+        { displayName: "30", value: 30 }
+    ]
+
+    readonly property var bitrateOptions: [
+        { displayName: Translation.tr("Low (1M)"), value: "1M" },
+        { displayName: Translation.tr("Balanced (2M)"), value: "2M" },
+        { displayName: Translation.tr("High (4M)"), value: "4M" }
+    ]
+
+    readonly property string networkMode: page.get("networkMode", "local")
+
     function defaultDraft() {
         return {
             version: 1,
             networkMode: "local",
             target: "",
             sink: "",
+            outputRes: "1280x720",
+            fps: 20,
+            bitrate: "2M",
+            protocol: "cast",
             stream: { mode: "mirror", codec: "auto", audio: true }
         }
     }
@@ -85,6 +111,10 @@ ContentPage {
                 networkMode: saved.networkMode ?? "local",
                 target: saved.target ?? "",
                 sink: saved.sink ?? "",
+                outputRes: saved.outputRes ?? "1280x720",
+                fps: saved.fps ?? 20,
+                bitrate: saved.bitrate ?? "2M",
+                protocol: saved.protocol ?? "cast",
                 stream: {
                     mode: saved.mode ?? "mirror",
                     codec: saved.codec ?? "auto",
@@ -115,8 +145,13 @@ ContentPage {
 
     function connectSink(sink) {
         const name = sink?.name ?? sink?.description ?? ""
-        if (name === "") return
-        page.set("sink", name)
+        const address = sink?.address ?? ""
+        if (name === "" && address === "") return
+        const isWfd = sink?.type === "wfd"
+        page.set("networkMode", isWfd ? "local" : "remote")
+        page.set("sink", name || address)
+        page.set("target", address || name)
+        page.set("protocol", isWfd ? "wfd" : (sink?.type === "dlna" ? "dlna" : "cast"))
         page.dirty = false
         Cast.apply(page.draft)
         Cast.start()
@@ -149,6 +184,7 @@ ContentPage {
     Component.onCompleted: {
         page.resetDraft()
         Cast.refresh()
+        Cast.discover(page.networkMode)
         Cast.monitoring = page.visible
     }
 
@@ -258,18 +294,41 @@ ContentPage {
                     }
                 }
 
-                RippleButtonWithIcon {
-                    mainText: Translation.tr("Run setup")
-                    materialIcon: "settings"
-                    onClicked: page.runSetup()
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    RippleButtonWithIcon {
+                        mainText: Translation.tr("Run setup")
+                        materialIcon: "settings"
+                        onClicked: page.runSetup()
+                    }
+
+                    RippleButtonWithIcon {
+                        mainText: page.dirty ? Translation.tr("Apply") : Translation.tr("Saved")
+                        materialIcon: "save"
+                        enabled: page.dirty && !Cast.busy && Cast.helperAvailable
+                        onClicked: page.applyDraft()
+                    }
+
+                    Item { Layout.fillWidth: true }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    visible: page.dirty
+                    text: Translation.tr("Applying settings restarts the active cast session.")
+                    color: Appearance.colors.colSubtext
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    wrapMode: Text.Wrap
                 }
             }
         }
 
         ContentSection {
-            icon: "lan"
+            icon: "cast_connected"
             shape: MaterialShape.Shape.PixelCircle
-            title: Translation.tr("Connection")
+            title: Translation.tr("Scanned devices")
 
             ColumnLayout {
                 Layout.fillWidth: true
@@ -279,48 +338,78 @@ ContentPage {
                     text: Translation.tr("Network")
                     icon: "lan"
                     options: page.networkModes
-                    currentValue: page.get("networkMode", "local")
-                    onSelected: value => page.set("networkMode", value)
+                    currentValue: page.networkMode
+                    onSelected: value => {
+                        page.set("networkMode", value)
+                        Cast.discover(value)
+                    }
                 }
 
-                ColumnLayout {
+                RowLayout {
                     Layout.fillWidth: true
-                    spacing: 6
-                    visible: page.get("networkMode", "local") === "local"
+                    spacing: 8
 
-                    StyledText {
-                        Layout.fillWidth: true
-                        text: Translation.tr("Sinks")
-                        font.weight: Font.DemiBold
+                    RippleButtonWithIcon {
+                        mainText: Translation.tr("Scan devices")
+                        materialIcon: "refresh"
+                        enabled: !Cast.busy
+                        onClicked: Cast.discover(page.networkMode)
                     }
 
                     StyledText {
                         Layout.fillWidth: true
-                        visible: Cast.sinks.length === 0
-                        text: Translation.tr("No sinks found.")
+                        text: Translation.tr("%1 device(s) found").arg(Cast.sinks.length)
                         color: Appearance.colors.colSubtext
                     }
+                }
 
-                    Repeater {
-                        model: Cast.sinks
+                StyledText {
+                    Layout.fillWidth: true
+                    visible: Cast.sinks.length === 0
+                    text: Translation.tr("No devices found. Install the backend for the selected network, then scan again. You can also enter an address below.")
+                    color: Appearance.colors.colSubtext
+                    wrapMode: Text.Wrap
+                }
 
-                        delegate: RowLayout {
-                            required property var modelData
+                Repeater {
+                    model: Cast.sinks
+
+                    delegate: RowLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        MaterialSymbol {
+                            text: modelData.type === "wfd" ? "cast" : (modelData.type === "cast" ? "tv" : "desktop_windows")
+                            iconSize: Appearance.font.pixelSize.large
+                            color: Appearance.colors.colPrimary
+                        }
+
+                        ColumnLayout {
                             Layout.fillWidth: true
-                            spacing: 8
+                            spacing: 2
 
                             StyledText {
                                 Layout.fillWidth: true
-                                text: modelData.description || modelData.name || Translation.tr("Unknown")
+                                text: modelData.name || modelData.address || Translation.tr("Unknown")
+                                font.weight: Font.DemiBold
                                 elide: Text.ElideRight
                             }
-
-                            RippleButtonWithIcon {
-                                mainText: Translation.tr("Connect")
-                                materialIcon: "cast"
-                                enabled: !Cast.busy
-                                onClicked: page.connectSink(modelData)
+                            StyledText {
+                                Layout.fillWidth: true
+                                visible: (modelData.address || "") !== ""
+                                text: `${modelData.type ?? ""} · ${modelData.address ?? ""}`
+                                color: Appearance.colors.colSubtext
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                elide: Text.ElideRight
                             }
+                        }
+
+                        RippleButtonWithIcon {
+                            mainText: Translation.tr("Connect")
+                            materialIcon: "cast"
+                            enabled: !Cast.busy
+                            onClicked: page.connectSink(modelData)
                         }
                     }
                 }
@@ -328,21 +417,12 @@ ContentPage {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 8
-                    visible: page.get("networkMode", "local") !== "local"
 
                     MaterialTextField {
-                        id: targetField
                         Layout.fillWidth: true
-                        placeholderText: Translation.tr("Target address")
+                        placeholderText: Translation.tr("Target address (TV IP / host)")
                         text: page.get("target", "")
                         onTextEdited: page.set("target", text)
-                    }
-
-                    RippleButtonWithIcon {
-                        mainText: Translation.tr("Discover")
-                        materialIcon: "wifi"
-                        enabled: !Cast.busy
-                        onClicked: Cast.discover(page.get("networkMode", "local"))
                     }
                 }
 
@@ -386,6 +466,45 @@ ContentPage {
                     options: page.codecOptions
                     currentValue: page.get("stream.codec", "auto")
                     onSelected: value => page.set("stream.codec", value)
+                }
+
+                ConfigSelectionArray {
+                    text: Translation.tr("Resolution")
+                    icon: "aspect_ratio"
+                    options: page.resolutionOptions
+                    currentValue: page.get("outputRes", "1280x720")
+                    onSelected: value => page.set("outputRes", value)
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    ConfigSelectionArray {
+                        Layout.fillWidth: true
+                        text: Translation.tr("Frame rate")
+                        icon: "speed"
+                        options: page.fpsOptions
+                        currentValue: page.get("fps", 20)
+                        onSelected: value => page.set("fps", value)
+                    }
+
+                    ConfigSelectionArray {
+                        Layout.fillWidth: true
+                        text: Translation.tr("Bitrate")
+                        icon: "network_check"
+                        options: page.bitrateOptions
+                        currentValue: page.get("bitrate", "2M")
+                        onSelected: value => page.set("bitrate", value)
+                    }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: Translation.tr("720p at 20 fps is the tested-safe default for Android TV Cast. Higher settings can make the TV drop the stream.")
+                    color: Appearance.colors.colSubtext
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    wrapMode: Text.Wrap
                 }
 
                 ConfigSwitch {
@@ -496,27 +615,6 @@ ContentPage {
                     font.pixelSize: Appearance.font.pixelSize.smaller
                     wrapMode: Text.Wrap
                 }
-            }
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 8
-
-            RippleButtonWithIcon {
-                mainText: page.dirty ? Translation.tr("Apply") : Translation.tr("Saved")
-                materialIcon: "save"
-                enabled: page.dirty && !Cast.busy && Cast.helperAvailable
-                onClicked: page.applyDraft()
-            }
-
-            StyledText {
-                Layout.fillWidth: true
-                visible: page.dirty
-                text: Translation.tr("Applying settings restarts the active cast session.")
-                color: Appearance.colors.colSubtext
-                font.pixelSize: Appearance.font.pixelSize.smaller
-                wrapMode: Text.Wrap
             }
         }
     }

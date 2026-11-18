@@ -260,6 +260,15 @@ ContentPage {
                     color: Appearance.colors.colSubtext
                     font.pixelSize: Appearance.font.pixelSize.smaller
                 }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    visible: page.dirty && Vnc.clients.length > 0
+                    text: Translation.tr("Applying restarts VNC and disconnects the connected client(s).")
+                    color: Appearance.colors.colError
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    wrapMode: Text.Wrap
+                }
             }
         }
 
@@ -719,27 +728,6 @@ ContentPage {
                     font.pixelSize: Appearance.font.pixelSize.smaller
                     wrapMode: Text.Wrap
                 }
-            }
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 8
-
-            RippleButtonWithIcon {
-                mainText: page.dirty ? Translation.tr("Apply changes") : Translation.tr("No changes")
-                materialIcon: "save"
-                enabled: page.dirty && !Vnc.busy && Vnc.helperAvailable
-                onClicked: page.applyDraft()
-            }
-
-            StyledText {
-                Layout.fillWidth: true
-                visible: page.dirty && Vnc.clients.length > 0
-                text: Translation.tr("Applying restarts VNC and disconnects the connected client(s).")
-                color: Appearance.colors.colError
-                font.pixelSize: Appearance.font.pixelSize.smaller
-                wrapMode: Text.Wrap
             }
         }
     }
