@@ -20,7 +20,32 @@ RowLayout {
 
     readonly property var comboBox: root.searchable ? searchComboBox : comboBox
 
+    // The index is derived from currentValue, but the combo box writes its
+    // own currentIndex when the user picks an item. That imperative write
+    // removes the declarative index binding above, so the visible item would
+    // stop following currentValue. These bindings re-apply the index when
+    // currentValue or the model changes, which also keeps two ConfigComboBox
+    // instances on the same key in sync.
+    readonly property int currentIndexForValue: {
+        const index = root.model.findIndex(item => item.value === root.currentValue);
+        return index !== -1 ? index : 0;
+    }
+
     signal selected(var newValue)
+
+    Binding {
+        target: comboBox
+        property: "currentIndex"
+        value: root.currentIndexForValue
+        restoreMode: Binding.RestoreBinding
+    }
+
+    Binding {
+        target: searchComboBox
+        property: "currentIndex"
+        value: root.currentIndexForValue
+        restoreMode: Binding.RestoreBinding
+    }
 
     spacing: 10
     Layout.leftMargin: 8
@@ -62,11 +87,6 @@ RowLayout {
         textRole: root.textRole
         model: root.model
 
-        currentIndex: {
-            const index = root.model.findIndex(item => item.value === root.currentValue);
-            return index !== -1 ? index : 0;
-        }
-
         onActivated: index => {
             root.selected(comboBox.model[index].value);
         }
@@ -81,11 +101,6 @@ RowLayout {
         enabled: root.enabled
         textRole: root.textRole
         model: root.model
-
-        currentIndex: {
-            const index = root.model.findIndex(item => item.value === root.currentValue);
-            return index !== -1 ? index : 0;
-        }
 
         onActivated: index => {
             root.selected(searchComboBox.model[index].value);

@@ -44,6 +44,18 @@ Item {
         : [{ id: "layout", name: Translation.tr("Layout"), icon: "dashboard_customize" }]
     property bool showIconPickerDialog: false
 
+    // editTab is writable (the toolbar sets it), so its initial binding is
+    // gone after the user picks a tab. Switching the quick-toggle style in
+    // Settings can then leave it on "toggles" while that tab no longer
+    // exists; fall back to the first valid tab.
+    Connections {
+        target: Config.ready ? Config.options.sidebar.quickToggles : null
+        function onStyleChanged() {
+            if (!root.editTabs.some(tab => tab.id === root.editTab))
+                root.editTab = root.editTabs.length > 0 ? root.editTabs[0].id : "layout";
+        }
+    }
+
     readonly property bool animatedEntrance: WM.compositor !== "hyprland"
     readonly property bool sidebarOpen: GlobalStates.sidebarRightOpen
 

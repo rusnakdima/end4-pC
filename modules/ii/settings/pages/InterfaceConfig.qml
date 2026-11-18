@@ -124,25 +124,53 @@ ContentPage {
             title: Translation.tr("Transparency")
             GroupedList {
                 ConfigSwitch {
+                    id: transparencyEnableSwitch
                     buttonIcon: "check"
                     text: Translation.tr("Enable")
                     checked: Config.options.appearance.transparency.enable
-                    onCheckedChanged: { Config.options.appearance.transparency.enable = checked }
+                    onCheckedChanged: {
+                        if (checked === Config.options.appearance.transparency.enable) return;
+                        Config.options.appearance.transparency.enable = checked;
+                    }
+                    ConfigBinding {
+                        target: transparencyEnableSwitch
+                        property: "checked"
+                        value: Config.options.appearance.transparency.enable
+                    }
                 }
                 ConfigSwitch {
+                    id: transparencyAutoSwitch
                     buttonIcon: "auto_awesome"
                     text: Translation.tr("Automatic (from wallpaper)")
                     checked: Config.options.appearance.transparency.automatic
                     enabled: Config.options.appearance.transparency.enable
-                    onCheckedChanged: { Config.options.appearance.transparency.automatic = checked }
+                    onCheckedChanged: {
+                        if (checked === Config.options.appearance.transparency.automatic) return;
+                        Config.options.appearance.transparency.automatic = checked;
+                    }
+                    ConfigBinding {
+                        target: transparencyAutoSwitch
+                        property: "checked"
+                        value: Config.options.appearance.transparency.automatic
+                    }
                 }
                 ConfigSwitch {
+                    id: glassyUiSwitch
                     buttonIcon: "water_drop"
                     text: Translation.tr("Glassy UI")
                     checked: Config.options.background.widgets.glass.enable
-                    onCheckedChanged: { Config.options.background.widgets.glass.enable = checked }
+                    onCheckedChanged: {
+                        if (checked === Config.options.background.widgets.glass.enable) return;
+                        Config.options.background.widgets.glass.enable = checked;
+                    }
+                    ConfigBinding {
+                        target: glassyUiSwitch
+                        property: "checked"
+                        value: Config.options.background.widgets.glass.enable
+                    }
                 }
                 ConfigSlider {
+                    id: transparencyBackgroundSlider
                     buttonIcon: "layers"
                     text: Translation.tr("Background")
                     enabled: Config.options.appearance.transparency.enable
@@ -151,19 +179,32 @@ ContentPage {
                     stopIndicatorValues: [0.11]
                     value: Config.options.appearance.transparency.backgroundTransparency
                     onValueChanged: {
+                        if (value === Config.options.appearance.transparency.backgroundTransparency) return;
                         Config.options.appearance.transparency.backgroundTransparency = value
+                    }
+                    ConfigBinding {
+                        target: transparencyBackgroundSlider
+                        property: "value"
+                        value: Config.options.appearance.transparency.backgroundTransparency
                     }
                 }
                 ConfigSlider {
+                    id: transparencyContentSlider
                     buttonIcon: "opacity"
                     text: Translation.tr("Content")
                     enabled: Config.options.appearance.transparency.enable
                             && !Config.options.appearance.transparency.automatic
                     from: 0; to: 1
                     stopIndicatorValues: [0.57]
-                    value: Config.options.appearance.transparency.contentTransparency 
+                    value: Config.options.appearance.transparency.contentTransparency
                     onValueChanged: {
-                        Config.options.appearance.transparency.contentTransparency = value  
+                        if (value === Config.options.appearance.transparency.contentTransparency) return;
+                        Config.options.appearance.transparency.contentTransparency = value
+                    }
+                    ConfigBinding {
+                        target: transparencyContentSlider
+                        property: "value"
+                        value: Config.options.appearance.transparency.contentTransparency
                     }
                 }
             }
@@ -274,10 +315,19 @@ ContentPage {
                                 onCheckedChanged: { Config.options.sidebar.media.enable = checked }
                             }
                             ConfigSwitch {
+                                id: followAlbumColorsSwitch
                                 buttonIcon: "radio_button_partial"
                                 text: Translation.tr("Follow Album Colors")
                                 checked: Config.options.sidebar.media.artColors
-                                onCheckedChanged: { Config.options.sidebar.media.artColors = checked }
+                                onCheckedChanged: {
+                                    if (checked === Config.options.sidebar.media.artColors) return;
+                                    Config.options.sidebar.media.artColors = checked;
+                                }
+                                ConfigBinding {
+                                    target: followAlbumColorsSwitch
+                                    property: "checked"
+                                    value: Config.options.sidebar.media.artColors
+                                }
                             }
                         }
                     }
@@ -466,6 +516,7 @@ ContentPage {
                         ]
                     }
                     ConfigSpinBox {
+                        id: quickToggleColumnsBox
                         enabled: Config.options.sidebar.quickToggles.style === "android"
                         icon: "add_column_left"
                         text: Translation.tr("Columns")
@@ -474,7 +525,13 @@ ContentPage {
                         to: 8
                         stepSize: 1
                         onValueChanged: {
+                            if (value === Config.options.sidebar.quickToggles.android.columns) return;
                             Config.options.sidebar.quickToggles.android.columns = value;
+                        }
+                        ConfigBinding {
+                            target: quickToggleColumnsBox
+                            property: "value"
+                            value: Config.options.sidebar.quickToggles.android.columns
                         }
                     }
                 }

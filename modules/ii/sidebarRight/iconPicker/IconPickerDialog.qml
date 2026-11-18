@@ -74,11 +74,18 @@ WindowDialog {
 
     WindowDialogButtonRow {
         ConfigSwitch {
+            id: colorizeSwitch
             buttonIcon: "colors"
             text: Translation.tr("Colorize")
             checked: Config.options.custom.colorizeIcon
             onCheckedChanged: {
-                Config.options.custom.colorizeIcon = checked
+                if (checked === Config.options.custom.colorizeIcon) return;
+                Config.options.custom.colorizeIcon = checked;
+            }
+            ConfigBinding {
+                target: colorizeSwitch
+                property: "checked"
+                value: Config.options.custom.colorizeIcon
             }
         }
 

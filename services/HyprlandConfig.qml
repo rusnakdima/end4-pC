@@ -79,6 +79,15 @@ Singleton {
 
         // Persist the final list; the configurator re-applies it live as well.
         root.set("input:kb_layout", applied);
+
+        // Keep both config leaves in step: the II bar and Settings read
+        // input.kbLayout, the Waffle bar lists waffles.bar.keyboardLayouts.
+        // A reorder from either bar would otherwise leave the other list on
+        // the old order.
+        if (Config.ready) {
+            Config.options.hyprland.input.kbLayout = applied;
+            Config.options.waffles.bar.keyboardLayouts = applied;
+        }
         return applied;
     }
 

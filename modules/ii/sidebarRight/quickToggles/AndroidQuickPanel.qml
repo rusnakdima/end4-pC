@@ -281,6 +281,7 @@ AbstractQuickPanel {
         }
 
         ConfigSpinBox {
+            id: columnsBox
             visible: root.editMode
             width: parent.width 
             enabled: Config.options.sidebar.quickToggles.style === "android"
@@ -291,7 +292,13 @@ AbstractQuickPanel {
             to: 8
             stepSize: 1
             onValueChanged: {
+                if (value === Config.options.sidebar.quickToggles.android.columns) return;
                 Config.options.sidebar.quickToggles.android.columns = value;
+            }
+            ConfigBinding {
+                target: columnsBox
+                property: "value"
+                value: Config.options.sidebar.quickToggles.android.columns
             }
         }
     }

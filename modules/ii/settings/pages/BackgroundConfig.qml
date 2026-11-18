@@ -226,9 +226,13 @@ ContentPage {
                     text: Translation.tr("Use same wallpaper for both")
                     checked: Config.options.background.lockWall === ""
                     onCheckedChanged: {
-                        if (checked) {
-                            Config.options.background.lockWall = "";
-                        }
+                        if (!checked || Config.options.background.lockWall === "") return;
+                        Config.options.background.lockWall = "";
+                    }
+                    ConfigBinding {
+                        target: syncWallpaperSwitch
+                        property: "checked"
+                        value: Config.options.background.lockWall === ""
                     }
                 }
 
@@ -330,13 +334,6 @@ ContentPage {
                 }
             }
 
-            Connections {
-                target: Config.options.background
-                function onLockWallChanged() {
-                    syncWallpaperSwitch.checked = Qt.binding(() => Config.options.background.lockWall === "")
-                }
-            }
-
             ContentSubsection {
                 title: Translation.tr("Live wallpaper")
                 Layout.fillWidth: true
@@ -372,33 +369,54 @@ ContentPage {
 
                 GroupedList {
                     ConfigSwitch {
+                        id: centeredWallpaperSwitch
                         Layout.fillWidth: true
                         buttonIcon: "check"
                         text: Translation.tr("Enable")
                         checked: Config.options.background.centeredWallpaper
-                        onClicked: {
-                            Config.options.background.centeredWallpaper = !Config.options.background.centeredWallpaper;
+                        onCheckedChanged: {
+                            if (checked === Config.options.background.centeredWallpaper) return;
+                            Config.options.background.centeredWallpaper = checked;
+                        }
+                        ConfigBinding {
+                            target: centeredWallpaperSwitch
+                            property: "checked"
+                            value: Config.options.background.centeredWallpaper
                         }
                     }
                     ConfigSwitch {
+                        id: centeredWallpaperLockedSwitch
                         Layout.fillWidth: true
                         buttonIcon: "lock"
                         text: Translation.tr("Show only when locked")
                         checked: Config.options.background.centeredWallpaperOnlyWhenLocked
                         onCheckedChanged: {
+                            if (checked === Config.options.background.centeredWallpaperOnlyWhenLocked) return;
                             Config.options.background.centeredWallpaperOnlyWhenLocked = checked;
                         }
                         enabled: Config.options.background.centeredWallpaper && WM.compositor !== "niri"
+                        ConfigBinding {
+                            target: centeredWallpaperLockedSwitch
+                            property: "checked"
+                            value: Config.options.background.centeredWallpaperOnlyWhenLocked
+                        }
                     }
                     ConfigSwitch {
+                        id: centeredWallpaperShapeCycleSwitch
                         Layout.fillWidth: true
                         buttonIcon: "cycle"
                         text: Translation.tr("Cycle shape with scroll wheel")
                         checked: Config.options.background.centeredWallpaperShapeCycle
                         onCheckedChanged: {
+                            if (checked === Config.options.background.centeredWallpaperShapeCycle) return;
                             Config.options.background.centeredWallpaperShapeCycle = checked;
                         }
                         enabled: Config.options.background.centeredWallpaper && WM.compositor !== "niri"
+                        ConfigBinding {
+                            target: centeredWallpaperShapeCycleSwitch
+                            property: "checked"
+                            value: Config.options.background.centeredWallpaperShapeCycle
+                        }
                     }
                 }
 
@@ -430,6 +448,7 @@ ContentPage {
                         }
                     }
                     ConfigSlider {
+                        id: centeredWallpaperSizeSlider
                         visible: Config.options.background.centeredWallpaper
                         text: Translation.tr("Size")
                         value: Config.options.background.centeredWallpaperSize
@@ -439,7 +458,13 @@ ContentPage {
                         to: 800
                         stopIndicatorValues: [400]
                         onValueChanged: {
+                            if (value === Config.options.background.centeredWallpaperSize) return;
                             Config.options.background.centeredWallpaperSize = value;
+                        }
+                        ConfigBinding {
+                            target: centeredWallpaperSizeSlider
+                            property: "value"
+                            value: Config.options.background.centeredWallpaperSize
                         }
                     }
                 }
@@ -799,6 +824,7 @@ ContentPage {
                     }
 
                     ConfigSpinBox {
+                        id: cookieSidesBox
                         icon: "add_triangle"
                         text: Translation.tr("Sides")
                         value: Config.options.background.widgets.clock.cookie.sides
@@ -806,7 +832,13 @@ ContentPage {
                         to: 40
                         stepSize: 1
                         onValueChanged: {
+                            if (value === Config.options.background.widgets.clock.cookie.sides) return;
                             Config.options.background.widgets.clock.cookie.sides = value;
+                        }
+                        ConfigBinding {
+                            target: cookieSidesBox
+                            property: "value"
+                            value: Config.options.background.widgets.clock.cookie.sides
                         }
                     }
 
@@ -1675,11 +1707,18 @@ ContentPage {
 
             GroupedList {
                 ConfigSwitch {
+                    id: systemFilePickerSwitch
                     buttonIcon: "ad"
                     text: Translation.tr('Use system file picker')
                     checked: Config.options.wallpaperSelector.useSystemFileDialog
                     onCheckedChanged: {
+                        if (checked === Config.options.wallpaperSelector.useSystemFileDialog) return;
                         Config.options.wallpaperSelector.useSystemFileDialog = checked;
+                    }
+                    ConfigBinding {
+                        target: systemFilePickerSwitch
+                        property: "checked"
+                        value: Config.options.wallpaperSelector.useSystemFileDialog
                     }
                 }
 
@@ -1735,11 +1774,18 @@ ContentPage {
                 }
 
                 ConfigSwitch {
+                    id: alwaysShowSearchBarSwitch
                     buttonIcon: "search"
                     text: Translation.tr('Always show search bar')
                     checked: Config.options.wallpaperSelector.showSearchbar
                     onCheckedChanged: {
+                        if (checked === Config.options.wallpaperSelector.showSearchbar) return;
                         Config.options.wallpaperSelector.showSearchbar = checked;
+                    }
+                    ConfigBinding {
+                        target: alwaysShowSearchBarSwitch
+                        property: "checked"
+                        value: Config.options.wallpaperSelector.showSearchbar
                     }
                 }
                 ConfigTextArea {

@@ -55,7 +55,8 @@ ShellRoot {
         "tst_collapsible_section_header.qml",
         "tst_ConfigMultiSelect.qml",
         "tst_dialog_search_field.qml",
-        "tst_VolumeLevelMeter.qml"
+        "tst_VolumeLevelMeter.qml",
+        "tst_config_sync.qml"
     ]
 
     property int doneCount: 0

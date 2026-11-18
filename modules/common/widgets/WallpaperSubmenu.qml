@@ -141,20 +141,38 @@ Item {
                 spacing: 6
 
                 ConfigSwitch {
+                    id: centeredWallpaperSwitch
                     Layout.fillWidth: true
                     buttonIcon: "check"
                     text: Translation.tr("Centered wallpaper")
                     checked: Config.options.background.centeredWallpaper
-                    onCheckedChanged: Config.options.background.centeredWallpaper = checked
+                    onCheckedChanged: {
+                        if (checked === Config.options.background.centeredWallpaper) return;
+                        Config.options.background.centeredWallpaper = checked;
+                    }
+                    ConfigBinding {
+                        target: centeredWallpaperSwitch
+                        property: "checked"
+                        value: Config.options.background.centeredWallpaper
+                    }
                 }
 
                 ConfigSwitch {
+                    id: centeredWallpaperLockedSwitch
                     Layout.fillWidth: true
                     buttonIcon: "lock"
                     text: Translation.tr("Only when locked")
                     checked: Config.options.background.centeredWallpaperOnlyWhenLocked
                     enabled: Config.options.background.centeredWallpaper
-                    onCheckedChanged: Config.options.background.centeredWallpaperOnlyWhenLocked = checked
+                    onCheckedChanged: {
+                        if (checked === Config.options.background.centeredWallpaperOnlyWhenLocked) return;
+                        Config.options.background.centeredWallpaperOnlyWhenLocked = checked;
+                    }
+                    ConfigBinding {
+                        target: centeredWallpaperLockedSwitch
+                        property: "checked"
+                        value: Config.options.background.centeredWallpaperOnlyWhenLocked
+                    }
                 }
 
                 ConfigSelectionShapeArray {
@@ -181,6 +199,7 @@ Item {
                 }
 
                 ConfigSlider {
+                    id: centeredWallpaperSizeSlider
                     Layout.fillWidth: true
                     showLabel: false
                     visible: Config.options.background.centeredWallpaper
@@ -190,7 +209,15 @@ Item {
                     from: 400
                     to: 800
                     stopIndicatorValues: [400]
-                    onValueChanged: Config.options.background.centeredWallpaperSize = value
+                    onValueChanged: {
+                        if (value === Config.options.background.centeredWallpaperSize) return;
+                        Config.options.background.centeredWallpaperSize = value;
+                    }
+                    ConfigBinding {
+                        target: centeredWallpaperSizeSlider
+                        property: "value"
+                        value: Config.options.background.centeredWallpaperSize
+                    }
                 }
             }
         }

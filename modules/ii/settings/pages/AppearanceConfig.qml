@@ -346,19 +346,38 @@ ContentPage {
             title: Translation.tr("Transparency")
             GroupedList {
                 ConfigSwitch {
+                    id: appearanceTransparencyEnableSwitch
                     buttonIcon: "check"
                     text: Translation.tr("Enable")
                     checked: Config.options.appearance.transparency.enable
-                    onCheckedChanged: { Config.options.appearance.transparency.enable = checked }
+                    onCheckedChanged: {
+                        if (checked === Config.options.appearance.transparency.enable) return;
+                        Config.options.appearance.transparency.enable = checked;
+                    }
+                    ConfigBinding {
+                        target: appearanceTransparencyEnableSwitch
+                        property: "checked"
+                        value: Config.options.appearance.transparency.enable
+                    }
                 }
                 ConfigSwitch {
+                    id: appearanceTransparencyAutoSwitch
                     buttonIcon: "auto_awesome"
                     text: Translation.tr("Automatic (from wallpaper)")
                     checked: Config.options.appearance.transparency.automatic
                     enabled: Config.options.appearance.transparency.enable
-                    onCheckedChanged: { Config.options.appearance.transparency.automatic = checked }
+                    onCheckedChanged: {
+                        if (checked === Config.options.appearance.transparency.automatic) return;
+                        Config.options.appearance.transparency.automatic = checked;
+                    }
+                    ConfigBinding {
+                        target: appearanceTransparencyAutoSwitch
+                        property: "checked"
+                        value: Config.options.appearance.transparency.automatic
+                    }
                 }
                 ConfigSlider {
+                    id: appearanceTransparencyBackgroundSlider
                     buttonIcon: "layers"
                     text: Translation.tr("Background")
                     enabled: Config.options.appearance.transparency.enable
@@ -367,10 +386,17 @@ ContentPage {
                     stopIndicatorValues: [0.11]
                     value: Config.options.appearance.transparency.backgroundTransparency
                     onValueChanged: {
+                        if (value === Config.options.appearance.transparency.backgroundTransparency) return;
                         Config.options.appearance.transparency.backgroundTransparency = value
+                    }
+                    ConfigBinding {
+                        target: appearanceTransparencyBackgroundSlider
+                        property: "value"
+                        value: Config.options.appearance.transparency.backgroundTransparency
                     }
                 }
                 ConfigSlider {
+                    id: appearanceTransparencyContentSlider
                     buttonIcon: "opacity"
                     text: Translation.tr("Content")
                     enabled: Config.options.appearance.transparency.enable
@@ -379,7 +405,13 @@ ContentPage {
                     stopIndicatorValues: [0.57]
                     value: Config.options.appearance.transparency.contentTransparency
                     onValueChanged: {
+                        if (value === Config.options.appearance.transparency.contentTransparency) return;
                         Config.options.appearance.transparency.contentTransparency = value
+                    }
+                    ConfigBinding {
+                        target: appearanceTransparencyContentSlider
+                        property: "value"
+                        value: Config.options.appearance.transparency.contentTransparency
                     }
                 }
             }

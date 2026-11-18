@@ -310,6 +310,7 @@ ContentPage {
                 ConfigRow {
                     uniform: true
                     ConfigSwitch {
+                        id: showFrameSwitch
                         buttonIcon: "panorama_wide_angle"
                         text: Translation.tr("Show Frame")
                         checked: Config.options.bar.showFrame
@@ -321,7 +322,13 @@ ContentPage {
                             if (switchReady && checked) {
                                 GlobalStates.refreshBar();
                             }
+                            if (checked === Config.options.bar.showFrame) return;
                             Config.options.bar.showFrame = checked;
+                        }
+                        ConfigBinding {
+                            target: showFrameSwitch
+                            property: "checked"
+                            value: Config.options.bar.showFrame
                         }
                     }
                     ConfigSwitch {
@@ -489,10 +496,19 @@ ContentPage {
                     }
                 }
                 ConfigSwitch {
+                    id: colorizeIconSwitch
                     buttonIcon: "colors"
                     text: Translation.tr("Colorize icon")
                     checked: Config.options.custom.colorizeIcon
-                    onCheckedChanged: { Config.options.custom.colorizeIcon = checked }
+                    onCheckedChanged: {
+                        if (checked === Config.options.custom.colorizeIcon) return;
+                        Config.options.custom.colorizeIcon = checked;
+                    }
+                    ConfigBinding {
+                        target: colorizeIconSwitch
+                        property: "checked"
+                        value: Config.options.custom.colorizeIcon
+                    }
                 }
                 ColorSelectionArray {
                     enabled: Config.options.custom.colorizeIcon
@@ -837,6 +853,11 @@ ContentPage {
                     onValueChanged: {
                         mediaDebounceTimer.restart();
                     }
+                    ConfigBinding {
+                        target: preferredPlayerField
+                        property: "value"
+                        value: Config.options.bar.media.preferredPlayer
+                    }
 
                     Timer {
                         id: mediaDebounceTimer
@@ -892,6 +913,11 @@ ContentPage {
                     placeholderText: Translation.tr("e.g., us,ru")
                     Component.onCompleted: value = Config.options.waffles.bar.keyboardLayouts
                     onValueChanged: waffleKeyboardLayoutsDebounce.restart()
+                    ConfigBinding {
+                        target: waffleKeyboardLayoutsField
+                        property: "value"
+                        value: Config.options.waffles.bar.keyboardLayouts
+                    }
 
                     Timer {
                         id: waffleKeyboardLayoutsDebounce

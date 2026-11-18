@@ -1,0 +1,43 @@
+# Parameters that are edited from more than one shell surface.
+#
+# Every ConfigSwitch / ConfigSpinBox / ConfigSlider / ConfigTextArea that
+# binds one of these keys must also declare a ConfigBinding, otherwise the
+# control stops following changes made in the other surface after its first
+# use. See tests/check-config-sync.py and
+# modules/common/widgets/ConfigBinding.qml.
+
+# Settings <-> right sidebar edit mode
+sidebar.quickToggles.android.columns
+sidebar.media.artColors
+custom.colorizeIcon
+
+# Settings / dashboard <-> glass toggle
+background.widgets.glass.enable
+
+# Settings <-> desktop right-click wallpaper menu
+background.centeredWallpaper
+background.centeredWallpaperOnlyWhenLocked
+background.centeredWallpaperShapeCycle
+background.centeredWallpaperSize
+
+# Settings <-> wallpaper picker
+background.lockWall
+wallpaperSelector.showSearchbar
+wallpaperSelector.useSystemFileDialog
+
+# Settings <-> desktop widget menu
+background.widgetsLocked
+
+# Settings <-> bar
+bar.showFrame
+bar.media.preferredPlayer
+waffles.bar.keyboardLayouts
+
+# Settings page <-> settings dashboard (same page duplicated)
+appearance.transparency.enable
+appearance.transparency.automatic
+appearance.transparency.backgroundTransparency
+appearance.transparency.contentTransparency
+
+# Cookie clock settings <-> clock widget preset
+background.widgets.clock.cookie.sides

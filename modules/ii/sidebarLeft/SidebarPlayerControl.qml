@@ -600,10 +600,19 @@ Item {
                             }
 
                             ConfigSwitch {
+                                id: artColorsSwitch
                                 buttonIcon: "radio_button_partial"
                                 text: Translation.tr("Art Colors")
                                 checked: Config.options.sidebar.media.artColors
-                                onCheckedChanged: { Config.options.sidebar.media.artColors = checked }
+                                onCheckedChanged: {
+                                    if (checked === Config.options.sidebar.media.artColors) return;
+                                    Config.options.sidebar.media.artColors = checked;
+                                }
+                                ConfigBinding {
+                                    target: artColorsSwitch
+                                    property: "checked"
+                                    value: Config.options.sidebar.media.artColors
+                                }
                             }
 
                             ConfigSwitch {

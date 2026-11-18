@@ -31,11 +31,20 @@ Item {
         spacing: 2
 
         ConfigSwitch {
+            id: widgetsLockedSwitch
             Layout.fillWidth: true
             buttonIcon: "lock"
             text: Translation.tr("Lock widget positions")
             checked: Config.options.background.widgetsLocked
-            onCheckedChanged: Config.options.background.widgetsLocked = checked
+            onCheckedChanged: {
+                if (checked === Config.options.background.widgetsLocked) return;
+                Config.options.background.widgetsLocked = checked;
+            }
+            ConfigBinding {
+                target: widgetsLockedSwitch
+                property: "checked"
+                value: Config.options.background.widgetsLocked
+            }
         }
         ConfigSwitch {
             Layout.fillWidth: true

@@ -104,6 +104,14 @@ if [[ -n "$dup" ]]; then
     printf '%s\n' "$dup" | sed -E 's/^([^:]+):[0-9]+: /\1: /'
 fi
 
+# Duplicated config parameters must keep their two-way link to the config:
+# a control that overwrites its own checked/value property needs a
+# ConfigBinding next to it, or it stops following the other surface.
+if ! sync=$(python3 ./tests/check-config-sync.py 2>&1); then
+    status=1
+    printf '%s\n' "$sync"
+fi
+
 # A Material Symbols name that is not in the Google pack renders as the
 # literal text instead of an icon, so the names are checked against the
 # pinned pack list.
