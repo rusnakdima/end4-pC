@@ -29,6 +29,36 @@ TestCase {
         "}"
     ].join("\n")
 
+    // Keybinds are indexed from the live services, so the tests install their
+    // own small tree the same way tst_keybinds.qml does and put it back after.
+    property var savedDefault: null
+    property var savedUser: null
+    property var savedManaged: null
+
+    function init() {
+        testCase.savedDefault = HyprlandKeybinds.defaultKeybinds;
+        testCase.savedUser = HyprlandKeybinds.userKeybinds;
+        testCase.savedManaged = ManagedKeybinds.entries;
+
+        HyprlandKeybinds.defaultKeybinds = {
+            "name": "", "children": [], "keybinds": [
+                { "mods": ["SUPER"], "key": "F6", "dispatcher": "hl.dsp.exec_cmd", "params": "", "comment": "Zqterminal plain", "action": "" },
+                { "mods": ["SUPER"], "key": "Z", "dispatcher": "hl.dsp.global", "params": "", "comment": "Zqoverview", "action": "zq.action" },
+                { "mods": ["SUPER"], "key": "A", "dispatcher": "hl.dsp.global", "params": "", "comment": "Zqoverview", "action": "zq.action" }
+            ]
+        };
+        HyprlandKeybinds.userKeybinds = { "name": "", "children": [], "keybinds": [] };
+        ManagedKeybinds.entries = [
+            { id: "zqmanaged", name: "Zqmanaged", category: "Zqcat", command: "kitty", combo: "SUPER + T" }
+        ];
+    }
+
+    function cleanup() {
+        HyprlandKeybinds.defaultKeybinds = testCase.savedDefault;
+        HyprlandKeybinds.userKeybinds = testCase.savedUser;
+        ManagedKeybinds.entries = testCase.savedManaged;
+    }
+
     function test_parse_page_extracts_the_section_and_the_options() {
         const entries = SettingsSearchIndex.parsePage(testCase.fixturePage);
 
@@ -100,5 +130,39 @@ TestCase {
         compare(SettingsSearchIndex.search("zqalpha", 1).length, 1);
 
         SettingsSearchIndex.entriesByPage = saved;
+    }
+
+    function test_keybinds_are_indexed_only_when_requested() {
+        const included = SettingsSearchIndex.search("zqterminal", 10, true);
+        verify(included.some(result => result.kind === "keybind"
+            && result.label === "Zqterminal plain (SUPER + F6)"));
+
+        // The shell-wide launcher calls search() with two arguments; its
+        // results must stay free of keybinds.
+        const excluded = SettingsSearchIndex.search("zqterminal", 10);
+        verify(!excluded.some(result => result.kind === "keybind"));
+    }
+
+    function test_keybind_search_matches_the_combo_and_carries_navigation_data() {
+        const results = SettingsSearchIndex.search("SUPER F6", 10, true);
+        const hit = results.find(result => result.kind === "keybind"
+            && result.label === "Zqterminal plain (SUPER + F6)");
+        verify(hit !== undefined);
+        compare(hit.pageId, "keyboard");
+        compare(hit.icon, "keyboard");
+        verify(hit.section.length > 0);
+        // The label is also the row's `title`, so ContentPage.goTo() can find
+        // exactly this row once the page opens.
+        compare(hit.label, "Zqterminal plain (SUPER + F6)");
+    }
+
+    function test_managed_and_shell_action_labels_are_searchable() {
+        const managed = SettingsSearchIndex.search("zqmanaged", 10, true);
+        verify(managed.some(result => result.kind === "keybind"
+            && result.label === "Zqmanaged (SUPER + T)"));
+
+        const shell = SettingsSearchIndex.search("zqoverview", 10, true);
+        verify(shell.some(result => result.kind === "keybind"
+            && result.label === "Zqoverview (SUPER + Z, SUPER + A)"));
     }
 }

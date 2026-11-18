@@ -45,6 +45,12 @@ Singleton {
     property bool workspaceShowNumbers: false
     property var settingsTarget: null
 
+    // The single filter shared by the consolidated keybind block on the
+    // Keyboard page and by search navigation. Activating a keybind result
+    // clears it before opening the page, so the row being highlighted is
+    // never hidden by a filter typed earlier.
+    property string keybindFilter: ""
+
     // The theme's own WlSessionLock is the lock screen. A Quickshell reload or
     // a full qs restart destroys its lock surface; Hyprland then paints its
     // "lock screen died" fallback. misc:allow_session_lock_restore is enabled,

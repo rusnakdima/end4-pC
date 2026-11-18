@@ -7,6 +7,7 @@ import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.common.functions as CF
+import "../../../common/functions/KeybindLabels.js" as KeybindLabels
 
 /**
  * Keyboard backlight colour, shell shortcuts and the other keybinds.
@@ -38,6 +39,54 @@ ContentPage {
             : holder.label);
         return Translation.tr("Also used by %1").arg(labels.join(", "));
     }
+
+    // ------------------------------------------------------
+    // The single keybind filter
+    // ------------------------------------------------------
+    // All three bind lists go through the same query, so one field filters
+    // the whole block. The query lives in GlobalStates rather than on the
+    // page: accepting a keybind in search clears it before the deep link
+    // opens this page, otherwise the target row could be filtered out.
+
+    readonly property bool keybindFiltering:
+        String(GlobalStates.keybindFilter ?? "").trim() !== ""
+
+    readonly property var visibleManaged: CF.StringUtils.filterByQuery(
+        ManagedKeybinds.editableEntries, GlobalStates.keybindFilter,
+        ["name", "category", "combo", "command"])
+
+    readonly property var visibleShell: CF.StringUtils.filterByQuery(
+        HyprlandKeybinds.shellActions, GlobalStates.keybindFilter,
+        ["description", "action", "combos"])
+
+    // A category name matches every bind below it; otherwise match the bind's
+    // own text and its combination. The extra searchCombo field is only used
+    // by the filter — the row still receives the original bind object.
+    function filterOtherSections(sections, query) {
+        const out = [];
+        const tokens = String(query ?? "").trim().toLowerCase().split(/\s+/).filter(t => t !== "");
+        for (const section of (sections ?? [])) {
+            const category = String(section?.name ?? "").toLowerCase();
+            const categoryMatches = tokens.length > 0 && tokens.every(t => category.includes(t));
+            const binds = categoryMatches
+                ? (section?.binds ?? [])
+                : CF.StringUtils.filterByQuery(
+                    (section?.binds ?? []).map(bind => Object.assign({}, bind, {
+                        searchCombo: HyprlandKeybinds.comboOf(bind)
+                    })),
+                    query,
+                    ["comment", "searchCombo", "action", "key", "mods"]);
+            if (binds.length > 0) out.push({ name: section?.name ?? "", binds: binds });
+        }
+        return out;
+    }
+
+    // The arguments are read here so QML tracks both services and the query.
+    readonly property var visibleOtherSections: page.filterOtherSections(
+        HyprlandKeybinds.otherSections, GlobalStates.keybindFilter)
+
+    readonly property int keybindMatchCount: page.visibleManaged.length
+        + page.visibleShell.length + page.visibleOtherSections.length
 
     // ------------------------------------------------------
     // Keyboard colour
@@ -636,98 +685,141 @@ ContentPage {
 
         // The bind lists talk to Hyprland services; on any other
         // compositor the Loader stays inactive so they are never
-        // created.
+        // created. The manager, the shell shortcuts and the compositor's own
+        // binds are one block now, with a single filter over all of them.
         Loader {
             Layout.fillWidth: true
             active: WM.compositor === "hyprland"
             sourceComponent: Component {
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 20
+                ContentSection {
+                    icon: "keyboard"
+                    title: Translation.tr("Keybinds")
+                    hint: Translation.tr("Search, create and rebind keyboard shortcuts. New keybinds are written to ~/.config/hypr/custom/keybinds.lua.")
 
-                    ContentSection {
-                        icon: "edit_note"
-                        title: Translation.tr("Keybind manager")
-                        hint: Translation.tr("New keybinds are written to ~/.config/hypr/custom/keybinds.lua and show up in the cheatsheet after a reload.")
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
 
-                        ColumnLayout {
+                        // One filter for the whole block, not per list. The
+                        // query lives in GlobalStates so accepting a search
+                        // result can clear it before the target row flashes.
+                        RowLayout {
                             Layout.fillWidth: true
-                            spacing: 12
+                            spacing: 8
 
-                            // The form replaces the button and the list while
-                            // it is open. The Loader destroys it on close, so
-                            // every open starts from the draft with fresh field
-                            // bindings — a typed-in TextField drops its binding
-                            // and a surviving instance would show stale text.
-                            //
-                            // preferredHeight is pinned to the live item on
-                            // purpose: after the item is destroyed the Loader
-                            // keeps its last height (measured: 660 px of empty
-                            // slab with active=false), which is exactly the
-                            // leftover space after Cancel/Save.
-                            Loader {
+                            MaterialSymbol {
+                                text: "search"
+                                iconSize: Appearance.font.pixelSize.large
+                                color: Appearance.colors.colOnSurfaceVariant
+                            }
+
+                            ToolbarTextField {
+                                id: keybindFilterField
                                 Layout.fillWidth: true
-                                Layout.preferredHeight:
-                                    (active && item !== null && item !== undefined)
-                                        ? item.implicitHeight : 0
-                                active: page.formOpen
-                                sourceComponent: Component {
-                                    KeybindForm {
-                                        Layout.fillWidth: true
+                                placeholderText: Translation.tr("Search keybinds…")
+                                text: GlobalStates.keybindFilter
+                                onTextChanged: GlobalStates.keybindFilter = text
+
+                                Keys.onPressed: event => {
+                                    if (event.key === Qt.Key_Escape && text !== "") {
+                                        text = "";
+                                        event.accepted = true;
                                     }
                                 }
                             }
 
-                            RippleButton {
-                                visible: !page.formOpen
-                                Layout.fillWidth: false
-                                Layout.alignment: Qt.AlignLeft
-                                buttonText: Translation.tr("New keybind")
-                                buttonRadius: Appearance.rounding.full
-                                colBackground: Appearance.colors.colPrimaryContainer
-                                colBackgroundHover: Appearance.colors.colPrimaryContainerHover
-                                onClicked: page.openCreateForm()
-                            }
-
-                            StyledText {
-                                Layout.fillWidth: true
-                                visible: !page.formOpen && ManagedKeybinds.editableEntries.length === 0
-                                text: Translation.tr("No keybinds created yet. Press New keybind to add one.")
-                                font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colSubtext
-                                wrapMode: Text.Wrap
-                            }
-
-                            ColumnLayout {
-                                visible: !page.formOpen
-                                Layout.fillWidth: true
-                                spacing: 2
-                                Repeater {
-                                    model: ManagedKeybinds.editableEntries
-                                    delegate: ManagedRow {
-                                        required property var modelData
-                                        entry: modelData
-                                    }
+                            IconToolbarButton {
+                                visible: keybindFilterField.text !== ""
+                                text: "close"
+                                onClicked: {
+                                    keybindFilterField.text = "";
+                                    keybindFilterField.forceActiveFocus();
+                                }
+                                StyledToolTip {
+                                    text: Translation.tr("Clear filter")
                                 }
                             }
                         }
-                    }
-                    ContentSection {
-                        icon: "keyboard"
-                        title: Translation.tr("Shell shortcuts")
-                        hint: Translation.tr("Click a shortcut and press the key combination you want to use.")
+
+                        // ---- Panel-managed keybinds ---------------------------
+                        // The form replaces the button and the list while it is
+                        // open. The Loader destroys it on close, so every open
+                        // starts from the draft with fresh field bindings — a
+                        // typed-in TextField drops its binding and a surviving
+                        // instance would show stale text.
+                        //
+                        // preferredHeight is pinned to the live item on purpose:
+                        // after the item is destroyed the Loader keeps its last
+                        // height, which is exactly the leftover space after
+                        // Cancel/Save.
+                        Loader {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight:
+                                (active && item !== null && item !== undefined)
+                                    ? item.implicitHeight : 0
+                            active: page.formOpen
+                            sourceComponent: Component {
+                                KeybindForm {
+                                    Layout.fillWidth: true
+                                }
+                            }
+                        }
+
+                        RippleButton {
+                            visible: !page.formOpen
+                            Layout.fillWidth: false
+                            Layout.alignment: Qt.AlignLeft
+                            buttonText: Translation.tr("New keybind")
+                            buttonRadius: Appearance.rounding.full
+                            colBackground: Appearance.colors.colPrimaryContainer
+                            colBackgroundHover: Appearance.colors.colPrimaryContainerHover
+                            onClicked: page.openCreateForm()
+                        }
+
+                        StyledText {
+                            Layout.fillWidth: true
+                            visible: !page.formOpen && !page.keybindFiltering
+                                && ManagedKeybinds.editableEntries.length === 0
+                            text: Translation.tr("No keybinds created yet. Press New keybind to add one.")
+                            font.pixelSize: Appearance.font.pixelSize.normal
+                            color: Appearance.colors.colSubtext
+                            wrapMode: Text.Wrap
+                        }
+
+                        ColumnLayout {
+                            visible: !page.formOpen
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Repeater {
+                                model: page.visibleManaged
+                                delegate: ManagedRow {
+                                    required property var modelData
+                                    entry: modelData
+                                }
+                            }
+                        }
+
+                        // ---- Shell shortcuts ----------------------------------
+                        StyledText {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 8
+                            visible: page.visibleShell.length > 0
+                            text: Translation.tr("Shell shortcuts")
+                            font.pixelSize: Appearance.font.pixelSize.title
+                            color: Appearance.colors.colOnLayer1
+                        }
+                        StyledText {
+                            Layout.fillWidth: true
+                            visible: !page.keybindFiltering && HyprlandKeybinds.shellActions.length === 0
+                            text: Translation.tr("No keybinds found.")
+                            font.pixelSize: Appearance.font.pixelSize.normal
+                            color: Appearance.colors.colSubtext
+                        }
                         ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 2
-                            StyledText {
-                                Layout.fillWidth: true
-                                visible: HyprlandKeybinds.shellActions.length === 0
-                                text: Translation.tr("No keybinds found.")
-                                font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colSubtext
-                            }
                             Repeater {
-                                model: HyprlandKeybinds.shellActions
+                                model: page.visibleShell
                                 delegate: ShortcutRow {
                                     required property var modelData
                                     actionData: modelData
@@ -735,40 +827,48 @@ ContentPage {
                                 }
                             }
                         }
-                    }
-                    ContentSection {
-                        icon: "keyboard"
-                        title: Translation.tr("Other keybinds")
-                        hint: Translation.tr("The compositor's own binds. Click a bind to give it another key combination.")
-                        collapsible: true
-                        ColumnLayout {
+
+                        // ---- The compositor's own binds ------------------------
+                        StyledText {
                             Layout.fillWidth: true
-                            spacing: 20
-                            Repeater {
-                                model: HyprlandKeybinds.otherSections
-                                delegate: ColumnLayout {
-                                    id: sectionColumn
-                                    required property var modelData
+                            Layout.topMargin: 8
+                            visible: page.visibleOtherSections.length > 0
+                            text: Translation.tr("Other keybinds")
+                            font.pixelSize: Appearance.font.pixelSize.title
+                            color: Appearance.colors.colOnLayer1
+                        }
+                        Repeater {
+                            model: page.visibleOtherSections
+                            delegate: ColumnLayout {
+                                id: sectionColumn
+                                required property var modelData
+                                Layout.fillWidth: true
+                                spacing: 2
+                                StyledText {
                                     Layout.fillWidth: true
-                                    spacing: 2
-                                    StyledText {
-                                        Layout.fillWidth: true
-                                        text: sectionColumn.modelData.name === "" ? Translation.tr("Uncategorized") : sectionColumn.modelData.name
-                                        font.pixelSize: Appearance.font.pixelSize.title
-                                        color: Appearance.colors.colOnLayer1
-                                    }
-                                    Repeater {
-                                        model: sectionColumn.modelData.binds
-                                        delegate: OtherBindRow {
-                                            required property var modelData
-                                            bindData: modelData
-                                        }
+                                    text: sectionColumn.modelData.name === "" ? Translation.tr("Uncategorized") : sectionColumn.modelData.name
+                                    font.pixelSize: Appearance.font.pixelSize.normal
+                                    color: Appearance.colors.colSubtext
+                                }
+                                Repeater {
+                                    model: sectionColumn.modelData.binds
+                                    delegate: OtherBindRow {
+                                        required property var modelData
+                                        bindData: modelData
                                     }
                                 }
                             }
                         }
-                    }
 
+                        StyledText {
+                            Layout.fillWidth: true
+                            visible: page.keybindFiltering && page.keybindMatchCount === 0
+                            text: Translation.tr("No keybinds match")
+                            font.pixelSize: Appearance.font.pixelSize.normal
+                            color: Appearance.colors.colSubtext
+                            wrapMode: Text.Wrap
+                        }
+                    }
                 }
             }
         }
@@ -779,6 +879,10 @@ ContentPage {
         id: shortcutRow
         required property var actionData
         property bool capturing: false
+
+        // The search index builds this exact string; ContentPage.goTo() uses
+        // `title` to find the row a search result points at.
+        readonly property string title: KeybindLabels.shell(actionData)
 
         readonly property string defaultCombo: actionData?.combos?.[0] ?? ""
         readonly property string combo: HyprlandBindOverrides.comboFor(actionData?.action ?? "", shortcutRow.defaultCombo)
@@ -926,6 +1030,10 @@ ContentPage {
         id: otherBindRow
         required property var bindData
 
+        // Deep-link target; the index uses KeybindLabels.other() with the
+        // same combo so the two strings are identical.
+        readonly property string title: KeybindLabels.other(bindData, HyprlandKeybinds.comboOf(bindData))
+
         readonly property string originalCombo: HyprlandKeybinds.comboOf(bindData)
         readonly property string overrideId: "bind_" + otherBindRow.originalCombo.replace(/[^A-Za-z0-9_]/g, "_")
         readonly property string combo: HyprlandBindOverrides.comboFor(otherBindRow.overrideId, otherBindRow.originalCombo)
@@ -1057,6 +1165,10 @@ ContentPage {
     component ManagedRow: Rectangle {
         id: managedRow
         required property var entry
+
+        // Deep-link target; kept in sync with SettingsSearchIndex by the
+        // shared KeybindLabels helper.
+        readonly property string title: KeybindLabels.managed(entry)
 
         readonly property string fileCombo: entry.combo
         readonly property string overrideId: "bind_" + managedRow.fileCombo.replace(/[^A-Za-z0-9_]/g, "_")

@@ -47,7 +47,7 @@ Rectangle {
     function runSearch() {
         const term = pane.query.trim();
         pane.appliedQuery = term;
-        pane.results = term === "" ? [] : SettingsSearchIndex.search(term, 15);
+        pane.results = term === "" ? [] : SettingsSearchIndex.search(term, 15, true);
         if (listView.count > 0)
             listView.currentIndex = 0;
     }
@@ -63,6 +63,11 @@ Rectangle {
     function accept(result) {
         if (!result)
             return false;
+        // A keybind row lives in the consolidated block behind the in-pane
+        // filter. Clear it first, or the deep link could highlight a row the
+        // filter has hidden.
+        if (result.kind === "keybind")
+            GlobalStates.keybindFilter = "";
         GlobalStates.openSettingsAt(result.pageId, result.kind === "page" ? "" : result.label, result.section, result.subsection);
         pane.dismissed();
         return true;
@@ -77,7 +82,8 @@ Rectangle {
             return "";
         if (result.kind === "page")
             return Translation.tr("Settings");
-        return [result.pageName, result.kind === "option" ? result.section : "", result.kind === "option" ? result.subsection : ""]
+        const withSection = result.kind === "option" || result.kind === "keybind";
+        return [result.pageName, withSection ? result.section : "", withSection ? result.subsection : ""]
             .filter(part => part).join(" › ");
     }
 
