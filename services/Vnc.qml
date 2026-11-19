@@ -32,6 +32,7 @@ Singleton {
     property var detectedAddresses: []
     property var listenAddresses: []
     property var statusErrors: []
+    property int configPort: 0
     property bool serviceActive: false
     property bool serviceEnabled: false
     property bool serviceInstalled: false
@@ -72,6 +73,8 @@ Singleton {
         root.headless = s.headless ?? ""
         root.hostname = s.hostname ?? ""
         root.versionText = s.version?.wayvnc ?? ""
+        const livePort = Number(s.config?.network?.port ?? 0)
+        root.configPort = Number.isFinite(livePort) && livePort > 0 ? livePort : 0
         root.helperAvailable = true
         root.updated()
     }

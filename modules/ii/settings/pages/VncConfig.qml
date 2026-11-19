@@ -39,6 +39,7 @@ ContentPage {
     readonly property bool pamMode: page.get("network.pam", false)
     readonly property bool authOff: !page.get("network.auth", true)
     readonly property string bindMode: page.get("network.bindMode", "auto")
+    property bool portEdited: false
     readonly property string tailscaleAddress: (Vnc.detectedAddresses ?? []).find(a => a.kind === "tailscale")?.address ?? (Vnc.addresses ?? []).find(a => a.startsWith("100.")) ?? ""
 
     function detectedOutput() {
@@ -56,7 +57,7 @@ ContentPage {
             encoding: { maxFps: 30, renderCursor: true, gpu: false, disableResizing: false },
             network: {
                 address: "127.0.0.1",
-                port: 5900,
+                port: Vnc.configPort || 5900,
                 auth: true,
                 username: Quickshell.env("USER") ?? "",
                 pam: false,
@@ -122,6 +123,15 @@ ContentPage {
         page.dirty = false
     }
 
+    function syncPortFromLive() {
+        const live = Vnc.configPort
+        if (live > 0 && !page.portEdited && page.get("network.port", live) !== live) {
+            const next = page.copy(page.draft)
+            next.network.port = live
+            page.draft = next
+        }
+    }
+
     function applyDraft() {
         page.dirty = false
         Vnc.apply(page.draft)
@@ -132,7 +142,7 @@ ContentPage {
     }
 
     function listenSummary() {
-        const port = page.get("network.port", 5900)
+        const port = Vnc.configPort || page.get("network.port", 5900)
         const list = Vnc.listenAddresses ?? []
         if (list.length > 0)
             return list.map(address => `${address}:${port}`).join(", ")
@@ -140,7 +150,7 @@ ContentPage {
     }
 
     function sshCommand() {
-        const port = page.get("network.port", 5900)
+        const port = Vnc.configPort || page.get("network.port", 5900)
         const bind = page.bindMode === "auto"
             ? "127.0.0.1"
             : page.get("network.address", "127.0.0.1")
@@ -154,6 +164,7 @@ ContentPage {
         function onUpdated() {
             if (!page.dirty)
                 page.resetDraft()
+            page.syncPortFromLive()
         }
     }
 
@@ -385,12 +396,20 @@ ContentPage {
                 Layout.fillWidth: true
                 spacing: 10
 
+                StyledText {
+                    Layout.fillWidth: true
+                    text: Translation.tr("Auto binds loopback, Ethernet/Wi-Fi and Tailscale. Custom uses one address.")
+                    color: Appearance.colors.colSubtext
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    wrapMode: Text.Wrap
+                }
+
                 ConfigSelectionArray {
-                    text: Translation.tr("Bind addresses")
+                    text: Translation.tr("Bind mode")
                     icon: "lan"
                     options: [
-                        { displayName: Translation.tr("Automatic (localhost + LAN + Tailscale)"), icon: "hub", value: "auto" },
-                        { displayName: Translation.tr("Custom address"), icon: "settings_ethernet", value: "custom" }
+                        { displayName: Translation.tr("Auto"), icon: "hub", value: "auto" },
+                        { displayName: Translation.tr("Custom"), icon: "settings_ethernet", value: "custom" }
                     ]
                     currentValue: page.bindMode
                     onSelected: value => page.set("network.bindMode", value)
@@ -422,7 +441,7 @@ ContentPage {
 
                     StyledText {
                         Layout.fillWidth: true
-                        text: Translation.tr("The firewall must allow TCP %1 on the Ethernet/Wi-Fi and Tailscale interfaces.").arg(page.get("network.port", 5900))
+                        text: Translation.tr("The firewall must allow TCP %1 on the Ethernet/Wi-Fi and Tailscale interfaces.").arg(Vnc.configPort || page.get("network.port", 5900))
                         color: Appearance.colors.colSubtext
                         font.pixelSize: Appearance.font.pixelSize.smaller
                         wrapMode: Text.Wrap
@@ -486,8 +505,41 @@ ContentPage {
                     from: 1024
                     to: 65535
                     stepSize: 1
-                    value: page.get("network.port", 5900)
-                    onValueModified: page.set("network.port", value)
+                    value: page.get("network.port", Vnc.configPort || 5900)
+                    onValueModified: {
+                        page.portEdited = true
+                        page.set("network.port", value)
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    visible: Vnc.configPort > 0
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: page.get("network.port", Vnc.configPort) !== Vnc.configPort
+                            ? Translation.tr("Live port: %1 — staged change needs Apply.").arg(Vnc.configPort)
+                            : Translation.tr("Live port: %1").arg(Vnc.configPort)
+                        color: page.get("network.port", Vnc.configPort) !== Vnc.configPort
+                            ? Appearance.colors.colError
+                            : Appearance.colors.colSubtext
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        wrapMode: Text.Wrap
+                    }
+
+                    RippleButtonWithIcon {
+                        mainText: Translation.tr("Use live port")
+                        materialIcon: "sync"
+                        visible: page.get("network.port", Vnc.configPort) !== Vnc.configPort
+                        onClicked: {
+                            page.portEdited = false
+                            const next = page.copy(page.draft)
+                            next.network.port = Vnc.configPort
+                            page.draft = next
+                        }
+                    }
                 }
 
                 ConfigSwitch {
