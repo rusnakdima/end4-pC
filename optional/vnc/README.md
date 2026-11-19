@@ -115,7 +115,12 @@ Settings → VNC → Network & Security on first connect.
 - detected loopback, Ethernet/Wi-Fi and Tailscale addresses with firewall hints;
 - remote input and keyboard layout;
 - lock-on-disconnect, idle inhibition, exit-on-disconnect, log level;
-- connected clients, outputs, diagnostics, SSH tunnel command and logs.
+- a **Clients** block with per-session monitoring (user, address, access kind,
+  interface, seat, connection time, uptime), per-client **Details** spoilers,
+  disconnect, disconnect-all and refresh;
+- an **Outputs** block with the monitor description, size, power state and a
+  live **Capture now** switch;
+- diagnostics, SSH tunnel command and logs.
 
 The page stages changes and sends one JSON patch to the controller. The
 controller validates, writes atomically and restarts the user service when
@@ -147,8 +152,10 @@ page. It needs a TTY (`ssh -t`) for prompts and password entry.
 ~/.local/bin/end4pc-vnc service autostart-on|autostart-off
 ~/.local/bin/end4pc-vnc password          # reads the password from stdin
 ~/.local/bin/end4pc-vnc cert regenerate
-~/.local/bin/end4pc-vnc clients
-~/.local/bin/end4pc-vnc outputs
+~/.local/bin/end4pc-vnc clients          # user, address, access kind, seat, uptime
+~/.local/bin/end4pc-vnc outputs          # name, description, size, power, capture
+~/.local/bin/end4pc-vnc disconnect <id>
+~/.local/bin/end4pc-vnc disconnect-all
 ~/.local/bin/end4pc-vnc output-set HDMI-A-2
 ~/.local/bin/end4pc-vnc desktop-name "end4-pC"
 ~/.local/bin/end4pc-vnc log -n 200

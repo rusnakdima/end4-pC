@@ -22,6 +22,7 @@ import subprocess
 import sys
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 
 APP = "end4pc-vnc"
@@ -604,6 +605,97 @@ def disable_headless() -> None:
 # --------------------------------------------------------------------------
 
 
+# Address classification for connected peers.  This is read-only telemetry:
+# it never changes how wayvnc binds.
+PRIVATE_NETWORKS = (
+    "10.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.",
+    "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.",
+    "172.27.", "172.28.", "172.29.", "172.30.", "172.31.", "192.168.",
+)
+
+
+def _same_subnet(a: str, b: str, prefix: int = 24) -> bool:
+    try:
+        import ipaddress
+        net_a = ipaddress.ip_network(f"{a}/{prefix}", strict=False)
+        return ipaddress.ip_address(b) in net_a
+    except ValueError:
+        return False
+
+
+def classify_peer(address: str, detected: list[dict] | None = None) -> tuple[str, str]:
+    """Return (kind, interface) for a connected client's address."""
+    addr = (address or "").strip().strip("[]")
+    if not addr:
+        return "unknown", ""
+    if addr == "::1" or addr.startswith("127."):
+        return "loopback", "lo"
+    # Tailscale uses 100.64.0.0/10 (CGNAT); addresses in that range that are
+    # also detected locally are reported as tailscale by detected_addresses().
+    for entry in detected if detected is not None else detected_addresses():
+        if entry["kind"] == "tailscale" and _same_subnet(addr, entry["address"], 10):
+            return "tailscale", entry["interface"]
+        if entry["kind"] == "lan" and _same_subnet(addr, entry["address"]):
+            return "lan", entry["interface"]
+    if addr.startswith("100."):
+        return "tailscale", "tailscale0"
+    if addr.startswith(PRIVATE_NETWORKS):
+        return "lan", ""
+    if ":" in addr:
+        return "vpn", ""
+    return "remote", ""
+
+
+def enrich_clients(raw: list[dict]) -> list[dict]:
+    """Add monitoring fields to wayvnc's client list.
+
+    wayvnc only reports id, address, username and seat.  We derive the access
+    kind (loopback / LAN / Tailscale) and remember when each id was first
+    seen so the Settings page can show a stable "connected since" value
+    across its 5-second status polls.
+    """
+    state = load_state()
+    seen = state.get("clientSeen") if isinstance(state.get("clientSeen"), dict) else {}
+    now = time.time()
+    live_ids: set[str] = set()
+    result: list[dict] = []
+    detected = detected_addresses()
+
+    for client in raw:
+        if not isinstance(client, dict):
+            continue
+        cid = str(client.get("id") or "")
+        live_ids.add(cid)
+        since = seen.get(cid)
+        if not isinstance(since, (int, float)) or since <= 0 or since > now:
+            since = now
+            seen[cid] = since
+        address = str(client.get("address") or "")
+        kind, interface = classify_peer(address, detected)
+        item = dict(client)
+        item.update({
+            "id": cid,
+            "address": address,
+            "username": str(client.get("username") or "") or None,
+            "seat": str(client.get("seat") or "") or None,
+            "kind": kind,
+            "interface": interface,
+            "connectedSince": datetime.fromtimestamp(since).astimezone().isoformat(timespec="seconds"),
+            "uptimeSeconds": max(0, int(now - since)),
+        })
+        result.append(item)
+
+    for stale in [key for key in seen if key not in live_ids]:
+        del seen[stale]
+    if state.get("clientSeen") != seen:
+        state["clientSeen"] = seen
+        try:
+            save_state(state)
+        except OSError:
+            pass
+    return result
+
+
 def clients() -> list[dict]:
     rc, out, _ = wayvncctl(["client-list"])
     if rc != 0:
@@ -614,7 +706,9 @@ def clients() -> list[dict]:
         return []
     if isinstance(data, dict):
         data = data.get("clients", [])
-    return data if isinstance(data, list) else []
+    if not isinstance(data, list):
+        return []
+    return enrich_clients(data)
 
 
 def output_list() -> list[dict]:
@@ -956,6 +1050,23 @@ def cmd_disconnect(args: argparse.Namespace) -> int:
         print(json.dumps({"ok": False, "error": (err or out).strip() or "client-disconnect failed"}))
         return 1
     print(json.dumps({"ok": True}))
+    return 0
+
+
+def cmd_disconnect_all(_args: argparse.Namespace) -> int:
+    current = clients()
+    if not current:
+        print(json.dumps({"ok": True, "disconnected": 0}))
+        return 0
+    failed: list[str] = []
+    for client in current:
+        rc, out, err = wayvncctl(["client-disconnect", str(client.get("id") or "")])
+        if rc != 0:
+            failed.append(str(client.get("id") or "?"))
+    if failed:
+        print(json.dumps({"ok": False, "error": "failed to disconnect: " + ", ".join(failed), "disconnected": len(current) - len(failed)}))
+        return 1
+    print(json.dumps({"ok": True, "disconnected": len(current)}))
     return 0
 
 
@@ -1485,43 +1596,88 @@ def _behavior_menu(cfg: dict) -> bool:
                 _menu_pause()
 
 
+def _uptime_text(seconds: object) -> str:
+    try:
+        n = int(seconds)
+    except (TypeError, ValueError):
+        return "unknown"
+    if n < 60:
+        return f"{n}s"
+    if n < 3600:
+        return f"{n // 60}m"
+    if n < 86400:
+        return f"{n // 3600}h {(n % 3600) // 60}m"
+    return f"{n // 86400}d {(n % 86400) // 3600}h"
+
+
 def _clients_menu() -> None:
     while True:
         _menu_clear()
         connected = clients()
-        print("Clients & outputs")
-        print("=================")
+        print("Clients")
+        print("=======")
         if not connected:
-            print("No clients connected.")
+            print("No clients connected. Waiting for an incoming VNC connection.")
         for client in connected:
-            print(f"  id={client.get('id')}  address={client.get('address')}  user={client.get('username')}")
+            print()
+            print(f"  {client.get('username') or '(unnamed)'}  <{client.get('id')}>")
+            print(f"    address   : {client.get('address') or 'unknown'}")
+            print(f"    via       : {client.get('kind') or 'unknown'}"
+                  f"{' (' + client['interface'] + ')' if client.get('interface') else ''}")
+            print(f"    seat      : {client.get('seat') or 'unknown'}")
+            print(f"    connected : {client.get('connectedSince') or 'unknown'}"
+                  f"  ({_uptime_text(client.get('uptimeSeconds'))})")
+        print()
         print("d) Disconnect a client")
-        print("o) List outputs and switch the captured output")
+        print("a) Disconnect all clients")
         print("r) Refresh")
         print("0) Back")
         choice = _menu_input("Select")
         if choice == "0":
             return
         if choice == "d":
-            client_id = _menu_input("Client id")
+            client_id = _menu_input("Client id", str(connected[0].get("id") or "") if connected else "")
             if client_id:
                 rc, out, err = wayvncctl(["client-disconnect", client_id])
                 print("Disconnected." if rc == 0 else f"Failed: {(err or out).strip()}")
                 _menu_pause()
-        elif choice == "o":
-            outputs = output_list()
-            if not outputs:
-                print("No output list available (is the service running?).")
-            else:
-                for index, output in enumerate(outputs, 1):
-                    print(f"  {index}) {output.get('name')} captured={output.get('captured')}")
-                raw = _menu_input("Output number", "1")
-                try:
-                    name = outputs[int(raw) - 1].get("name")
-                    rc, out, err = wayvncctl(["output-set", str(name)])
-                    print(f"Switched to {name}." if rc == 0 else f"Failed: {(err or out).strip()}")
-                except (ValueError, IndexError):
-                    print("Invalid output.")
+        elif choice == "a":
+            if not connected:
+                print("Nobody is connected.")
+            elif _menu_confirm(f"Disconnect all {len(connected)} client(s)?", False):
+                result = cmd_disconnect_all(argparse.Namespace())
+                print("Disconnected." if result == 0 else "Some clients could not be disconnected.")
+                _menu_pause()
+        elif choice == "r":
+            pass
+
+
+def _outputs_menu() -> None:
+    while True:
+        _menu_clear()
+        outputs = output_list()
+        print("Outputs")
+        print("=======")
+        if not outputs:
+            print("No output list available (is the service running?).")
+        for index, output in enumerate(outputs, 1):
+            marker = " [CURRENT]" if output.get("captured") else ""
+            print(f"  {index}) {output.get('name')}  "
+                  f"{output.get('width')}x{output.get('height')}"
+                  f"{'  ' + str(output.get('power')) if output.get('power') else ''}{marker}")
+            if output.get("description"):
+                print(f"       {output['description']}")
+        print()
+        print("1-N) Capture that output now (live only)")
+        print("r) Refresh")
+        print("0) Back")
+        choice = _menu_input("Select")
+        if choice == "0":
+            return
+        if choice.isdigit() and 1 <= int(choice) <= len(outputs):
+            name = outputs[int(choice) - 1].get("name")
+            rc, out, err = wayvncctl(["output-set", str(name)])
+            print(f"Switched to {name}." if rc == 0 else f"Failed: {(err or out).strip()}")
             _menu_pause()
 
 
@@ -1584,9 +1740,10 @@ def cmd_menu(_args: argparse.Namespace) -> int:
             print("4) Capture & encoding")
             print("5) Input & keyboard")
             print("6) Behaviour")
-            print("7) Clients & live outputs")
-            print("8) Service log")
-            print("9) Review / apply changes")
+            print("7) Clients")
+            print("8) Outputs")
+            print("9) Service log")
+            print("10) Review / apply changes")
             print("0) Exit")
             if dirty:
                 print("\n* unsaved changes")
@@ -1625,8 +1782,10 @@ def cmd_menu(_args: argparse.Namespace) -> int:
             elif choice == "7":
                 _clients_menu()
             elif choice == "8":
-                _logs_menu()
+                _outputs_menu()
             elif choice == "9":
+                _logs_menu()
+            elif choice == "10":
                 cfg, original, dirty = _review_menu(cfg)
     except KeyboardInterrupt:
         print("\nInterrupted.")
@@ -1680,6 +1839,9 @@ def main(argv: list[str]) -> int:
     p = sub.add_parser("disconnect", help="disconnect one client")
     p.add_argument("id")
     p.set_defaults(func=cmd_disconnect)
+
+    p = sub.add_parser("disconnect-all", help="disconnect every connected client")
+    p.set_defaults(func=cmd_disconnect_all)
 
     p = sub.add_parser("log", help="show the user service log")
     p.add_argument("-n", "--lines", type=int, default=200)

@@ -27,6 +27,7 @@ Singleton {
     property var settings: ({})
     property var clients: []
     property var outputs: []
+    property var wayvncOutputs: []
     property var monitors: []
     property var addresses: []
     property var detectedAddresses: []
@@ -59,6 +60,7 @@ Singleton {
         root.settings = s.config ?? {}
         root.clients = s.clients ?? []
         root.outputs = s.outputs ?? []
+        root.wayvncOutputs = s.wayvncOutputs ?? []
         root.monitors = s.monitors ?? []
         root.addresses = s.addresses ?? []
         root.detectedAddresses = s.detected ?? []
@@ -136,6 +138,7 @@ Singleton {
     function outputSet(name): void { root.runAction(["output-set", name]) }
     function desktopName(name): void { root.runAction(["desktop-name", name]) }
     function disconnectClient(id): void { root.runAction(["disconnect", id]) }
+    function disconnectAllClients(): void { root.runAction(["disconnect-all"]) }
 
     onMonitoringChanged: {
         if (root.monitoring) root.refresh()

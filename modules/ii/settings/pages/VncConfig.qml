@@ -159,6 +159,68 @@ ContentPage {
         return `ssh -L ${port}:${target}:${port} ${user}@${Vnc.hostname || "<host>"}`
     }
 
+
+    // ---- connected-client monitoring helpers ----------------------------
+
+    // Per-client "Details" spoiler state. Keys are wayvnc client ids.
+    property var expandedClients: ({})
+
+    function toggleClientDetails(id) {
+        const next = page.copy(page.expandedClients)
+        next[id] = !next[id]
+        page.expandedClients = next
+    }
+
+    function clientName(client) {
+        return client.username || Translation.tr("Unnamed client")
+    }
+
+    function uptimeText(seconds) {
+        const n = Number(seconds) || 0
+        if (n < 60) return Translation.tr("%1s").arg(n)
+        if (n < 3600) return Translation.tr("%1m").arg(Math.floor(n / 60))
+        if (n < 86400) return Translation.tr("%1h %2m").arg(Math.floor(n / 3600)).arg(Math.floor((n % 3600) / 60))
+        return Translation.tr("%1d %2h").arg(Math.floor(n / 86400)).arg(Math.floor((n % 86400) / 3600))
+    }
+
+    function kindLabel(kind) {
+        switch (kind) {
+        case "loopback": return Translation.tr("This machine")
+        case "tailscale": return Translation.tr("Tailscale")
+        case "lan": return Translation.tr("Local network")
+        case "vpn": return Translation.tr("VPN")
+        case "remote": return Translation.tr("Remote")
+        default: return Translation.tr("Unknown")
+        }
+    }
+
+    function kindIcon(kind) {
+        switch (kind) {
+        case "loopback": return "computer"
+        case "tailscale": return "vpn_key"
+        case "lan": return "lan"
+        case "vpn": return "public"
+        case "remote": return "public"
+        default: return "help"
+        }
+    }
+
+    function clientDetailRows(client) {
+        return [
+            { label: Translation.tr("User"), value: client.username || "—" },
+            { label: Translation.tr("Address"), value: client.address || "—" },
+            { label: Translation.tr("Via"), value: page.kindLabel(client.kind) + (client.interface ? " · " + client.interface : "") },
+            { label: Translation.tr("Seat"), value: client.seat || "—" },
+            { label: Translation.tr("Client ID"), value: client.id || "—" },
+            { label: Translation.tr("Connected"), value: client.connectedSince || "—" },
+            { label: Translation.tr("Uptime"), value: page.uptimeText(client.uptimeSeconds) }
+        ]
+    }
+
+    readonly property var outputRows: Vnc.wayvncOutputs.length > 0
+        ? Vnc.wayvncOutputs
+        : (Vnc.outputs ?? []).filter(output => !output.headless && !output.disabled)
+
     Connections {
         target: Vnc
         function onUpdated() {
@@ -890,9 +952,249 @@ ContentPage {
         }
 
         ContentSection {
-            icon: "devices"
+            icon: "groups"
             shape: MaterialShape.Shape.Oval
-            title: Translation.tr("Clients & Outputs")
+            title: Translation.tr("Clients")
+            hint: Translation.tr("%1 connected").arg(Vnc.clients.length)
+            hintIcon: "sensors"
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                // Management bar: only meaningful while someone is connected.
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: Vnc.clients.length > 0
+                    spacing: 8
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: Translation.tr("%1 active session(s)").arg(Vnc.clients.length)
+                        color: Appearance.colors.colSubtext
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                    }
+
+                    RippleButtonWithIcon {
+                        mainText: Translation.tr("Refresh")
+                        materialIcon: "refresh"
+                        enabled: !Vnc.busy
+                        onClicked: Vnc.refresh()
+                    }
+
+                    RippleButtonWithIcon {
+                        mainText: Translation.tr("Disconnect all")
+                        materialIcon: "link_off"
+                        enabled: !Vnc.busy
+                        onClicked: Vnc.disconnectAllClients()
+                    }
+                }
+
+                // Empty state with the same glass-card language as a client.
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: emptyRow.implicitHeight + 20
+                    visible: Vnc.clients.length === 0
+                    radius: Appearance.rounding.small
+                    color: ColorUtils.transparentize(Appearance.colors.colLayer1, 0.4)
+
+                    RowLayout {
+                        id: emptyRow
+                        anchors {
+                            left: parent.left
+                            right: parent.right
+                            margins: 10
+                        }
+                        spacing: 10
+
+                        Rectangle {
+                            Layout.preferredWidth: 34
+                            Layout.preferredHeight: 34
+                            radius: 17
+                            color: Appearance.colors.colSecondaryContainer
+                            MaterialSymbol {
+                                anchors.centerIn: parent
+                                text: "hub"
+                                iconSize: Appearance.font.pixelSize.large
+                                color: Appearance.colors.colOnSecondaryContainer
+                            }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 1
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: Translation.tr("No clients connected")
+                                font.bold: true
+                                color: Appearance.colors.colOnSurface
+                            }
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: Translation.tr("Waiting for an incoming VNC connection.")
+                                color: Appearance.colors.colSubtext
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                            }
+                        }
+                    }
+                }
+
+                Repeater {
+                    model: Vnc.clients
+
+                    delegate: Rectangle {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        implicitHeight: clientCard.implicitHeight + 16
+                        radius: Appearance.rounding.small
+                        color: ColorUtils.transparentize(Appearance.colors.colLayer1, 0.4)
+                        border.width: 1
+                        border.color: ColorUtils.transparentize(Appearance.colors.colOutlineVariant, 0.6)
+
+                        ColumnLayout {
+                            id: clientCard
+                            anchors {
+                                left: parent.left
+                                right: parent.right
+                                margins: 8
+                            }
+                            spacing: 6
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                Rectangle {
+                                    Layout.preferredWidth: 34
+                                    Layout.preferredHeight: 34
+                                    radius: 17
+                                    color: Appearance.colors.colSecondaryContainer
+                                    MaterialSymbol {
+                                        anchors.centerIn: parent
+                                        text: "person"
+                                        iconSize: Appearance.font.pixelSize.large
+                                        color: Appearance.colors.colOnSecondaryContainer
+                                    }
+                                }
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 1
+
+                                    StyledText {
+                                        Layout.fillWidth: true
+                                        text: page.clientName(modelData)
+                                        font.bold: true
+                                        elide: Text.ElideRight
+                                        color: Appearance.colors.colOnSurface
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 6
+
+                                        StyledText {
+                                            Layout.fillWidth: true
+                                            text: modelData.address || "—"
+                                            elide: Text.ElideRight
+                                            color: Appearance.colors.colSubtext
+                                            font.pixelSize: Appearance.font.pixelSize.smaller
+                                        }
+
+                                        Rectangle {
+                                            radius: Appearance.rounding.small
+                                            color: ColorUtils.transparentize(Appearance.colors.colPrimary, 0.85)
+                                            implicitHeight: 20
+
+                                            RowLayout {
+                                                anchors {
+                                                    left: parent.left
+                                                    right: parent.right
+                                                    margins: 7
+                                                }
+                                                spacing: 4
+                                                MaterialSymbol {
+                                                    text: page.kindIcon(modelData.kind)
+                                                    iconSize: Appearance.font.pixelSize.smaller + 2
+                                                    color: Appearance.colors.colPrimary
+                                                }
+                                                StyledText {
+                                                    text: page.kindLabel(modelData.kind)
+                                                    color: Appearance.colors.colPrimary
+                                                    font.pixelSize: Appearance.font.pixelSize.smaller
+                                                }
+                                            }
+                                        }
+
+                                        StyledText {
+                                            text: page.uptimeText(modelData.uptimeSeconds)
+                                            color: Appearance.colors.colSubtext
+                                            font.pixelSize: Appearance.font.pixelSize.smaller
+                                        }
+                                    }
+                                }
+
+                                RippleButtonWithIcon {
+                                    mainText: page.expandedClients[modelData.id] ? Translation.tr("Hide") : Translation.tr("Details")
+                                    materialIcon: page.expandedClients[modelData.id] ? "expand_less" : "expand_more"
+                                    onClicked: page.toggleClientDetails(modelData.id)
+                                }
+
+                                RippleButtonWithIcon {
+                                    mainText: Translation.tr("Disconnect")
+                                    materialIcon: "link_off"
+                                    enabled: !Vnc.busy
+                                    onClicked: Vnc.disconnectClient(modelData.id)
+                                }
+                            }
+
+                            // Spoiled monitoring details: hidden until asked for.
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                visible: !!page.expandedClients[modelData.id]
+                                spacing: 3
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    height: 1
+                                    color: Appearance.colors.colOutlineVariant
+                                }
+
+                                Repeater {
+                                    model: page.clientDetailRows(modelData)
+
+                                    delegate: RowLayout {
+                                        required property var modelData
+                                        Layout.fillWidth: true
+                                        spacing: 8
+
+                                        StyledText {
+                                            Layout.preferredWidth: 88
+                                            text: modelData.label
+                                            color: Appearance.colors.colSubtext
+                                            font.pixelSize: Appearance.font.pixelSize.smaller
+                                        }
+                                        StyledText {
+                                            Layout.fillWidth: true
+                                            text: modelData.value
+                                            elide: Text.ElideRight
+                                            font.pixelSize: Appearance.font.pixelSize.smaller
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        ContentSection {
+            icon: "desktop_windows"
+            shape: MaterialShape.Shape.Square
+            title: Translation.tr("Outputs")
+            hint: Translation.tr("%1 detected").arg(Vnc.wayvncOutputs.length)
+            hintIcon: "monitor"
 
             ColumnLayout {
                 Layout.fillWidth: true
@@ -900,59 +1202,95 @@ ContentPage {
 
                 StyledText {
                     Layout.fillWidth: true
-                    visible: Vnc.clients.length === 0
-                    text: Translation.tr("No clients connected.")
+                    visible: page.outputRows.length === 0
+                    text: Translation.tr("No outputs were detected.")
                     color: Appearance.colors.colSubtext
                 }
 
                 Repeater {
-                    model: Vnc.clients
+                    model: page.outputRows
 
-                    delegate: RowLayout {
+                    delegate: Rectangle {
                         required property var modelData
                         Layout.fillWidth: true
-                        spacing: 8
+                        implicitHeight: outputRow.implicitHeight + 16
+                        radius: Appearance.rounding.small
+                        color: ColorUtils.transparentize(Appearance.colors.colLayer1, 0.4)
+                        border.width: 1
+                        border.color: ColorUtils.transparentize(Appearance.colors.colOutlineVariant, 0.6)
 
-                        StyledText {
-                            Layout.fillWidth: true
-                            text: `${modelData.address ?? Translation.tr("unknown")} · ${modelData.username ?? ""} · ${modelData.id ?? ""}`
-                            elide: Text.ElideRight
-                        }
+                        RowLayout {
+                            id: outputRow
+                            anchors {
+                                left: parent.left
+                                right: parent.right
+                                margins: 8
+                            }
+                            spacing: 8
 
-                        RippleButtonWithIcon {
-                            mainText: Translation.tr("Disconnect")
-                            materialIcon: "link_off"
-                            onClicked: Vnc.disconnectClient(modelData.id)
-                        }
-                    }
-                }
+                            Rectangle {
+                                Layout.preferredWidth: 34
+                                Layout.preferredHeight: 34
+                                radius: 17
+                                color: Appearance.colors.colSecondaryContainer
+                                MaterialSymbol {
+                                    anchors.centerIn: parent
+                                    text: "monitor"
+                                    iconSize: Appearance.font.pixelSize.large
+                                    color: Appearance.colors.colOnSecondaryContainer
+                                }
+                            }
 
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 1
-                    color: Appearance.colors.colOutlineVariant
-                    visible: Vnc.outputs.length > 0
-                }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 1
 
-                Repeater {
-                    model: (Vnc.outputs ?? []).filter(output => !output.headless)
+                                StyledText {
+                                    Layout.fillWidth: true
+                                    text: modelData.description || modelData.name || "—"
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                    color: Appearance.colors.colOnSurface
+                                }
 
-                    delegate: RowLayout {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        spacing: 8
+                                StyledText {
+                                    Layout.fillWidth: true
+                                    text: `${modelData.width || 0}×${modelData.height || 0}` +
+                                        (modelData.refresh ? ` · ${Math.round(modelData.refresh)} Hz` : "") +
+                                        (modelData.power ? ` · ${modelData.power}` : "")
+                                    color: Appearance.colors.colSubtext
+                                    font.pixelSize: Appearance.font.pixelSize.smaller
+                                    elide: Text.ElideRight
+                                }
+                            }
 
-                        StyledText {
-                            Layout.fillWidth: true
-                            text: `${modelData.name} · ${modelData.width}×${modelData.height}${modelData.focused ? " · focused" : ""}`
-                            elide: Text.ElideRight
-                        }
+                            Rectangle {
+                                visible: modelData.captured === true || modelData.focused === true
+                                radius: Appearance.rounding.small
+                                color: ColorUtils.transparentize(Appearance.colors.colPrimary, 0.85)
+                                implicitHeight: 20
 
-                        RippleButtonWithIcon {
-                            mainText: Translation.tr("Capture now")
-                            materialIcon: "screenshot_monitor"
-                            visible: Vnc.serviceActive
-                            onClicked: Vnc.outputSet(modelData.name)
+                                StyledText {
+                                    anchors {
+                                        left: parent.left
+                                        right: parent.right
+                                        margins: 7
+                                    }
+                                    horizontalAlignment: Text.AlignHCenter
+                                    text: Translation.tr("CURRENT")
+                                    color: Appearance.colors.colPrimary
+                                    font.pixelSize: Appearance.font.pixelSize.smaller
+                                    font.bold: true
+                                }
+                            }
+
+                            RippleButtonWithIcon {
+                                mainText: Translation.tr("Capture now")
+                                materialIcon: "screenshot_monitor"
+                                visible: Vnc.serviceActive
+                                enabled: !Vnc.busy
+                                onClicked: Vnc.outputSet(modelData.name)
+                            }
                         }
                     }
                 }
