@@ -128,10 +128,24 @@ Item {
         }
         Revealer {
             reveal: Hotspot.active
-            MaterialSymbol {
-                text: "wifi_tethering"
-                iconSize: Appearance.font.pixelSize.larger
-                color: root.iconColor
+            Flow {
+                id: hotspotIconsFlow
+                flow: root.vertical ? Flow.TopToBottom : Flow.LeftToRight
+                spacing: 2
+
+                MaterialSymbol {
+                    id: hotspotIcon
+                    text: "wifi_tethering"
+                    iconSize: Appearance.font.pixelSize.larger
+                    color: root.iconColor
+                }
+
+                // Sits to the right of the AP icon instead of overlapping it.
+                HotspotClientCount {
+                    contentColor: root.contentColor
+                    contentColorOverridden: root.contentColorOverridden
+                    isMaterial: root.isMaterial
+                }
             }
         }
         MaterialSymbol {

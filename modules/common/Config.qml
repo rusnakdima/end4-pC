@@ -94,6 +94,7 @@ Singleton {
                 property string ssid: "archpc-ap"
                 property string passphrase: "aic8800ap" // 9 chars, satisfies hostapd's 8..63
                 property int channel: 0 // 0 = follow the STA channel (fallback 6)
+                property bool notifyClientChanges: true // notify when an AP client connects or disconnects
             }
 
             property JsonObject policies: JsonObject {
@@ -657,6 +658,9 @@ Singleton {
                 property JsonObject indicators: JsonObject {
                     property JsonObject notifications: JsonObject {
                         property bool showUnreadCount: false
+                    }
+                    property JsonObject hotspot: JsonObject {
+                        property bool showClientCount: true // AP connected-client badge in the bar
                     }
                 }
                 property JsonObject tooltips: JsonObject {

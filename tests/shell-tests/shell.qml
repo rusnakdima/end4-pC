@@ -59,7 +59,8 @@ ShellRoot {
         "tst_config_sync.qml",
         "tst_projection.qml",
         "tst_cast.qml",
-        "tst_wallpaper_video.qml"
+        "tst_wallpaper_video.qml",
+        "tst_hotspot_clients.qml"
     ]
 
     property int doneCount: 0
