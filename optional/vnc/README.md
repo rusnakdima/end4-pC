@@ -23,7 +23,8 @@ Hyprland (single instance) ── Quickshell, PipeWire, lock screen
 - Render cursor, FPS limit, GPU option, client resize control, view-only mode.
 - Match the host keyboard layout, or override the XKB settings.
 - Runtime output switching and per-client disconnect.
-- Optional lock-on-disconnect / idle inhibition.
+- Lock-on-disconnect using the **end4-pC Quickshell lock screen** (on by
+  default), plus optional idle inhibition. Connecting never unlocks.
 - Optional wallpaper suppression while a client is connected (desktop image,
   video, centered image and lock wallpaper).
 - A full Settings page under **Settings → VNC**.
@@ -116,7 +117,8 @@ Settings → VNC → Network & Security on first connect.
 - automatic or custom bind mode, port, TLS, username, password, certificate, PAM;
 - detected loopback, Ethernet/Wi-Fi and Tailscale addresses with firewall hints;
 - remote input and keyboard layout;
-- lock-on-disconnect, idle inhibition, exit-on-disconnect, log level;
+- **Lock on disconnect** (on by default, uses the theme lock and never unlocks on connect),
+  idle inhibition, exit-on-disconnect, log level;
 - **Hide wallpaper while a client is connected** (on by default);
 - a **Clients** block with per-session monitoring (user, address, access kind,
   interface, seat, connection time, uptime), per-client **Details** spoilers,

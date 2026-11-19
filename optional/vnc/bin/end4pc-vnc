@@ -83,7 +83,7 @@ DEFAULTS = {
         "xkb": {"layout": "", "variant": "", "model": "", "options": "", "rules": ""},
     },
     "behavior": {
-        "lockOnDisconnect": False,
+        "lockOnDisconnect": True,
         "inhibitIdle": False,
         "exitOnDisconnect": False,
         "logLevel": "warning",
@@ -700,6 +700,10 @@ def enrich_clients(raw: list[dict]) -> list[dict]:
 
 
 def clients() -> list[dict]:
+    # wayvnc creates its control socket at startup. The watcher starts just
+    # before it, so avoid a noisy "connection refused" on every boot.
+    if not (XDG_RUNTIME_DIR / "wayvncctl").exists():
+        return []
     rc, out, _ = wayvncctl(["client-list"])
     if rc != 0:
         return []
@@ -1155,6 +1159,29 @@ def cmd_run(_args: argparse.Namespace) -> int:
     return rc
 
 
+def lock_with_theme() -> bool:
+    """Lock through the end4-pC Quickshell lock screen.
+
+    `qs -c end4-pC ipc call lock activate` is the theme's own WlSessionLock
+    entry point - the same one hypridle uses. loginctl/hyprlock would show
+    the compositor fallback instead of the themed lock screen.
+
+    This is only ever called after the LAST client disconnects. There is
+    deliberately no matching unlock on connect: a VNC session must never
+    dismiss an existing lock.
+    """
+    qs = shutil.which("qs")
+    if not qs:
+        print(f"{APP}: qs not found; cannot activate the theme lock", file=sys.stderr)
+        return False
+    rc, _out, err = run([qs, "-c", "end4-pC", "ipc", "call", "lock", "activate"], timeout=10)
+    if rc != 0:
+        print(f"{APP}: theme lock failed: {(err or '').strip() or rc}", file=sys.stderr)
+        return False
+    print(f"{APP}: locked with the end4-pC theme lock screen", file=sys.stderr)
+    return True
+
+
 def publish_client_state(count: int) -> None:
     """Publish the current client count for the desktop shell.
 
@@ -1177,8 +1204,6 @@ def watch_clients(cfg: dict, stop_event: threading.Event) -> None:
     beh = cfg.get("behavior") or {}
     inhibitor: subprocess.Popen | None = None
     active = False
-    # The shell needs this signal even when no behaviour option below is on.
-    publish_client_state(len(clients()))
 
     def set_inhibitor(on: bool) -> None:
         nonlocal inhibitor
@@ -1207,11 +1232,28 @@ def watch_clients(cfg: dict, stop_event: threading.Event) -> None:
                 inhibitor.kill()
             inhibitor = None
 
+    def on_count(count: int) -> None:
+        # Single source of truth for the shell state and the idle inhibitor.
+        # Called both by wayvnc events and by the reconciliation on restart,
+        # so a dropped event stream cannot miss the last disconnect.
+        publish_client_state(count)
+        nonlocal active
+        if count > 0 and not active:
+            active = True
+            set_inhibitor(True)
+        elif count == 0 and active:
+            active = False
+            set_inhibitor(False)
+            if beh.get("lockOnDisconnect") and not stop_event.is_set():
+                lock_with_theme()
+
     try:
         while not stop_event.is_set():
             # Reconcile after an event-stream restart: a client that stayed
-            # connected would otherwise never announce itself again.
-            publish_client_state(len(clients()))
+            # connected would otherwise never announce itself again, and a
+            # disconnect that happened while the stream was down must still
+            # lock the session.
+            on_count(len(clients()))
             proc = subprocess.Popen(
                 ["wayvncctl", "--json", "--wait", "--reconnect", "event-receive"],
                 stdout=subprocess.PIPE,
@@ -1234,15 +1276,7 @@ def watch_clients(cfg: dict, stop_event: threading.Event) -> None:
                     if count is None:
                         continue
                     count = int(count)
-                    publish_client_state(count)
-                    if count > 0 and not active:
-                        active = True
-                        set_inhibitor(True)
-                    elif count == 0 and active:
-                        active = False
-                        set_inhibitor(False)
-                        if beh.get("lockOnDisconnect") and not stop_event.is_set():
-                            run(["loginctl", "lock-session"], timeout=5)
+                    on_count(count)
             finally:
                 if proc.poll() is None:
                     proc.terminate()
