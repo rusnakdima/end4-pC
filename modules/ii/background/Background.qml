@@ -96,6 +96,13 @@ Variants {
             return enabled && sensitiveWallpaper && sensitiveNetwork;
         }
 
+        // Hide every personal wallpaper surface while a VNC client is
+        // connected. This is a view-only suppression: the configured paths
+        // stay intact and come back the moment the last client disconnects.
+        readonly property bool vncSuppressed: (Config.options.background.vnc?.disableWallpaper ?? true)
+            && (Vnc.clientConnected ?? false)
+        readonly property bool wallpaperSuppressed: bgRoot.wallpaperSafetyTriggered || bgRoot.vncSuppressed
+
         // The decoded desktop clip only covers the screen once it really has
         // a frame; until then the still/poster stays up. In the external
         // mpvpaper mode there is no in-shell item, so the old reveal decision
@@ -103,7 +110,7 @@ Variants {
         readonly property bool videoVisible: bgRoot.wallpaperIsVideo
             && bgRoot.videoRevealed
             && (Config.options.background.inShellVideo
-                ? (!bgRoot.wallpaperSafetyTriggered
+                ? (!bgRoot.wallpaperSuppressed
                     && !bgRoot.hiddenForFullscreen
                     && !centeredWallpaper.centeredHidesFullWallpaper
                     && desktopVideo.videoReady)
@@ -111,7 +118,7 @@ Variants {
         property bool lockStreamHeld: false
 
         function refreshDesktopVideo() {
-            if (!bgRoot.wallpaperIsVideo || bgRoot.wallpaperSafetyTriggered) return;
+            if (!bgRoot.wallpaperIsVideo || bgRoot.wallpaperSuppressed) return;
             // Keep a poster ready for the moment the clip is paused, hidden or
             // still loading, and for the settings previews.
             Wallpapers.ensureVideoStill(bgRoot.effectiveWallpaperPath);
@@ -121,7 +128,7 @@ Variants {
         property color dominantColor: Appearance.colors.colPrimary
         property bool dominantColorIsDark: dominantColor.hslLightness < 0.5
         property color colText: {
-            if (wallpaperSafetyTriggered)
+            if (wallpaperSuppressed)
                 return CF.ColorUtils.mix(Appearance.colors.colOnLayer0, Appearance.colors.colPrimary, 0.75);
             return (GlobalStates.screenLocked && shouldBlur) ? Appearance.colors.colOnLayer0 : CF.ColorUtils.colorWithLightness(Appearance.colors.colPrimary, (dominantColorIsDark ? 0.8 : 0.12));
         }
@@ -151,7 +158,7 @@ Variants {
             right: true
         }
         color: {
-            if (!bgRoot.wallpaperSafetyTriggered || bgRoot.wallpaperIsVideo)
+            if (!bgRoot.wallpaperSuppressed || bgRoot.wallpaperIsVideo)
                 return "transparent";
             return CF.ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colPrimary, 0.75);
         }
@@ -160,8 +167,8 @@ Variants {
         }
 
         Component.onCompleted: {
-            previousWallpaper.source = bgRoot.wallpaperSafetyTriggered ? "" : bgRoot.wallpaperPath
-            wallpaper.source = bgRoot.wallpaperSafetyTriggered ? "" : bgRoot.wallpaperPath
+            previousWallpaper.source = bgRoot.wallpaperSuppressed ? "" : bgRoot.wallpaperPath
+            wallpaper.source = bgRoot.wallpaperSuppressed ? "" : bgRoot.wallpaperPath
             bgRoot.currentWallpaperSource = bgRoot.wallpaperPath
             bgRoot.previousWallpaperSource = ""
             bgRoot.transitionProgress = 1.0
@@ -177,9 +184,30 @@ Variants {
         onEffectiveWallpaperPathChanged: bgRoot.refreshDesktopVideo()
         onWallpaperSafetyTriggeredChanged: bgRoot.refreshDesktopVideo()
 
+        onVncSuppressedChanged: {
+            bgRoot.refreshDesktopVideo()
+            if (bgRoot.vncSuppressed) {
+                // Clear both layers immediately: a stale pixmap would still
+                // show the wallpaper behind the solid background color.
+                bgRoot.transitionPending = false
+                previousWallpaper.source = ""
+                wallpaper.source = ""
+                bgRoot.currentWallpaperSource = ""
+                bgRoot.transitionProgress = 1.0
+                bgRoot.videoRevealed = false
+            } else {
+                previousWallpaper.source = ""
+                wallpaper.source = bgRoot.wallpaperPath
+                bgRoot.currentWallpaperSource = bgRoot.wallpaperPath
+                bgRoot.transitionProgress = 1.0
+                bgRoot.videoRevealed = bgRoot.showLiveVideo
+                bgRoot.refreshDesktopVideo()
+            }
+        }
+
         onWallpaperPathChanged: {
             bgRoot.videoRevealed = false
-            if (wallpaperSafetyTriggered) {
+            if (wallpaperSuppressed) {
                 bgRoot.transitionPending = false
                 previousWallpaper.source = ""
                 wallpaper.source = ""
@@ -252,7 +280,7 @@ Variants {
         Connections {
             target: GlobalStates
             function onScreenLockedChanged() {
-                if (!GlobalStates.screenLocked) {
+                if (!GlobalStates.screenLocked && !bgRoot.wallpaperSuppressed) {
                     bgRoot.videoRevealed = bgRoot.showLiveVideo
                 }
             }
@@ -267,11 +295,11 @@ Variants {
         Connections {
             target: LiveWallpaper
             function onAvailableChanged() {
-                if (!Config.options.background.inShellVideo)
+                if (!Config.options.background.inShellVideo && !bgRoot.wallpaperSuppressed)
                     bgRoot.videoRevealed = bgRoot.showLiveVideo
             }
             function onPreviewPlayerActiveChanged() {
-                if (!Config.options.background.inShellVideo)
+                if (!Config.options.background.inShellVideo && !bgRoot.wallpaperSuppressed)
                     bgRoot.videoRevealed = bgRoot.showLiveVideo
             }
         }
@@ -358,7 +386,7 @@ Variants {
                 visible: Config.options.background.inShellVideo
                     && bgRoot.wallpaperIsVideo
                     && bgRoot.videoRevealed
-                    && !bgRoot.wallpaperSafetyTriggered
+                    && !bgRoot.wallpaperSuppressed
                     && !bgRoot.hiddenForFullscreen
                     && !centeredWallpaper.centeredHidesFullWallpaper
                 source: Config.options.background.inShellVideo ? bgRoot.effectiveWallpaperPath : ""
@@ -504,8 +532,9 @@ Variants {
                 id: centeredWallpaper
                 anchors.fill: parent
                 screen: bgRoot.screen
-                wallpaperPath: bgRoot.wallpaperPath
+                wallpaperPath: bgRoot.wallpaperSuppressed ? "" : bgRoot.wallpaperPath
                 wallpaperIsVideo: bgRoot.wallpaperIsVideo
+                wallpaperSuppressed: bgRoot.wallpaperSuppressed
             }
 
             /* Widgets Loader */
@@ -542,6 +571,8 @@ Variants {
                 WidgetsLoader {
                     screen: bgRoot.screen
                     wallpaperItem: Collage.enabled && collageLoader.item ? collageLoader.item : wallpaper
+                    // This flag is only the work-safety status text; VNC
+                    // suppression is not a work-safety trigger.
                     wallpaperSafetyTriggered: bgRoot.wallpaperSafetyTriggered
                 }
             }

@@ -24,6 +24,8 @@ Hyprland (single instance) ── Quickshell, PipeWire, lock screen
 - Match the host keyboard layout, or override the XKB settings.
 - Runtime output switching and per-client disconnect.
 - Optional lock-on-disconnect / idle inhibition.
+- Optional wallpaper suppression while a client is connected (desktop image,
+  video, centered image and lock wallpaper).
 - A full Settings page under **Settings → VNC**.
 
 Not supported:
@@ -115,6 +117,7 @@ Settings → VNC → Network & Security on first connect.
 - detected loopback, Ethernet/Wi-Fi and Tailscale addresses with firewall hints;
 - remote input and keyboard layout;
 - lock-on-disconnect, idle inhibition, exit-on-disconnect, log level;
+- **Hide wallpaper while a client is connected** (on by default);
 - a **Clients** block with per-session monitoring (user, address, access kind,
   interface, seat, connection time, uptime), per-client **Details** spoilers,
   disconnect, disconnect-all and refresh;
@@ -122,10 +125,30 @@ Settings → VNC → Network & Security on first connect.
   live **Capture now** switch;
 - diagnostics, SSH tunnel command and logs.
 
-The page stages changes and sends one JSON patch to the controller. The
+The page stages VNC changes and sends one JSON patch to the controller. The
 controller validates, writes atomically and restarts the user service when
-needed. The page never writes `~/.config/illogical-impulse/config.json` and
-never restarts Quickshell.
+needed. The wallpaper switch is the one exception: it writes the shell setting
+`background.vnc.disableWallpaper` directly, like the other theme settings. The
+page never restarts Quickshell.
+
+## Wallpaper suppression
+
+With **Settings → VNC → Behaviour → Hide wallpaper while a client is connected**
+enabled (default), the desktop falls back to a solid theme color for as long as
+at least one VNC client is connected: the image layer is cleared, the video is
+paused, and the centered and lock-screen wallpapers are hidden too. Everything
+is restored when the last client disconnects. A manual pause or the battery
+pause policy is kept separate, so neither canceling the other.
+
+The controller watches `wayvncctl event-receive` and publishes connection state
+on change to `$XDG_RUNTIME_DIR/end4pc-vnc-clients.json`. The shell reads that
+small file instead of polling the full status command. Diagnostics:
+
+```bash
+cat "$XDG_RUNTIME_DIR/end4pc-vnc-clients.json"
+qs -c end4-pC ipc call vnc status
+qs -c end4-pC ipc call livewallpaper status
+```
 
 ## Interactive configurator over SSH
 

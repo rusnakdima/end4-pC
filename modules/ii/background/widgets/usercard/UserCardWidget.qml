@@ -237,9 +237,11 @@ AbstractBackgroundWidget {
                     visible: false
 
                     // Only feeds the FastBlur used when widget blur is off
-                    property string effectiveSource: Config.options.background.widgets.blurWidgets ? "" : "file://" + (GlobalStates.screenLocked && Config.options.background.lockWall !== ""
-                        ? Config.options.background.lockWall
-                        : Wallpapers.displayPathFor(Config.options.background.wallpaperPath))
+                    property string effectiveSource: ((Config.options.background.vnc?.disableWallpaper ?? true) && (Vnc.clientConnected ?? false))
+                        ? ""
+                        : (Config.options.background.widgets.blurWidgets ? "" : "file://" + (GlobalStates.screenLocked && Config.options.background.lockWall !== ""
+                            ? Config.options.background.lockWall
+                            : Wallpapers.displayPathFor(Config.options.background.wallpaperPath)))
 
                     Image {
                         id: bgImageA

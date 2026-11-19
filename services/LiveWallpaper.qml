@@ -31,11 +31,20 @@ Singleton {
         : root.mpvAvailable
     // mpvpaper's own reachability, kept for the external-player mode.
     property bool mpvAvailable: false
-    // What we last asked for
-    property bool paused: false
+    // Pause reasons are kept apart so one cannot cancel another: resuming
+    // from battery must not undo a manual pause, and disconnecting VNC must
+    // not start a video the user had paused themselves.
+    property bool manualPaused: false
+    property bool powerPaused: false
+    property bool vncPaused: false
+    readonly property bool paused: root.manualPaused || root.powerPaused || root.vncPaused
 
     readonly property bool pauseOnBattery: Config.options?.background.liveWallpaper.pauseOnBattery ?? false
     readonly property real pauseBelowPercent: Config.options?.background.liveWallpaper.pauseBelowPercent ?? 0
+
+    // Hide wallpaper while a VNC client is connected (Settings -> VNC).
+    readonly property bool vncSuppressesWallpaper: (Config.options?.background?.vnc?.disableWallpaper ?? true)
+        && (Vnc.clientConnected ?? false)
 
     // ── Socket IO ──────────────────────────────────────────────────────────
     // python3 instead of socat: socat is not installed here, and the old
@@ -81,7 +90,7 @@ sk.close()`
     // decode the same clip behind the shell's copy.
     function stopExternalPlayer() {
         root.mpvAvailable = false;
-        root.paused = false;
+        root.manualPaused = false;
         Quickshell.execDetached([Directories.videoWallpaperScriptPath, "--stop"]);
     }
 
@@ -155,10 +164,17 @@ sk.close()`
     }
 
     function setPaused(value) {
-        root.paused = value;
-        if (root.inShell) return;
-        root.sendCommand(`{"command":["set_property","pause",${value}]}`);
+        root.manualPaused = value;
     }
+
+    // Every reason reaches the external player through the effective state,
+    // not just manual toggles: onPausedChanged covers VNC and battery too.
+    function syncPlayer() {
+        if (root.inShell) return;
+        root.sendCommand(`{"command":["set_property","pause",${root.paused}]}`);
+    }
+
+    onPausedChanged: root.syncPlayer()
 
     function toggle() { root.setPaused(!root.paused) }
     function pause()  { root.setPaused(true) }
@@ -448,7 +464,17 @@ sk.close()`
                     const reply = JSON.parse(line);
                     root.mpvAvailable = reply.error === "success";
                     if (root.mpvAvailable) {
-                        root.paused = reply.data === true;
+                        const mpvPaused = reply.data === true;
+                        if (root.vncPaused || root.powerPaused) {
+                            // A policy owns the state. A freshly restarted
+                            // player reports "playing", so re-assert the pause
+                            // without turning it into a manual one.
+                            if (root.paused !== mpvPaused) root.syncPlayer();
+                        } else {
+                            // No policy: adopt the player's real state so the
+                            // toggle does not lie about an mpvpaper -p pause.
+                            root.manualPaused = mpvPaused;
+                        }
                         // A player this preview started has come up. It was
                         // started on the previewed clip, so the preview owns
                         // it and the live layer may be revealed — otherwise
@@ -484,10 +510,11 @@ sk.close()`
         && (root.pauseOnBattery
             || (root.pauseBelowPercent > 0 && Battery.percentage * 100 <= root.pauseBelowPercent))
 
-    onShouldPauseForPowerChanged: {
-        if (root.shouldPauseForPower) root.pause();
-        else if (root.paused) root.resume();
-    }
+    onShouldPauseForPowerChanged: root.powerPaused = root.shouldPauseForPower
+
+    // VNC suppression pauses the video for as long as a client is connected.
+    onVncSuppressesWallpaperChanged: root.vncPaused = root.vncSuppressesWallpaper
+    Component.onCompleted: root.vncPaused = root.vncSuppressesWallpaper
 
     // Diagnostics and CLI control:
     //   qs -c end4-pC ipc call livewallpaper status
@@ -500,6 +527,10 @@ sk.close()`
             return JSON.stringify({
                 available: root.available,
                 paused: root.paused,
+                manualPaused: root.manualPaused,
+                powerPaused: root.powerPaused,
+                vncPaused: root.vncPaused,
+                vncSuppressesWallpaper: root.vncSuppressesWallpaper,
                 previewing: root.previewing,
                 queryInFlight: root.queryInFlight,
                 previewPlayerActive: root.previewPlayerActive,
@@ -516,5 +547,8 @@ sk.close()`
         function stopPreview(): void {
             Wallpapers.stopPreview();
         }
+
+        function pause(): void { root.pause() }
+        function resume(): void { root.resume() }
     }
 }

@@ -12,6 +12,8 @@ Item {
     required property var screen
     required property string wallpaperPath
     required property bool wallpaperIsVideo
+    // A VNC session hides the centered image as well as the full wallpaper.
+    property bool wallpaperSuppressed: false
 
     readonly property bool centeredWallpaperConfigEnabled: Config.options.background.centeredWallpaper
     property bool centeredWallpaperEnabled: false
@@ -20,9 +22,10 @@ Item {
     property int centeredWallpaperShape: CF.ShapeUtils.getShape(Config.options.background.centeredWallpaperShape)
     property int centeredWallpaperSize: Config.options.background.centeredWallpaperSize
     readonly property bool collageMode: Collage.enabled
-    readonly property string shapeImagePath: root.collageMode && Config.options.background.centeredWallpaperImage !== ""
-        ? Config.options.background.centeredWallpaperImage
-        : root.wallpaperPath
+    readonly property string shapeImagePath: root.wallpaperSuppressed ? ""
+        : (root.collageMode && Config.options.background.centeredWallpaperImage !== ""
+            ? Config.options.background.centeredWallpaperImage
+            : root.wallpaperPath)
     property color centeredWallpaperColor: Appearance.getColorFromName(Config.options.background.centeredWallpaperColor)
 
     onCenteredOnlyWhenLockedChanged: root.syncProgress()

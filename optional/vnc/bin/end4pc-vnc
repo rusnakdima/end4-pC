@@ -41,6 +41,9 @@ KEY_FILE = TLS_DIR / "key.pem"
 WAYVNC_CONF = VNC_DIR / "wayvnc.conf"
 STATE_FILE = XDG_RUNTIME_DIR / "end4pc-vnc-state.json"
 LOCK_FILE = XDG_RUNTIME_DIR / "end4pc-vnc.lock"
+# Small, write-only-on-change file watched by the shell. The full status is
+# too expensive to poll continuously just to know whether someone is connected.
+CLIENT_STATE_FILE = XDG_RUNTIME_DIR / "end4pc-vnc-clients.json"
 
 DEFAULTS = {
     "version": 1,
@@ -1124,10 +1127,10 @@ def cmd_run(_args: argparse.Namespace) -> int:
     cmd = [shutil.which("wayvnc"), *wayvnc_args(cfg)]
     stop_event = threading.Event()
     watcher: threading.Thread | None = None
-    beh = cfg.get("behavior") or {}
-    if beh.get("lockOnDisconnect") or beh.get("inhibitIdle"):
-        watcher = threading.Thread(target=watch_clients, args=(cfg, stop_event), daemon=True)
-        watcher.start()
+    # Always watch: besides lock-on-disconnect / idle inhibition, the shell
+    # uses the published client state to hide the wallpaper during a session.
+    watcher = threading.Thread(target=watch_clients, args=(cfg, stop_event), daemon=True)
+    watcher.start()
     proc = subprocess.Popen(cmd)
     rc = 0
 
@@ -1146,15 +1149,36 @@ def cmd_run(_args: argparse.Namespace) -> int:
         stop_event.set()
         if watcher is not None:
             watcher.join(timeout=2)
+        publish_client_state(0)
         if headless:
             disable_headless()
     return rc
+
+
+def publish_client_state(count: int) -> None:
+    """Publish the current client count for the desktop shell.
+
+    Written on connect/disconnect only, never deleted: an explicit
+    connected=false survives a service restart or a crash better than a
+    missing file, which a FileView would report as a stale "still connected".
+    """
+    payload = {
+        "connected": count > 0,
+        "count": count,
+        "updated": int(time.time()),
+    }
+    try:
+        atomic_write(CLIENT_STATE_FILE, json.dumps(payload, sort_keys=True) + "\n", 0o600)
+    except OSError:
+        pass
 
 
 def watch_clients(cfg: dict, stop_event: threading.Event) -> None:
     beh = cfg.get("behavior") or {}
     inhibitor: subprocess.Popen | None = None
     active = False
+    # The shell needs this signal even when no behaviour option below is on.
+    publish_client_state(len(clients()))
 
     def set_inhibitor(on: bool) -> None:
         nonlocal inhibitor
@@ -1185,6 +1209,9 @@ def watch_clients(cfg: dict, stop_event: threading.Event) -> None:
 
     try:
         while not stop_event.is_set():
+            # Reconcile after an event-stream restart: a client that stayed
+            # connected would otherwise never announce itself again.
+            publish_client_state(len(clients()))
             proc = subprocess.Popen(
                 ["wayvncctl", "--json", "--wait", "--reconnect", "event-receive"],
                 stdout=subprocess.PIPE,
@@ -1207,6 +1234,7 @@ def watch_clients(cfg: dict, stop_event: threading.Event) -> None:
                     if count is None:
                         continue
                     count = int(count)
+                    publish_client_state(count)
                     if count > 0 and not active:
                         active = True
                         set_inhibitor(True)
@@ -1227,6 +1255,7 @@ def watch_clients(cfg: dict, stop_event: threading.Event) -> None:
             time.sleep(1)
     finally:
         set_inhibitor(False)
+        publish_client_state(0)
 
 
 # --------------------------------------------------------------------------

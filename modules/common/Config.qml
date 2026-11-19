@@ -537,6 +537,12 @@ Singleton {
                     property bool pauseOnBattery: false // Pause as soon as the charger is out
                     property real pauseBelowPercent: 0 // Or only under this charge, 0 to ignore
                 }
+                property JsonObject vnc: JsonObject {
+                    // While a VNC client is connected, hide the desktop image,
+                    // pause the video, and suppress the centered and lock
+                    // wallpapers. Controlled from Settings -> VNC -> Behaviour.
+                    property bool disableWallpaper: true
+                }
                 property list<string> screenList: [] 
                 property string wallpaperPath: ""
                 // Videos are decoded by the shell (WallpaperMedia) instead of

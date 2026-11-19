@@ -239,7 +239,9 @@ Singleton {
                     // hiding it here would blink the still over a running
                     // wallpaper.
                     LiveWallpaper.mpvAvailable = false;
-                    LiveWallpaper.paused = false;
+                    // Go through the manual reason: a VNC or battery pause
+                    // must survive applying a new wallpaper.
+                    LiveWallpaper.setPaused(false);
                 }
                 liveRefreshTimer.tries = 0;
                 liveRefreshTimer.restart();

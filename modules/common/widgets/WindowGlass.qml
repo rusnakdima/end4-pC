@@ -178,6 +178,10 @@ Item {
     }
 
     readonly property string wallpaper: {
+        // A VNC session must not leak the desktop or lock wallpaper into a
+        // glass widget, even when the main background layer is suppressed.
+        if ((Config.options.background.vnc?.disableWallpaper ?? true) && (Vnc.clientConnected ?? false))
+            return ""
         const lockWall = Config.options.background.lockWall ?? ""
         const path = GlobalStates.screenLocked && lockWall !== "" ? lockWall : Config.options.background.wallpaperPath
         return Images.isVideoPath(path) ? Config.options.background.thumbnailPath : path

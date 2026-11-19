@@ -938,6 +938,30 @@ ContentPage {
                     }
                 }
 
+                ConfigSwitch {
+                    id: hideWallpaperSwitch
+                    buttonIcon: "wallpaper"
+                    text: Translation.tr("Hide wallpaper while a client is connected")
+                    // This is a shell setting, not part of the VNC JSON patch.
+                    checked: Config.options.background.vnc.disableWallpaper ?? true
+                    onUserToggled: value => Config.options.background.vnc.disableWallpaper = value
+
+                    Binding {
+                        target: hideWallpaperSwitch
+                        property: "checked"
+                        value: Config.options.background.vnc.disableWallpaper ?? true
+                        restoreMode: Binding.RestoreBinding
+                    }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: Translation.tr("Hides the desktop image, pauses the video, and hides the centered and lock-screen wallpapers until the last client disconnects.")
+                    color: Appearance.colors.colSubtext
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    wrapMode: Text.Wrap
+                }
+
                 ConfigComboBox {
                     Layout.fillWidth: true
                     buttonIcon: "article"

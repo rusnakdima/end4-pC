@@ -34,6 +34,12 @@ Singleton {
     property var listenAddresses: []
     property var statusErrors: []
     property int configPort: 0
+    // Live connection state, watched from the controller's runtime file so
+    // the wallpaper can react without polling the full status command.
+    property bool clientConnected: false
+    property int clientCount: 0
+    readonly property string clientStatePath:
+        `${Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/1000"}/end4pc-vnc-clients.json`
     property bool serviceActive: false
     property bool serviceEnabled: false
     property bool serviceInstalled: false
@@ -79,6 +85,17 @@ Singleton {
         root.configPort = Number.isFinite(livePort) && livePort > 0 ? livePort : 0
         root.helperAvailable = true
         root.updated()
+    }
+
+    function handleClientState(text): void {
+        try {
+            const data = JSON.parse(text)
+            root.clientCount = Number(data.count) || 0
+            root.clientConnected = !!data.connected && root.clientCount > 0
+        } catch (e) {
+            root.clientCount = 0
+            root.clientConnected = false
+        }
     }
 
     function handleStatus(text): void {
@@ -158,6 +175,15 @@ Singleton {
         onTriggered: root.refresh()
     }
 
+    FileView {
+        id: clientStateFile
+        path: root.clientStatePath
+        watchChanges: true
+        printErrors: false
+        onLoaded: root.handleClientState(clientStateFile.text())
+        onFileChanged: clientStateFile.reload()
+    }
+
     Process {
         id: statusProc
         command: [root.helperPath, "status"]
@@ -224,6 +250,15 @@ Singleton {
         target: "vnc"
 
         function refresh(): void { root.refresh() }
+
+        function status(): string {
+            return JSON.stringify({
+                clientConnected: root.clientConnected,
+                clientCount: root.clientCount,
+                serviceActive: root.serviceActive,
+                configPort: root.configPort
+            });
+        }
 
         // Diagnostic endpoint used by the Settings page and by the CLI to
         // exercise the exact same apply path the UI uses.
