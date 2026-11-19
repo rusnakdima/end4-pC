@@ -281,12 +281,20 @@ ContentPage {
                 }
 
                 ConfigSwitch {
+                    id: autostartSwitch
                     buttonIcon: "autorenew"
                     text: Translation.tr("Start at login")
                     checked: page.get("autostart", false)
                     onUserToggled: value => {
                         page.set("autostart", value)
                         Vnc.setAutostart(value)
+                    }
+
+                    Binding {
+                        target: autostartSwitch
+                        property: "checked"
+                        value: page.get("autostart", false)
+                        restoreMode: Binding.RestoreBinding
                     }
                 }
 
@@ -347,6 +355,7 @@ ContentPage {
                 }
 
                 ConfigSpinBox {
+                    id: fpsSpin
                     text: Translation.tr("Maximum FPS")
                     icon: "speed"
                     from: 1
@@ -354,27 +363,58 @@ ContentPage {
                     stepSize: 1
                     value: page.get("encoding.maxFps", 30)
                     onValueModified: page.set("encoding.maxFps", value)
+
+                    Binding {
+                        target: fpsSpin
+                        property: "value"
+                        value: page.get("encoding.maxFps", 30)
+                        restoreMode: Binding.RestoreBinding
+                    }
                 }
 
                 ConfigSwitch {
+                    id: cursorSwitch
                     buttonIcon: "ads_click"
                     text: Translation.tr("Render cursor")
                     checked: page.get("encoding.renderCursor", true)
                     onUserToggled: value => page.set("encoding.renderCursor", value)
+
+                    Binding {
+                        target: cursorSwitch
+                        property: "checked"
+                        value: page.get("encoding.renderCursor", true)
+                        restoreMode: Binding.RestoreBinding
+                    }
                 }
 
                 ConfigSwitch {
+                    id: gpuSwitch
                     buttonIcon: "memory"
                     text: Translation.tr("GPU acceleration")
                     checked: page.get("encoding.gpu", false)
                     onUserToggled: value => page.set("encoding.gpu", value)
+
+                    Binding {
+                        target: gpuSwitch
+                        property: "checked"
+                        value: page.get("encoding.gpu", false)
+                        restoreMode: Binding.RestoreBinding
+                    }
                 }
 
                 ConfigSwitch {
+                    id: resizeSwitch
                     buttonIcon: "aspect_ratio"
                     text: Translation.tr("Disable client-driven resizing")
                     checked: page.get("encoding.disableResizing", false)
                     onUserToggled: value => page.set("encoding.disableResizing", value)
+
+                    Binding {
+                        target: resizeSwitch
+                        property: "checked"
+                        value: page.get("encoding.disableResizing", false)
+                        restoreMode: Binding.RestoreBinding
+                    }
                 }
 
                 StyledText {
@@ -459,6 +499,13 @@ ContentPage {
                         placeholderText: Translation.tr("Bind address")
                         text: page.get("network.address", "127.0.0.1")
                         onTextEdited: page.set("network.address", text)
+
+                        Binding {
+                            target: addressField
+                            property: "text"
+                            value: page.get("network.address", "127.0.0.1")
+                            restoreMode: Binding.RestoreBinding
+                        }
                     }
 
                     RippleButtonWithIcon {
@@ -500,6 +547,7 @@ ContentPage {
                 }
 
                 ConfigSpinBox {
+                    id: portSpin
                     text: Translation.tr("Port")
                     icon: "lan"
                     from: 1024
@@ -509,6 +557,13 @@ ContentPage {
                     onValueModified: {
                         page.portEdited = true
                         page.set("network.port", value)
+                    }
+
+                    Binding {
+                        target: portSpin
+                        property: "value"
+                        value: page.get("network.port", Vnc.configPort || 5900)
+                        restoreMode: Binding.RestoreBinding
                     }
                 }
 
@@ -543,10 +598,18 @@ ContentPage {
                 }
 
                 ConfigSwitch {
+                    id: tlsSwitch
                     buttonIcon: "enhanced_encryption"
                     text: Translation.tr("TLS authentication")
                     checked: page.get("network.auth", true)
                     onUserToggled: value => page.set("network.auth", value)
+
+                    Binding {
+                        target: tlsSwitch
+                        property: "checked"
+                        value: page.get("network.auth", true)
+                        restoreMode: Binding.RestoreBinding
+                    }
                 }
 
                 StyledText {
@@ -559,10 +622,18 @@ ContentPage {
                 }
 
                 MaterialTextField {
+                    id: usernameField
                     Layout.fillWidth: true
                     placeholderText: Translation.tr("VNC username")
                     text: page.get("network.username", "")
                     onTextEdited: page.set("network.username", text)
+
+                    Binding {
+                        target: usernameField
+                        property: "text"
+                        value: page.get("network.username", "")
+                        restoreMode: Binding.RestoreBinding
+                    }
                 }
 
                 RowLayout {
@@ -600,10 +671,18 @@ ContentPage {
                 }
 
                 ConfigSwitch {
+                    id: pamSwitch
                     buttonIcon: "verified_user"
                     text: Translation.tr("Use PAM authentication")
                     checked: page.get("network.pam", false)
                     onUserToggled: value => page.set("network.pam", value)
+
+                    Binding {
+                        target: pamSwitch
+                        property: "checked"
+                        value: page.get("network.pam", false)
+                        restoreMode: Binding.RestoreBinding
+                    }
                 }
 
                 StyledText {
@@ -656,17 +735,33 @@ ContentPage {
                 spacing: 10
 
                 ConfigSwitch {
+                    id: inputSwitch
                     buttonIcon: "mouse"
                     text: Translation.tr("Allow remote input")
                     checked: page.get("input.enabled", true)
                     onUserToggled: value => page.set("input.enabled", value)
+
+                    Binding {
+                        target: inputSwitch
+                        property: "checked"
+                        value: page.get("input.enabled", true)
+                        restoreMode: Binding.RestoreBinding
+                    }
                 }
 
                 ConfigSwitch {
+                    id: hostKeyboardSwitch
                     buttonIcon: "keyboard"
                     text: Translation.tr("Match the host keyboard layout")
                     checked: page.get("input.matchHostKeyboard", true)
                     onUserToggled: value => page.set("input.matchHostKeyboard", value)
+
+                    Binding {
+                        target: hostKeyboardSwitch
+                        property: "checked"
+                        value: page.get("input.matchHostKeyboard", true)
+                        restoreMode: Binding.RestoreBinding
+                    }
                 }
 
                 StyledText {
@@ -679,26 +774,50 @@ ContentPage {
                 }
 
                 MaterialTextField {
+                    id: xkbLayoutField
                     Layout.fillWidth: true
                     visible: !page.get("input.matchHostKeyboard", true)
                     placeholderText: Translation.tr("XKB layout, e.g. us,ru")
                     text: page.get("input.xkb.layout", "")
                     onTextEdited: page.set("input.xkb.layout", text)
+
+                    Binding {
+                        target: xkbLayoutField
+                        property: "text"
+                        value: page.get("input.xkb.layout", "")
+                        restoreMode: Binding.RestoreBinding
+                    }
                 }
 
                 MaterialTextField {
+                    id: xkbOptionsField
                     Layout.fillWidth: true
                     visible: !page.get("input.matchHostKeyboard", true)
                     placeholderText: Translation.tr("XKB options, e.g. grp:win_space_toggle")
                     text: page.get("input.xkb.options", "")
                     onTextEdited: page.set("input.xkb.options", text)
+
+                    Binding {
+                        target: xkbOptionsField
+                        property: "text"
+                        value: page.get("input.xkb.options", "")
+                        restoreMode: Binding.RestoreBinding
+                    }
                 }
 
                 MaterialTextField {
+                    id: seatField
                     Layout.fillWidth: true
                     placeholderText: Translation.tr("Seat (empty = default)")
                     text: page.get("input.seat", "")
                     onTextEdited: page.set("input.seat", text)
+
+                    Binding {
+                        target: seatField
+                        property: "text"
+                        value: page.get("input.seat", "")
+                        restoreMode: Binding.RestoreBinding
+                    }
                 }
             }
         }
@@ -713,24 +832,48 @@ ContentPage {
                 spacing: 10
 
                 ConfigSwitch {
+                    id: lockOnDisconnectSwitch
                     buttonIcon: "lock_clock"
                     text: Translation.tr("Lock the session when the last client disconnects")
                     checked: page.get("behavior.lockOnDisconnect", false)
                     onUserToggled: value => page.set("behavior.lockOnDisconnect", value)
+
+                    Binding {
+                        target: lockOnDisconnectSwitch
+                        property: "checked"
+                        value: page.get("behavior.lockOnDisconnect", false)
+                        restoreMode: Binding.RestoreBinding
+                    }
                 }
 
                 ConfigSwitch {
+                    id: inhibitIdleSwitch
                     buttonIcon: "coffee"
                     text: Translation.tr("Inhibit idle while a client is connected")
                     checked: page.get("behavior.inhibitIdle", false)
                     onUserToggled: value => page.set("behavior.inhibitIdle", value)
+
+                    Binding {
+                        target: inhibitIdleSwitch
+                        property: "checked"
+                        value: page.get("behavior.inhibitIdle", false)
+                        restoreMode: Binding.RestoreBinding
+                    }
                 }
 
                 ConfigSwitch {
+                    id: exitOnDisconnectSwitch
                     buttonIcon: "logout"
                     text: Translation.tr("Stop VNC when the last client disconnects")
                     checked: page.get("behavior.exitOnDisconnect", false)
                     onUserToggled: value => page.set("behavior.exitOnDisconnect", value)
+
+                    Binding {
+                        target: exitOnDisconnectSwitch
+                        property: "checked"
+                        value: page.get("behavior.exitOnDisconnect", false)
+                        restoreMode: Binding.RestoreBinding
+                    }
                 }
 
                 ConfigComboBox {
