@@ -1,5 +1,6 @@
 import QtQuick
 import QtTest
+import qs.services
 import qs.modules.common.widgets
 
 /**
@@ -41,6 +42,31 @@ TestCase {
     function test_it_loads_in_the_engine() {
         compare(meterComponent.status, Component.Ready, meterComponent.errorString());
         verify(testCase.meter !== null, "VolumeLevelMeter failed to create");
+    }
+
+    /*
+     * The recreate loop: PwNodePeakMonitor's own capture stream has empty
+     * properties and name "quickshell". If it is not filtered from
+     * Audio.appNodes() it becomes an Input row, whose meter creates another
+     * monitor, ad infinitum - and appNodeDisplayName() crashed on the empty
+     * properties dict, which is why the meters were removed in the first
+     * place. Assert the discriminator against both fake and real node shapes.
+     */
+    function test_peak_monitor_nodes_are_filtered_from_the_mixer() {
+        const detector = { isStream: true, name: "quickshell", isSink: false, audio: {} };
+        compare(Audio.isPeakMonitorNode(detector), true);
+
+        const playback = { isStream: true, name: "Zen", isSink: true, audio: {} };
+        compare(Audio.isPeakMonitorNode(playback), false);
+
+        const capture = { isStream: true, name: "cava", isSink: false, audio: {} };
+        compare(Audio.isPeakMonitorNode(capture), false);
+
+        const device = { isStream: false, name: "quickshell", isSink: false, audio: {} };
+        compare(Audio.isPeakMonitorNode(device), false, "a device must never be filtered");
+
+        compare(Audio.isPeakMonitorNode(null), false);
+        compare(Audio.isPeakMonitorNode(undefined), false);
     }
 
     function test_the_default_state_is_silent() {

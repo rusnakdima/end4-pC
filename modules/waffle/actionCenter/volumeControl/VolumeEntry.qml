@@ -24,6 +24,14 @@ RowLayout {
         objects: [root.node]
     }
 
+    // Live level for the meter. Gated on visibility; never monitor a peak
+    // detector's own capture stream (a self-feeding recreate loop).
+    PwNodePeakMonitor {
+        id: peakMonitor
+        node: root.node
+        enabled: root.visible && !Audio.isPeakMonitorNode(root.node)
+    }
+
     WPanelIconButton {
         id: iconButton
         iconName: WIcons.audioAppIcon(root.node)
@@ -58,6 +66,12 @@ RowLayout {
             onMoved: root.node.audio.volume = value
         }
 
+        // Level meter under the slider (pavucontrol convention)
+        VolumeLevelMeter {
+            Layout.fillWidth: true
+            peak: peakMonitor.peak
+            muted: root.node?.audio.muted ?? false
+        }
     }
 
     StreamDeviceSelector {

@@ -35,9 +35,29 @@ Singleton {
     function correctType(node, isSink) {
         return (node.isSink === isSink) && node.audio
     }
+
+    /*
+     * PwNodePeakMonitor opens its own capture stream to measure a node:
+     *
+     *   application.name = "Quickshell Peak Detect"
+     *   media.class      = "Stream/Input/Audio"
+     *   node.name        = "quickshell"     <- the only field Quickshell's
+     *   stream.monitor   = true                partial property dict exposes
+     *
+     * It is isSink=false, isStream=true and has audio, so without this
+     * filter it passes appNodes(false) and shows up as a fake "quickshell"
+     * source in the Input tab. Worse, that row enables another peak monitor,
+     * which creates another capture node, which creates another row — an
+     * endless recreate loop that also resets every meter before it can
+     * accumulate a peak.
+     */
+    function isPeakMonitorNode(node) {
+        return node != null && node.isStream === true && String(node.name ?? "") === "quickshell";
+    }
+
     function appNodes(isSink) {
         return Pipewire.nodes.values.filter((node) => { // Should be list<PwNode> but it breaks ScriptModel
-            return root.correctType(node, isSink) && node.isStream
+            return root.correctType(node, isSink) && node.isStream && !root.isPeakMonitorNode(node)
         })
     }
     // Devices are matched by direction plus a media-class/name test, never

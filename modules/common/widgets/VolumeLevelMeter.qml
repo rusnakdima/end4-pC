@@ -19,7 +19,9 @@ Item {
 
     property real peak: 0          // live peak from the monitor, 0..1
     property bool muted: false
-    property real barHeight: 4
+    // Keep this thick enough to read at a glance. A 4 px line looked like
+    // an empty track when the level was low, which read as "no meter".
+    property real barHeight: 8
     property color highlightColor: Appearance?.colors.colPrimary ?? "#685496"
     property color trackColor: Appearance?.m3colors.m3secondaryContainer ?? "#F1D3F9"
     property color dangerColor: Appearance?.colors.colError ?? "#B3261E"

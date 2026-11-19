@@ -16,6 +16,15 @@ Item {
         objects: [root.node]
     }
 
+    // Live level for the meter. Gated on visibility so a closed mixer holds
+    // no capture streams, and never monitor another peak detector's stream
+    // (Audio.isPeakMonitorNode) - that is a self-feeding recreate loop.
+    PwNodePeakMonitor {
+        id: peakMonitor
+        node: root.node
+        enabled: root.visible && !Audio.isPeakMonitorNode(root.node)
+    }
+
     implicitHeight: rowLayout.implicitHeight
 
     RowLayout {
@@ -119,6 +128,14 @@ Item {
                 configuration: StyledSlider.Configuration.S
             }
 
+            // Level meter under the slider (pavucontrol convention)
+            VolumeLevelMeter {
+                Layout.fillWidth: true
+                // The column's spacing is -4; net a4 px gap under the slider
+                Layout.topMargin: 8
+                peak: peakMonitor.peak
+                muted: root.node?.audio.muted ?? false
+            }
         }
     }
 }

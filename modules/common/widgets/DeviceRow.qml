@@ -8,16 +8,20 @@ import qs.modules.common.widgets
 import qs.services
 
 /**
- * Two-line device row (per user spec):
+ * Two-line device row (per user spec), plus the level meter:
  *
  *   name device .................. mute toggler
  *   [========= volume slider =========]
+ *   [========= level meter ===========]
  *
  * The slider is full width so volume is easy to grab; the name row keeps
  * the optional icon and default-star (shown in the waffle list, hidden in
  * the Devices panel, which shows only the three essentials). Fixed-width
  * slots (icon 18 / star 18 / mute 22) keep the right edge aligned across
  * rows.
+ *
+ * The meter reads a PwNodePeakMonitor (see the pwNode property); it hides
+ * itself while no node backs the pactl name.
  *
  * State is re-asserted in `onDevChanged` because user interaction (drag)
  * severs plain declarative bindings in Qt; AudioDevices replaces the `dev`
@@ -37,6 +41,16 @@ ColumnLayout {
         : AudioDevices.source(root.deviceName)
     readonly property bool isDefault: AudioDevices.isDefault(root.deviceName)
     readonly property bool muted: root.dev?.mute ?? false
+
+    // PwNode backing this pactl-named device; null until one exists (then
+    // the meter stays hidden). The monitor binds the node only while the
+    // row is on screen, and never monitors a peak detector's own stream.
+    readonly property var pwNode: Audio.deviceNodeByName(root.deviceName, root.isOutput)
+    PwNodePeakMonitor {
+        id: peakMonitor
+        node: root.pwNode
+        enabled: root.visible && root.pwNode !== null && !Audio.isPeakMonitorNode(root.pwNode)
+    }
 
     spacing: 2
 
@@ -140,6 +154,15 @@ ColumnLayout {
         tooltipContent: `${Math.round(value)}%`
         value: root.dev ? root.dev.volume : 100
         onMoved: volTimer.restart()
+    }
+
+    // Level meter under the slider (pavucontrol convention)
+    VolumeLevelMeter {
+        visible: root.pwNode !== null
+        Layout.fillWidth: true
+        Layout.topMargin: 2
+        peak: peakMonitor.peak
+        muted: root.muted
     }
 
     Timer {
