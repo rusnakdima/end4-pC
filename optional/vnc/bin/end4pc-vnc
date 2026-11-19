@@ -10,6 +10,7 @@ never starts a second compositor.
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 import re
@@ -62,6 +63,7 @@ DEFAULTS = {
         "disableResizing": False,
     },
     "network": {
+        "bindMode": "auto",  # auto | custom
         "address": "127.0.0.1",
         "port": 5900,
         "auth": True,
@@ -333,9 +335,12 @@ def validate(cfg: dict, secret: str) -> list[str]:
         errors.append("encoding.maxFps must be a number")
 
     net = cfg.get("network") or {}
+    mode = str(net.get("bindMode") or "auto")
     address = str(net.get("address") or "").strip()
-    if not address:
-        errors.append("network.address is required")
+    if mode not in ("auto", "custom"):
+        errors.append("network.bindMode must be auto or custom")
+    if mode == "custom" and not address:
+        errors.append("network.address is required in custom bind mode")
     try:
         port = int(net.get("port", 5900))
         if port < 1024 or port > 65535:
@@ -344,7 +349,7 @@ def validate(cfg: dict, secret: str) -> list[str]:
         errors.append("network.port must be a number")
     auth = bool(net.get("auth"))
     pam = bool(net.get("pam"))
-    if not auth and not loopback(address):
+    if not auth and (mode == "auto" or not loopback(address)):
         errors.append("authentication must stay enabled unless the bind address is loopback")
     if auth:
         if not pam and not secret:
@@ -424,8 +429,6 @@ def write_wayvnc_conf(cfg: dict) -> None:
     net = cfg.get("network") or {}
     lines = [
         "use_relative_paths=false",
-        f"address={str(net.get('address') or '127.0.0.1').strip()}",
-        f"port={int(net.get('port', 5900))}",
         f"enable_auth={'true' if net.get('auth') else 'false'}",
     ]
     if net.get("auth"):
@@ -500,6 +503,13 @@ def wayvnc_args(cfg: dict) -> list[str]:
         args.append("-e")
     if beh.get("logLevel"):
         args += ["-L", str(beh["logLevel"])]
+    port = int((cfg.get("network") or {}).get("port", 5900))
+    listen = listen_addresses(cfg)
+    if not listen:
+        raise RuntimeError("no bind addresses were detected")
+    for addr in listen:
+        host = f"[{addr}]" if ":" in addr else addr
+        args.append(f"{host}:{port}")
     return args
 
 
@@ -620,29 +630,79 @@ def output_list() -> list[dict]:
     return data if isinstance(data, list) else []
 
 
-def addresses() -> list[str]:
-    out: list[str] = []
-    for value in ("127.0.0.1", "::1"):
-        out.append(value)
-    if shutil.which("tailscale"):
-        rc, text, _ = run(["tailscale", "ip", "-4"], timeout=5)
-        if rc == 0:
-            for line in text.splitlines():
-                line = line.strip()
-                if line and line not in out:
-                    out.append(line)
+LAN_IFACE_PREFIXES = ("en", "eth", "wl", "wlan")
+VIRTUAL_IFACE_PREFIXES = (
+    "lo", "tailscale", "docker", "veth", "virbr", "br-", "podman",
+    "vmnet", "tun", "wg", "zt",
+)
+
+
+def detected_addresses() -> list[dict]:
+    """Return loopback, physical Ethernet/Wi-Fi and Tailscale IPv4 addresses."""
+    out: list[dict] = []
+    seen: set[str] = set()
+
+    def add(address: str, kind: str, interface: str) -> None:
+        address = (address or "").strip()
+        if not address or address in seen:
+            return
+        seen.add(address)
+        out.append({"address": address, "kind": kind, "interface": interface})
+
+    add("127.0.0.1", "loopback", "lo")
+
     rc, text, _ = run(["ip", "-j", "addr", "show"], timeout=5)
     if rc == 0:
         try:
             for iface in json.loads(text):
+                name = str(iface.get("ifname") or "")
+                if not name or name.startswith(VIRTUAL_IFACE_PREFIXES):
+                    continue
+                if not name.startswith(LAN_IFACE_PREFIXES):
+                    continue
                 for info in iface.get("addr_info", []):
-                    if info.get("family") == "inet":
-                        local = info.get("local")
-                        if local and local not in out:
-                            out.append(local)
+                    if info.get("family") != "inet":
+                        continue
+                    local = str(info.get("local") or "")
+                    if local.startswith("169.254."):
+                        continue
+                    add(local, "lan", name)
         except ValueError:
             pass
+
+    if shutil.which("tailscale"):
+        rc, text, _ = run(["tailscale", "ip", "-4"], timeout=5)
+        if rc == 0:
+            for line in text.splitlines():
+                add(line.strip(), "tailscale", "tailscale0")
+
+    # Fallback when the tailscale CLI is unavailable but the interface exists.
+    if not any(entry["kind"] == "tailscale" for entry in out):
+        rc2, text2, _ = run(["ip", "-j", "addr", "show", "dev", "tailscale0"], timeout=5)
+        if rc2 == 0:
+            try:
+                ifaces = json.loads(text2)
+            except ValueError:
+                ifaces = []
+            for iface in ifaces:
+                for info in iface.get("addr_info", []):
+                    if info.get("family") == "inet":
+                        add(str(info.get("local") or ""), "tailscale", "tailscale0")
+
     return out
+
+
+def listen_addresses(cfg: dict) -> list[str]:
+    network = cfg.get("network") or {}
+    mode = str(network.get("bindMode") or "auto")
+    if mode == "custom":
+        address = str(network.get("address") or "").strip()
+        return [address] if address else []
+    return [entry["address"] for entry in detected_addresses()]
+
+
+def addresses() -> list[str]:
+    return [entry["address"] for entry in detected_addresses()]
 
 
 def status_payload() -> dict:
@@ -693,6 +753,8 @@ def status_payload() -> dict:
             for m in monitors_all
         ],
         "headless": current,
+        "detected": detected_addresses(),
+        "listenAddresses": listen_addresses(cfg),
         "addresses": addresses(),
         "errors": errors,
     }
@@ -725,31 +787,18 @@ def read_stdin_line() -> str:
     return line.rstrip("\r\n")
 
 
-def cmd_apply(_args: argparse.Namespace) -> int:
-    raw = sys.stdin.readline()
-    if not raw.strip():
-        raw = sys.stdin.read()
-    if not raw.strip():
-        print(json.dumps({"ok": False, "error": "empty settings payload"}))
-        return 2
-    try:
-        patch = json.loads(raw)
-    except ValueError as exc:
-        print(json.dumps({"ok": False, "error": f"invalid JSON: {exc}"}))
-        return 2
+def apply_patch(patch: dict) -> dict:
     cfg = deep_merge(load_config(), patch)
     secret = read_secret()
     errors = validate(cfg, secret)
     if errors:
-        print(json.dumps({"ok": False, "error": "; ".join(errors)}))
-        return 2
+        return {"ok": False, "error": "; ".join(errors)}
     try:
         if (cfg.get("network") or {}).get("auth"):
             ensure_tls(cfg)
         write_wayvnc_conf(cfg)
     except RuntimeError as exc:
-        print(json.dumps({"ok": False, "error": str(exc)}))
-        return 1
+        return {"ok": False, "error": str(exc)}
     old = load_config()
     save_config(cfg)
     was_autostart = bool(old.get("autostart"))
@@ -757,8 +806,7 @@ def cmd_apply(_args: argparse.Namespace) -> int:
         action = "enable" if cfg.get("autostart") else "disable"
         ok, err = systemctl(action)
         if not ok:
-            print(json.dumps({"ok": False, "error": err}))
-            return 1
+            return {"ok": False, "error": err}
     if cfg.get("capture", {}).get("mode") != "headless":
         disable_headless()
         # Virtual outputs left behind by an old experiment must not stay in
@@ -771,11 +819,26 @@ def cmd_apply(_args: argparse.Namespace) -> int:
     if active:
         ok, err = systemctl("restart")
         if not ok:
-            print(json.dumps({"ok": False, "error": err}))
-            return 1
+            return {"ok": False, "error": err}
         restarted = True
-    print(json.dumps({"ok": True, "restarted": restarted, "status": status_payload()}, indent=2))
-    return 0
+    return {"ok": True, "restarted": restarted, "status": status_payload()}
+
+
+def cmd_apply(_args: argparse.Namespace) -> int:
+    raw = sys.stdin.readline()
+    if not raw.strip():
+        raw = sys.stdin.read()
+    if not raw.strip():
+        print(json.dumps({"ok": False, "error": "empty settings payload"}))
+        return 2
+    try:
+        patch = json.loads(raw)
+    except ValueError as exc:
+        print(json.dumps({"ok": False, "error": f"invalid JSON: {exc}"}))
+        return 2
+    result = apply_patch(patch)
+    print(json.dumps(result, indent=2))
+    return 0 if result.get("ok") else 2
 
 
 def cmd_init(_args: argparse.Namespace) -> int:
@@ -933,6 +996,11 @@ def cmd_run(_args: argparse.Namespace) -> int:
     if not wait_for_hyprland():
         print(f"{APP}: the Hyprland session did not expose any outputs", file=sys.stderr)
         return 1
+    if str((cfg.get("network") or {}).get("bindMode") or "auto") == "auto" and shutil.which("tailscale"):
+        for _ in range(10):
+            if any(entry["kind"] == "tailscale" for entry in detected_addresses()):
+                break
+            time.sleep(1)
     ensure_tls(cfg)
     write_wayvnc_conf(cfg)
     headless = None
@@ -1050,9 +1118,528 @@ def watch_clients(cfg: dict, stop_event: threading.Event) -> None:
         set_inhibitor(False)
 
 
+# --------------------------------------------------------------------------
+# interactive configurator (works over ssh -t)
+# --------------------------------------------------------------------------
+
+
+def _menu_clear() -> None:
+    if sys.stdout.isatty():
+        print("\033[2J\033[H", end="")
+
+
+def _menu_input(prompt: str, default: str = "") -> str:
+    suffix = f" [{default}]" if default != "" else ""
+    try:
+        value = input(f"{prompt}{suffix}: ").strip()
+    except EOFError:
+        print()
+        raise SystemExit(0)
+    if value == "-":
+        return ""
+    return value or default
+
+
+def _menu_confirm(prompt: str, default: bool = False) -> bool:
+    raw = _menu_input(prompt + (" [Y/n]" if default else " [y/N]"), "y" if default else "n")
+    return raw.lower() in {"y", "yes"}
+
+
+def _menu_int(prompt: str, current: int, low: int, high: int) -> int:
+    while True:
+        raw = _menu_input(prompt, str(current))
+        try:
+            value = int(raw)
+        except ValueError:
+            print("Enter a number.")
+            continue
+        if low <= value <= high:
+            return value
+        print(f"Enter a value between {low} and {high}.")
+
+
+def _menu_bool(prompt: str, current: bool) -> bool:
+    return _menu_confirm(f"{prompt} (currently {'on' if current else 'off'})", current)
+
+
+def _menu_pause() -> None:
+    try:
+        input("\nPress Enter to continue...")
+    except EOFError:
+        raise SystemExit(0)
+
+
+def _auth_summary(cfg: dict) -> str:
+    net = cfg.get("network") or {}
+    if not net.get("auth"):
+        return "disabled"
+    if net.get("pam"):
+        return "TLS + PAM (system password)"
+    return "TLS + VNC password"
+
+
+def _print_summary(cfg: dict) -> None:
+    active, enabled, state = service_state()
+    net = cfg.get("network") or {}
+    cap = cfg.get("capture") or {}
+    enc = cfg.get("encoding") or {}
+    inp = cfg.get("input") or {}
+    listen = listen_addresses(cfg)
+    errors = validate(cfg, read_secret())
+    connected = clients()
+    print(f"Service : {'active' if active else state}  ({'enabled' if enabled else 'disabled'} at login)")
+    port = net.get('port', 5900)
+    bind_text = ", ".join(f"{address}:{port}" for address in listen) or "(none)"
+    print(f"Bind    : {net.get('bindMode', 'auto')} -> {bind_text}")
+    print(f"Auth    : {_auth_summary(cfg)}")
+    print(f"Capture : {cap.get('mode', 'all')}"
+          f"  fps={enc.get('maxFps', 30)}"
+          f"  cursor={'on' if enc.get('renderCursor') else 'off'}"
+          f"  input={'on' if inp.get('enabled', True) else 'view-only'}")
+    print(f"Clients : {len(connected)} connected")
+    if errors:
+        print("Problems: " + "; ".join(errors))
+
+
+def _print_addresses(cfg: dict) -> None:
+    print("Detected addresses:")
+    for entry in detected_addresses():
+        print(f"  - {entry['kind']:<9} {entry['address']:<16} ({entry['interface']})")
+    print("Listening on (after apply):")
+    for address in listen_addresses(cfg):
+        print(f"  - {address}:{cfg.get('network', {}).get('port', 5900)}")
+    port = cfg.get("network", {}).get("port", 5900)
+    print(f"Firewall helper: sudo ~/.local/bin/end4pc-vnc-firewall {port}")
+    print("Manual UFW rules:")
+    interfaces = sorted({entry["interface"] for entry in detected_addresses() if entry["kind"] in {"lan", "tailscale"}})
+    for interface in interfaces:
+        print(f"  ufw allow in on {interface} to any port {port} proto tcp")
+
+
+def _print_config(cfg: dict) -> None:
+    print(json.dumps(cfg, indent=2, sort_keys=True))
+
+
+def _service_menu(cfg: dict) -> bool:
+    dirty = False
+    while True:
+        _menu_clear()
+        active, enabled, state = service_state()
+        print("Service")
+        print("=======")
+        print(f"State: {state}; autostart: {'on' if enabled else 'off'}")
+        if dirty:
+            print("There are unapplied changes; apply them before starting if they matter.")
+        print("1) Start")
+        print("2) Stop")
+        print("3) Restart")
+        print(f"4) Autostart at login: {'on' if cfg.get('autostart') else 'off'}")
+        print("5) Show service status")
+        print("0) Back")
+        choice = _menu_input("Select")
+        if choice == "0":
+            return dirty
+        if choice == "1":
+            ok, err = systemctl("start")
+            print("Started." if ok else f"Failed: {err}")
+            _menu_pause()
+        elif choice == "2":
+            ok, err = systemctl("stop")
+            print("Stopped." if ok else f"Failed: {err}")
+            _menu_pause()
+        elif choice == "3":
+            ok, err = systemctl("restart")
+            print("Restarted." if ok else f"Failed: {err}")
+            _menu_pause()
+        elif choice == "4":
+            cfg["autostart"] = not bool(cfg.get("autostart"))
+            dirty = True
+        elif choice == "5":
+            rc, out, err = run(["systemctl", "--user", "status", SERVICE, "--no-pager"], timeout=10)
+            print(out or err)
+            _menu_pause()
+
+
+def _network_menu(cfg: dict) -> bool:
+    dirty = False
+    net = cfg.setdefault("network", {})
+    while True:
+        _menu_clear()
+        print("Network & access")
+        print("=================")
+        print(f"1) Bind mode: {net.get('bindMode', 'auto')}  (auto = localhost + LAN/Wi-Fi + Tailscale)")
+        print(f"2) Custom address: {net.get('address', '')}")
+        print(f"3) Port: {net.get('port', 5900)}")
+        print(f"4) TLS authentication: {'on' if net.get('auth') else 'off'}")
+        print(f"5) PAM authentication: {'on' if net.get('pam') else 'off'}")
+        print(f"6) Username: {net.get('username', '')}")
+        print("7) Set VNC password")
+        print("8) Regenerate TLS certificate")
+        print("9) Show detected addresses and firewall commands")
+        print("f) Apply firewall rules for this port (sudo)")
+        print("0) Back")
+        choice = _menu_input("Select")
+        if choice == "0":
+            return dirty
+        if choice == "1":
+            net["bindMode"] = "custom" if net.get("bindMode", "auto") == "auto" else "auto"
+            if net["bindMode"] == "auto" and not net.get("auth"):
+                print("Automatic mode exposes LAN/Tailscale addresses and requires authentication.")
+            dirty = True
+        elif choice == "2":
+            value = _menu_input("Custom bind address", str(net.get("address", "127.0.0.1")))
+            net["address"] = value
+            if net.get("bindMode", "auto") != "custom":
+                net["bindMode"] = "custom"
+                print("Switched to custom bind mode.")
+            dirty = True
+        elif choice == "3":
+            net["port"] = _menu_int("Port", int(net.get("port", 5900)), 1024, 65535)
+            dirty = True
+        elif choice == "4":
+            net["auth"] = _menu_bool("TLS authentication", bool(net.get("auth")))
+            dirty = True
+        elif choice == "5":
+            net["pam"] = _menu_bool("PAM authentication (system password)", bool(net.get("pam")))
+            dirty = True
+        elif choice == "6":
+            net["username"] = _menu_input("VNC username", str(net.get("username", "")))
+            dirty = True
+        elif choice == "7":
+            first = getpass.getpass("New VNC password: ")
+            second = getpass.getpass("Repeat password: ")
+            if not first or first != second:
+                print("Passwords are empty or do not match.")
+            elif first != first.strip() or "\n" in first or "\r" in first:
+                print("The password cannot contain newlines or surrounding whitespace.")
+            else:
+                write_secret(first)
+                print("Password saved. It takes effect after Apply/restart when PAM is off.")
+                dirty = True
+        elif choice == "8":
+            if not net.get("auth"):
+                print("TLS authentication is off; certificate is not used.")
+            for path in (CERT_FILE, KEY_FILE):
+                if path.exists():
+                    try:
+                        os.replace(path, path.with_suffix(path.suffix + ".bak"))
+                    except OSError:
+                        pass
+            try:
+                ensure_tls(cfg)
+                print("Certificate regenerated.")
+                print(f"SHA256: {fingerprint()}")
+            except RuntimeError as exc:
+                print(f"Failed: {exc}")
+            _menu_pause()
+        elif choice == "9":
+            _print_addresses(cfg)
+            _menu_pause()
+        elif choice.lower() == "f":
+            helper = shutil.which("end4pc-vnc-firewall") or str(HOME / ".local/bin/end4pc-vnc-firewall")
+            if not Path(helper).exists():
+                print("Firewall helper not found. Install optional/vnc/firewall.sh first.")
+            else:
+                try:
+                    rc = subprocess.run(["sudo", helper, str(net.get("port", 5900))]).returncode
+                    print("Firewall rules applied." if rc == 0 else f"Firewall helper exited with {rc}.")
+                except OSError as exc:
+                    print(f"Cannot run sudo: {exc}")
+            _menu_pause()
+
+
+def _display_menu(cfg: dict) -> bool:
+    dirty = False
+    cap = cfg.setdefault("capture", {})
+    enc = cfg.setdefault("encoding", {})
+    while True:
+        _menu_clear()
+        outputs = physical_outputs()
+        print("Capture & encoding")
+        print("==================")
+        print(f"1) Capture mode: {cap.get('mode', 'all')}")
+        print(f"2) Output: {cap.get('output', '')}")
+        print(f"3) Maximum FPS: {enc.get('maxFps', 30)}")
+        print(f"4) Render cursor: {'on' if enc.get('renderCursor') else 'off'}")
+        print(f"5) GPU acceleration: {'on' if enc.get('gpu') else 'off'}")
+        print(f"6) Disable client resizing: {'on' if enc.get('disableResizing') else 'off'}")
+        print("0) Back")
+        choice = _menu_input("Select")
+        if choice == "0":
+            return dirty
+        if choice == "1":
+            cap["mode"] = "single" if cap.get("mode", "all") == "all" else "all"
+            print(f"Capture mode: {cap['mode']}")
+            dirty = True
+        elif choice == "2":
+            if not outputs:
+                print("No physical outputs were detected.")
+                _menu_pause()
+                continue
+            for index, output in enumerate(outputs, 1):
+                print(f"  {index}) {output.get('name')}  {output.get('width')}x{output.get('height')}")
+            raw = _menu_input("Output number", "1")
+            try:
+                chosen = outputs[int(raw) - 1]
+                cap["output"] = str(chosen.get("name"))
+                cap["mode"] = "single"
+                dirty = True
+            except (ValueError, IndexError):
+                print("Invalid output.")
+                _menu_pause()
+        elif choice == "3":
+            enc["maxFps"] = _menu_int("Maximum FPS", int(enc.get("maxFps", 30)), 1, 120)
+            dirty = True
+        elif choice == "4":
+            enc["renderCursor"] = _menu_bool("Render cursor", bool(enc.get("renderCursor")))
+            dirty = True
+        elif choice == "5":
+            enc["gpu"] = _menu_bool("GPU acceleration", bool(enc.get("gpu")))
+            dirty = True
+        elif choice == "6":
+            enc["disableResizing"] = _menu_bool("Disable client resizing", bool(enc.get("disableResizing")))
+            dirty = True
+
+
+def _input_menu(cfg: dict) -> bool:
+    dirty = False
+    inp = cfg.setdefault("input", {})
+    xkb = inp.setdefault("xkb", {})
+    while True:
+        _menu_clear()
+        print("Input & keyboard")
+        print("================")
+        print(f"1) Allow remote input: {'on' if inp.get('enabled', True) else 'view-only'}")
+        print(f"2) Match host keyboard: {'on' if inp.get('matchHostKeyboard', True) else 'off'}")
+        if not inp.get("matchHostKeyboard", True):
+            print(f"3) XKB layout: {xkb.get('layout', '')}")
+            print(f"4) XKB options: {xkb.get('options', '')}")
+            print(f"5) XKB variant: {xkb.get('variant', '')}")
+            print(f"6) XKB model: {xkb.get('model', '')}")
+            print(f"7) XKB rules: {xkb.get('rules', '')}")
+        print(f"8) Seat: {inp.get('seat', '') or 'default'}")
+        print("0) Back")
+        choice = _menu_input("Select")
+        if choice == "0":
+            return dirty
+        if choice == "1":
+            inp["enabled"] = _menu_bool("Allow remote input", bool(inp.get("enabled", True)))
+            dirty = True
+        elif choice == "2":
+            inp["matchHostKeyboard"] = _menu_bool("Match host keyboard", bool(inp.get("matchHostKeyboard", True)))
+            dirty = True
+        elif choice == "3":
+            xkb["layout"] = _menu_input("XKB layout", str(xkb.get("layout", "")))
+            dirty = True
+        elif choice == "4":
+            xkb["options"] = _menu_input("XKB options", str(xkb.get("options", "")))
+            dirty = True
+        elif choice == "5":
+            xkb["variant"] = _menu_input("XKB variant", str(xkb.get("variant", "")))
+            dirty = True
+        elif choice == "6":
+            xkb["model"] = _menu_input("XKB model", str(xkb.get("model", "")))
+            dirty = True
+        elif choice == "7":
+            xkb["rules"] = _menu_input("XKB rules", str(xkb.get("rules", "")))
+            dirty = True
+        elif choice == "8":
+            inp["seat"] = _menu_input("Seat (empty = default)", str(inp.get("seat", "")))
+            dirty = True
+
+
+def _behavior_menu(cfg: dict) -> bool:
+    dirty = False
+    beh = cfg.setdefault("behavior", {})
+    levels = ["error", "warning", "info", "debug", "trace", "quiet"]
+    while True:
+        _menu_clear()
+        print("Behaviour")
+        print("=========")
+        print(f"1) Lock session when the last client disconnects: {'on' if beh.get('lockOnDisconnect') else 'off'}")
+        print(f"2) Inhibit idle while connected: {'on' if beh.get('inhibitIdle') else 'off'}")
+        print(f"3) Stop VNC when the last client disconnects: {'on' if beh.get('exitOnDisconnect') else 'off'}")
+        print(f"4) Log level: {beh.get('logLevel', 'warning')}")
+        print("0) Back")
+        choice = _menu_input("Select")
+        if choice == "0":
+            return dirty
+        if choice == "1":
+            beh["lockOnDisconnect"] = _menu_bool("Lock on disconnect", bool(beh.get("lockOnDisconnect")))
+            dirty = True
+        elif choice == "2":
+            beh["inhibitIdle"] = _menu_bool("Inhibit idle while connected", bool(beh.get("inhibitIdle")))
+            dirty = True
+        elif choice == "3":
+            beh["exitOnDisconnect"] = _menu_bool("Stop VNC on last disconnect", bool(beh.get("exitOnDisconnect")))
+            dirty = True
+        elif choice == "4":
+            for index, level in enumerate(levels, 1):
+                print(f"  {index}) {level}")
+            raw = _menu_input("Log level number", str(levels.index(beh.get("logLevel", "warning")) + 1))
+            try:
+                beh["logLevel"] = levels[int(raw) - 1]
+                dirty = True
+            except (ValueError, IndexError):
+                print("Invalid level.")
+                _menu_pause()
+
+
+def _clients_menu() -> None:
+    while True:
+        _menu_clear()
+        connected = clients()
+        print("Clients & outputs")
+        print("=================")
+        if not connected:
+            print("No clients connected.")
+        for client in connected:
+            print(f"  id={client.get('id')}  address={client.get('address')}  user={client.get('username')}")
+        print("d) Disconnect a client")
+        print("o) List outputs and switch the captured output")
+        print("r) Refresh")
+        print("0) Back")
+        choice = _menu_input("Select")
+        if choice == "0":
+            return
+        if choice == "d":
+            client_id = _menu_input("Client id")
+            if client_id:
+                rc, out, err = wayvncctl(["client-disconnect", client_id])
+                print("Disconnected." if rc == 0 else f"Failed: {(err or out).strip()}")
+                _menu_pause()
+        elif choice == "o":
+            outputs = output_list()
+            if not outputs:
+                print("No output list available (is the service running?).")
+            else:
+                for index, output in enumerate(outputs, 1):
+                    print(f"  {index}) {output.get('name')} captured={output.get('captured')}")
+                raw = _menu_input("Output number", "1")
+                try:
+                    name = outputs[int(raw) - 1].get("name")
+                    rc, out, err = wayvncctl(["output-set", str(name)])
+                    print(f"Switched to {name}." if rc == 0 else f"Failed: {(err or out).strip()}")
+                except (ValueError, IndexError):
+                    print("Invalid output.")
+            _menu_pause()
+
+
+def _logs_menu() -> None:
+    _menu_clear()
+    rc, out, err = run(["journalctl", "--user", "-u", SERVICE, "-n", "120", "--no-pager"], timeout=10)
+    print(out or err or "No log output.")
+    _menu_pause()
+
+
+def _review_menu(cfg: dict) -> tuple[dict, dict, bool]:
+    dirty = True
+    while True:
+        _menu_clear()
+        print("Review / apply")
+        print("==============")
+        print("Pending configuration:")
+        _print_config(cfg)
+        errors = validate(cfg, read_secret())
+        if errors:
+            print("\nProblems:")
+            for error in errors:
+                print(f"  - {error}")
+        print("\n1) Apply and restart VNC if it is running")
+        print("2) Reload configuration from disk (discard pending changes)")
+        print("3) Discard pending changes")
+        print("0) Back")
+        choice = _menu_input("Select")
+        if choice == "0":
+            return cfg, load_config(), True
+        if choice == "1":
+            result = apply_patch(cfg)
+            if result.get("ok"):
+                print("Applied.")
+                if result.get("restarted"):
+                    print("VNC restarted with the new configuration.")
+                return load_config(), load_config(), False
+            print(f"Failed: {result.get('error', 'unknown error')}")
+            _menu_pause()
+        elif choice == "2":
+            return load_config(), load_config(), False
+        elif choice == "3":
+            return load_config(), load_config(), False
+
+
+def cmd_menu(_args: argparse.Namespace) -> int:
+    cfg = load_config()
+    original = json.loads(json.dumps(cfg))
+    dirty = False
+    try:
+        while True:
+            _menu_clear()
+            print(f"{APP} interactive configurator")
+            print("=" * 42)
+            _print_summary(cfg)
+            print()
+            print("1) Status, addresses and validation")
+            print("2) Service start/stop/restart/autostart")
+            print("3) Network & access (bind mode, port, TLS/PAM)")
+            print("4) Capture & encoding")
+            print("5) Input & keyboard")
+            print("6) Behaviour")
+            print("7) Clients & live outputs")
+            print("8) Service log")
+            print("9) Review / apply changes")
+            print("0) Exit")
+            if dirty:
+                print("\n* unsaved changes")
+            choice = _menu_input("Select")
+            if choice == "0":
+                if dirty:
+                    if _menu_confirm("Apply changes before exit?", True):
+                        result = apply_patch(cfg)
+                        if not result.get("ok"):
+                            print(f"Failed: {result.get('error')}")
+                            _menu_pause()
+                            continue
+                        print("Applied.")
+                return 0
+            if choice == "1":
+                _menu_clear()
+                _print_summary(cfg)
+                print()
+                _print_addresses(cfg)
+                print("\nActive clients:")
+                for client in clients():
+                    print(f"  id={client.get('id')} address={client.get('address')} user={client.get('username')}")
+                errors = validate(cfg, read_secret())
+                print("\nValidation: " + ("OK" if not errors else "; ".join(errors)))
+                _menu_pause()
+            elif choice == "2":
+                dirty = _service_menu(cfg) or dirty
+            elif choice == "3":
+                dirty = _network_menu(cfg) or dirty
+            elif choice == "4":
+                dirty = _display_menu(cfg) or dirty
+            elif choice == "5":
+                dirty = _input_menu(cfg) or dirty
+            elif choice == "6":
+                dirty = _behavior_menu(cfg) or dirty
+            elif choice == "7":
+                _clients_menu()
+            elif choice == "8":
+                _logs_menu()
+            elif choice == "9":
+                cfg, original, dirty = _review_menu(cfg)
+    except KeyboardInterrupt:
+        print("\nInterrupted.")
+        return 130
+
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog=APP)
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("menu", aliases=["configure", "tui"], help="interactive configurator (use over ssh -t)")
+    p.set_defaults(func=cmd_menu)
 
     p = sub.add_parser("status", help="print the complete status as JSON")
     p.set_defaults(func=cmd_status)

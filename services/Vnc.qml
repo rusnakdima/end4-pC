@@ -29,6 +29,8 @@ Singleton {
     property var outputs: []
     property var monitors: []
     property var addresses: []
+    property var detectedAddresses: []
+    property var listenAddresses: []
     property var statusErrors: []
     property bool serviceActive: false
     property bool serviceEnabled: false
@@ -58,6 +60,8 @@ Singleton {
         root.outputs = s.outputs ?? []
         root.monitors = s.monitors ?? []
         root.addresses = s.addresses ?? []
+        root.detectedAddresses = s.detected ?? []
+        root.listenAddresses = s.listenAddresses ?? []
         root.statusErrors = s.errors ?? []
         root.serviceActive = !!s.serviceActive
         root.serviceEnabled = !!s.serviceEnabled

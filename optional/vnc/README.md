@@ -62,28 +62,46 @@ The installer generates a random VNC password in
 **Settings → VNC → Network & Security** before connecting, or read that file
 locally and replace it from Settings.
 
-The bind address is selected in **Settings → VNC → Network & Security**:
+The bind mode is selected in **Settings → VNC → Network & Security**:
 
-| Button | Bind address | Use |
+| Mode | Addresses | Use |
 |---|---|---|
-| Localhost | `127.0.0.1` | Default. Reach the desktop from anywhere through an SSH tunnel: `ssh -L 5900:127.0.0.1:5900 user@host`, then connect a VNC client to `localhost:5900`. |
-| LAN + VPN | `0.0.0.0` | Reachable from the local network **and** over Tailscale/VPN at the same time. |
-| Tailscale | detected `100.x` address | Private tailnet only; not visible on the LAN. |
+| Automatic (default) | `127.0.0.1`, every physical Ethernet/Wi-Fi IPv4, and the Tailscale IPv4 | Local SSH tunnel, same LAN, and the private tailnet at the same time. |
+| Custom | One address you type | A single interface or `0.0.0.0` when you deliberately want all interfaces. |
+
+Examples with port `5901`:
+
+```bash
+# SSH tunnel from anywhere
+ssh -L 5901:127.0.0.1:5901 user@host
+# then connect the VNC client to localhost:5901
+
+# Same Ethernet/Wi-Fi network
+vncviewer <ethernet-ip>:5901
+vncviewer <wifi-ip>:5901
+
+# Tailscale / VPN
+vncviewer <tailscale-ip>:5901
+```
 
 In every case, accept the self-signed certificate fingerprint shown in
 Settings → VNC → Network & Security on first connect.
 
 ## Security
 
-- TLS authentication and a VNC password are enabled by default, also when
-  binding to `0.0.0.0`. Keep them enabled on any non-loopback bind.
-- The password is stored in `vnc.secret` with mode `600`; it is never printed by
-  `status` and never returned to the Settings page.
-- If authentication is disabled, the controller refuses any bind address that
-  is not loopback.
-- `0.0.0.0` exposes port 5900 on every interface, including Wi‑Fi. Use a strong
-  password and, on an untrusted LAN, restrict port 5900 with a firewall. Prefer
-  the Tailscale bind or an SSH tunnel when the LAN is not trusted.
+- TLS authentication is enabled by default. Automatic bind mode refuses to
+  start without authentication because it exposes LAN and Tailscale addresses.
+- PAM is available and uses the system password; otherwise a VNC password is
+  stored in `vnc.secret` with mode `600`. It is never printed by `status` and
+  never returned to the Settings page.
+- If authentication is disabled, only a loopback bind is allowed.
+- UFW must allow the port on each exposed interface. Run once as root:
+  ```bash
+  sudo ~/.local/bin/end4pc-vnc-firewall 5901
+  ```
+  This allows `lo`, `tailscale0`, and every physical `en*`/`eth*`/`wl*`/
+  `wlan*` interface. It deliberately does not open docker, libvirt, or the
+  hotspot interface.
 - The self-signed certificate is intentionally local; compare its SHA256
   fingerprint on first connect.
 
@@ -93,7 +111,8 @@ Settings → VNC → Network & Security on first connect.
 
 - service start/stop/restart and autostart;
 - capture mode, output, FPS, cursor, GPU, resizing;
-- bind address, port, TLS, username, password, certificate, PAM;
+- automatic or custom bind mode, port, TLS, username, password, certificate, PAM;
+- detected loopback, Ethernet/Wi-Fi and Tailscale addresses with firewall hints;
 - remote input and keyboard layout;
 - lock-on-disconnect, idle inhibition, exit-on-disconnect, log level;
 - connected clients, outputs, diagnostics, SSH tunnel command and logs.
@@ -102,6 +121,22 @@ The page stages changes and sends one JSON patch to the controller. The
 controller validates, writes atomically and restarts the user service when
 needed. The page never writes `~/.config/illogical-impulse/config.json` and
 never restarts Quickshell.
+
+## Interactive configurator over SSH
+
+The same controller has a text menu built for SSH:
+
+```bash
+ssh -t user@host
+vnc-configurator
+# or
+end4pc-vnc menu
+```
+
+It covers the service, bind mode, port, TLS/PAM/password, capture, encoding,
+input, behaviour, clients, live output switching and logs. Changes are staged;
+the menu applies them through the same validated controller as the Settings
+page. It needs a TTY (`ssh -t`) for prompts and password entry.
 
 ## CLI
 
@@ -117,6 +152,7 @@ never restarts Quickshell.
 ~/.local/bin/end4pc-vnc output-set HDMI-A-2
 ~/.local/bin/end4pc-vnc desktop-name "end4-pC"
 ~/.local/bin/end4pc-vnc log -n 200
+~/.local/bin/end4pc-vnc menu        # interactive configurator
 ```
 
 The QML singleton also exposes `qs -c end4-pC ipc call vnc refresh` and

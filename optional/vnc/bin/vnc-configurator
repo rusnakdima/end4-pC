@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Interactive end4-pC VNC configurator. Safe over an SSH TTY.
+set -euo pipefail
+dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$dir/end4pc-vnc" menu "$@"

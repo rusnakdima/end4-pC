@@ -20,6 +20,8 @@ for cmd in wayvnc wayvncctl openssl systemctl install; do
 done
 
 install -Dm755 "$here/bin/end4pc-vnc" "$HOME/.local/bin/end4pc-vnc"
+install -Dm755 "$here/bin/vnc-configurator" "$HOME/.local/bin/vnc-configurator"
+install -Dm755 "$here/firewall.sh" "$HOME/.local/bin/end4pc-vnc-firewall"
 install -Dm644 "$here/systemd/wayvnc.service" "$HOME/.config/systemd/user/wayvnc.service"
 
 "$HOME/.local/bin/end4pc-vnc" init
@@ -42,17 +44,24 @@ cat <<EOF
 
 Installed:
   $HOME/.local/bin/end4pc-vnc
+  $HOME/.local/bin/vnc-configurator
+  $HOME/.local/bin/end4pc-vnc-firewall
   $HOME/.config/systemd/user/wayvnc.service
   $HOME/.config/end4-pC/vnc.json
   $HOME/.config/end4-pC/vnc.secret   (mode 600)
   $HOME/.config/end4-pC/vnc/         (TLS certificate + generated wayvnc config)
 
-Open Settings → VNC to manage capture, TLS, password, input and behaviour.
-The default bind is 127.0.0.1:5900; use an SSH tunnel or set a Tailscale
-address in Settings.  VNC carries no audio.
+Open Settings → VNC or run the interactive configurator over SSH:
+  ssh -t user@host vnc-configurator
+  ssh -t user@host end4pc-vnc menu
+
+The default bind mode is automatic: 127.0.0.1, every physical Ethernet/Wi-Fi
+IPv4 address, and the Tailscale IPv4 address.  Allow the chosen port in the
+firewall (run once):
+  sudo $HOME/.local/bin/end4pc-vnc-firewall 5901
 
 Start now:
   systemctl --user start wayvnc.service
 
-Or start at login from the VNC Settings page.
+Or start at login from the VNC Settings page.  VNC carries no audio.
 EOF

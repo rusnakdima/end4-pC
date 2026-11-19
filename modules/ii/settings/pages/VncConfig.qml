@@ -38,7 +38,8 @@ ContentPage {
     readonly property bool unsupportedMode: !["all", "single"].includes(page.get("capture.mode", "all"))
     readonly property bool pamMode: page.get("network.pam", false)
     readonly property bool authOff: !page.get("network.auth", true)
-    readonly property string tailscaleAddress: (Vnc.addresses ?? []).find(a => a.startsWith("100.")) ?? ""
+    readonly property string bindMode: page.get("network.bindMode", "auto")
+    readonly property string tailscaleAddress: (Vnc.detectedAddresses ?? []).find(a => a.kind === "tailscale")?.address ?? (Vnc.addresses ?? []).find(a => a.startsWith("100.")) ?? ""
 
     function detectedOutput() {
         const monitors = (Vnc.monitors ?? []).filter(m => !m.disabled)
@@ -130,9 +131,19 @@ ContentPage {
         Quickshell.clipboardText = text
     }
 
+    function listenSummary() {
+        const port = page.get("network.port", 5900)
+        const list = Vnc.listenAddresses ?? []
+        if (list.length > 0)
+            return list.map(address => `${address}:${port}`).join(", ")
+        return `${page.get("network.address", "127.0.0.1")}:${port}`
+    }
+
     function sshCommand() {
         const port = page.get("network.port", 5900)
-        const bind = page.get("network.address", "127.0.0.1")
+        const bind = page.bindMode === "auto"
+            ? "127.0.0.1"
+            : page.get("network.address", "127.0.0.1")
         const target = (bind === "0.0.0.0" || bind === "::") ? "127.0.0.1" : bind
         const user = page.get("network.username", "user") || "user"
         return `ssh -L ${port}:${target}:${port} ${user}@${Vnc.hostname || "<host>"}`
@@ -211,8 +222,9 @@ ContentPage {
 
                     StyledText {
                         Layout.fillWidth: true
-                        text: `${page.get("network.address", "127.0.0.1")}:${page.get("network.port", 5900)}`
+                        text: page.listenSummary()
                         color: Appearance.colors.colSubtext
+                        wrapMode: Text.Wrap
                     }
 
                     StyledText {
@@ -373,9 +385,54 @@ ContentPage {
                 Layout.fillWidth: true
                 spacing: 10
 
+                ConfigSelectionArray {
+                    text: Translation.tr("Bind addresses")
+                    icon: "lan"
+                    options: [
+                        { displayName: Translation.tr("Automatic (localhost + LAN + Tailscale)"), icon: "hub", value: "auto" },
+                        { displayName: Translation.tr("Custom address"), icon: "settings_ethernet", value: "custom" }
+                    ]
+                    currentValue: page.bindMode
+                    onSelected: value => page.set("network.bindMode", value)
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    visible: page.bindMode === "auto"
+                    spacing: 2
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: Translation.tr("Automatically binds:")
+                        color: Appearance.colors.colOnSecondaryContainer
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                    }
+
+                    Repeater {
+                        model: Vnc.detectedAddresses
+                        delegate: StyledText {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            text: `${modelData.kind === "loopback" ? "Localhost" : modelData.kind === "tailscale" ? "Tailscale" : "LAN"} · ${modelData.address}${modelData.interface ? " (" + modelData.interface + ")" : ""}`
+                            color: Appearance.colors.colSubtext
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            wrapMode: Text.Wrap
+                        }
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: Translation.tr("The firewall must allow TCP %1 on the Ethernet/Wi-Fi and Tailscale interfaces.").arg(page.get("network.port", 5900))
+                        color: Appearance.colors.colSubtext
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        wrapMode: Text.Wrap
+                    }
+                }
+
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 8
+                    visible: page.bindMode === "custom"
 
                     MaterialTextField {
                         id: addressField
@@ -416,7 +473,7 @@ ContentPage {
 
                 StyledText {
                     Layout.fillWidth: true
-                    visible: page.get("network.address", "127.0.0.1") === "0.0.0.0"
+                    visible: page.bindMode === "custom" && page.get("network.address", "127.0.0.1") === "0.0.0.0"
                     text: Translation.tr("All interfaces: reachable from the local network and over Tailscale/VPN. Keep TLS authentication and a strong password enabled, or restrict access with a firewall.")
                     color: Appearance.colors.colSubtext
                     font.pixelSize: Appearance.font.pixelSize.smaller
