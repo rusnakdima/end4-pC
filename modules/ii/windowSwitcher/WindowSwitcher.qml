@@ -524,8 +524,9 @@ Scope {
                     else root.step(1);
                     event.accepted = true;
                 } else if (event.nativeScanCode === 33 || event.nativeScanCode === 41 || event.key === Qt.Key_G) {
-                    // Fallback for layouts where the ALT+G compositor chord
-                    // does not match; date-based debounce in toggleView()
+                    // scan 41 is the physical G key (evdev 33 / XKB 41). On
+                    // this layout it produces the F keysym, so Qt.Key_G alone
+                    // cannot match. Date-based debounce in toggleView()
                     // prevents a double toggle when both paths fire.
                     root.toggleView();
                     event.accepted = true;
