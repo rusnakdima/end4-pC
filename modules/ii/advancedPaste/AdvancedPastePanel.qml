@@ -124,7 +124,7 @@ Window {
         ListElement { transformId: "upper";        label: "UPPERCASE";     icon: "arrow_upward";   hint: ""; colorOnly: false }
         ListElement { transformId: "lower";        label: "lowercase";     icon: "arrow_downward"; hint: ""; colorOnly: false }
         ListElement { transformId: "title";        label: "Title Case";    icon: "text_format";    hint: ""; colorOnly: false }
-        ListElement { transformId: "ai";           label: "AI transform";  icon: "auto_awesome";   hint: "Optional, needs a local or online model"; colorOnly: false }
+        ListElement { transformId: "ai";           label: "AI transform";  icon: "wand_stars";   hint: "Optional, needs a local or online model"; colorOnly: false }
         ListElement { transformId: "color_hex";     label: "HEX";           icon: "palette";        hint: "#RRGGBB"; colorOnly: true }
         ListElement { transformId: "color_rgb";     label: "RGB";           icon: "palette";        hint: "rgb(r, g, b)"; colorOnly: true }
         ListElement { transformId: "color_css";     label: "CSS rgba()";    icon: "code";           hint: "rgba(r, g, b, a)"; colorOnly: true }

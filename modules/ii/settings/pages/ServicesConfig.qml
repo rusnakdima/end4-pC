@@ -44,7 +44,7 @@ ContentPage {
                         Qt.callLater(() => Ai.setModel(Ai.preferredModelId()));
                     }
                     options: [
-                        { icon: "auto_awesome",    tooltip: Translation.tr("Auto (local first)"), value: "auto" },
+                        { icon: "wand_stars",      tooltip: Translation.tr("Auto (local first)"), value: "auto" },
                         { icon: "smart_toy",       tooltip: "Ollama",                             value: "ollama" },
                         { icon: "model_training",  tooltip: "LM Studio",                          value: "lmstudio" },
                         { icon: "dns",             tooltip: "vLLM",                               value: "vllm" },

@@ -21,7 +21,7 @@ ContentPage {
 
             GroupedList {
                 ConfigSwitch {
-                    buttonIcon: "auto_awesome"
+                    buttonIcon: "wand_stars"
                     text: Translation.tr("Offer AI transform (offline fallback)")
                     checked: Config.options.advancedPaste.showAi
                     onCheckedChanged: { Config.options.advancedPaste.showAi = checked; }
@@ -29,13 +29,14 @@ ContentPage {
                 ConfigSelectionArray {
                     text: Translation.tr("Default transform")
                     icon: "text_fields"
+                    showTooltips: true
                     currentValue: Config.options.advancedPaste.defaultTransform
                     onSelected: newValue => { Config.options.advancedPaste.defaultTransform = newValue }
                     options: [
-                        { displayName: Translation.tr("Plain text"), icon: "text_fields", value: "plain" },
-                        { displayName: Translation.tr("Markdown"), icon: "markdown", value: "markdown" },
-                        { displayName: Translation.tr("JSON string"), icon: "data_object", value: "json_escape" },
-                        { displayName: Translation.tr("Code block"), icon: "terminal", value: "codeblock" }
+                        { icon: "text_fields", tooltip: Translation.tr("Plain text"), value: "plain" },
+                        { icon: "markdown",    tooltip: Translation.tr("Markdown"), value: "markdown" },
+                        { icon: "data_object", tooltip: Translation.tr("JSON string"), value: "json_escape" },
+                        { icon: "terminal",    tooltip: Translation.tr("Code block"), value: "codeblock" }
                     ]
                 }
                 ConfigSwitch {
@@ -53,7 +54,8 @@ ContentPage {
                 ConfigTextArea {
                     id: aiPromptField
                     Layout.fillWidth: true
-                    fieldWidth: 430
+                    fieldWidth: 260
+                    Layout.minimumWidth: 220
                     buttonIcon: "edit_note"
                     text: Translation.tr("AI transform prompt")
                     value: Config.options.advancedPaste.aiPrompt
