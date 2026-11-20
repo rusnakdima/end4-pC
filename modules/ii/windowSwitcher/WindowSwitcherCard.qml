@@ -28,6 +28,7 @@ Item {
     property bool previewActive: true
 
     signal requestActivate()
+    signal requestWheel(real delta)
 
     readonly property var windowData: root.entry ? root.entry.windowData : null
     readonly property string iconPath: SystemAppearance.iconPath(AppSearch.guessIcon(root.windowData?.class), "")
@@ -163,5 +164,9 @@ Item {
         acceptedButtons: Qt.LeftButton
         cursorShape: Qt.PointingHandCursor
         onClicked: root.requestActivate()
+        onWheel: wheel => {
+            if (wheel.angleDelta.y !== 0)
+                root.requestWheel(wheel.angleDelta.y)
+        }
     }
 }

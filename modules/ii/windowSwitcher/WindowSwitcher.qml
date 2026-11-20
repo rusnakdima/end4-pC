@@ -114,6 +114,20 @@ Scope {
     }
     readonly property real gridCardHeight: root.gridCardWidth / 1.6
 
+    // Grid zoom, driven by the wheel or +/- keys. The Behavior makes every
+    // step a short animation, so previews grow and shrink smoothly.
+    property real gridZoom: 1.0
+    readonly property real minGridZoom: 0.5
+    readonly property real maxGridZoom: 2.2
+    Behavior on gridZoom {
+        NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+    }
+    function zoomGrid(delta) {
+        if (root.viewMode !== "grid")
+            return;
+        root.gridZoom = Math.max(root.minGridZoom, Math.min(root.maxGridZoom, root.gridZoom + delta));
+    }
+
     readonly property var selectedEntry: root.entries.length > 0
         ? root.entries[Math.max(0, Math.min(root.selectedIndex, root.entries.length - 1))]
         : null
@@ -171,9 +185,18 @@ Scope {
             const windowData = HyprlandData.windowByAddress[address];
             if (!windowData)
                 continue;
-            if (windowData.hidden || windowData.mapped === false)
-                continue;
-            windows.push({ toplevel: toplevel, address: address, windowData: windowData });
+            // A minimized client is hidden from the layout but must stay in
+            // alt-tab: the shell's own minimize button depends on the window
+            // remaining reachable here. ToplevelManager already guarantees
+            // the window is alive, so a dead client cannot reach this point.
+            // Carry the flag through instead of dropping the entry; a card
+            // can use it to show a "minimized" hint if it wants to.
+            windows.push({
+                toplevel: toplevel,
+                address: address,
+                windowData: windowData,
+                minimized: windowData.hidden === true || windowData.mapped === false
+            });
         }
 
         // focusHistoryID is Hyprland's MRU index (0 = focused). Filtering later
@@ -488,7 +511,11 @@ Scope {
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 onClicked: root.cancel()
                 onWheel: wheel => {
-                    if (wheel.angleDelta.y !== 0)
+                    if (wheel.angleDelta.y === 0)
+                        return;
+                    if (root.viewMode === "grid" && !(wheel.modifiers & Qt.ControlModifier))
+                        root.zoomGrid(wheel.angleDelta.y < 0 ? -0.12 : 0.12);
+                    else
                         root.step(wheel.angleDelta.y < 0 ? 1 : -1);
                 }
             }
@@ -533,6 +560,12 @@ Scope {
                 } else if (event.nativeScanCode === 50 || event.nativeScanCode === 58 || event.key === Qt.Key_M) {
                     // Same fallback for the workspace-scope toggle.
                     root.toggleWorkspaceScope();
+                    event.accepted = true;
+                } else if (event.key === Qt.Key_Plus || event.key === Qt.Key_Equal) {
+                    root.zoomGrid(0.12);
+                    event.accepted = true;
+                } else if (event.key === Qt.Key_Minus) {
+                    root.zoomGrid(-0.12);
                     event.accepted = true;
                 }
             }
@@ -684,6 +717,24 @@ Scope {
                                 }
                             }
                             Rectangle {
+                                visible: root.viewMode === "grid"
+                                anchors.verticalCenter: parent.verticalCenter
+                                implicitWidth: zoomLabel.implicitWidth + 16
+                                implicitHeight: 22
+                                radius: 11
+                                color: ColorUtils.applyAlpha("#ffffff", 0.10)
+                                border.width: 1
+                                border.color: ColorUtils.applyAlpha("#ffffff", 0.18)
+                                StyledText {
+                                    id: zoomLabel
+                                    anchors.centerIn: parent
+                                    text: `${Math.round(root.gridZoom * 100)}%`
+                                    font.pixelSize: Appearance.font.pixelSize.smaller
+                                    font.features: ({ "tnum": 1 })
+                                    color: "#ffffff"
+                                }
+                            }
+                            Rectangle {
                                 visible: root.locked
                                 anchors.verticalCenter: parent.verticalCenter
                                 implicitWidth: pinnedLabel.implicitWidth + 16
@@ -748,6 +799,7 @@ Scope {
                                 root.select(index);
                                 root.commit();
                             }
+                            onRequestWheel: delta => root.step(delta < 0 ? 1 : -1)
 
                             Behavior on x {
                                 animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(card)
@@ -780,6 +832,8 @@ Scope {
                         anchors.centerIn: parent
                         columns: root.gridColumns
                         spacing: root.gridSpacing
+                        scale: root.gridZoom
+                        transformOrigin: Item.Center
 
                         Repeater {
                             model: root.entries
@@ -799,6 +853,7 @@ Scope {
                                     root.select(index);
                                     root.commit();
                                 }
+                                onRequestWheel: delta => root.zoomGrid(delta < 0 ? -0.12 : 0.12)
                             }
                         }
                     }
@@ -880,75 +935,79 @@ Scope {
                     }
                 }
 
-                // Key hints, kept quiet so they do not compete with the cards.
+                // Key hints on a themed pill so they stay readable over any
+                // wallpaper without competing with the cards.
                 Item {
                     width: parent.width
-                    height: hintRow.implicitHeight
+                    height: hintPill.implicitHeight
 
-                    Row {
-                        id: hintRow
+                    Rectangle {
+                        id: hintPill
                         anchors.centerIn: parent
-                        spacing: 7
+                        implicitWidth: hintRow.implicitWidth + 28
+                        implicitHeight: hintRow.implicitHeight + 12
+                        radius: 16
+                        color: root.pillColor
+                        border.width: 1
+                        border.color: root.pillBorderColor
 
-                        KeyCap { label: "Alt" }
-                        KeyCap { label: "Tab" }
-                        StyledText {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: Translation.tr("cycle")
-                            font.pixelSize: Appearance.font.pixelSize.smaller
-                            color: root.hintColor
-                        }
-                        Item {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 10
-                            height: 1
-                        }
-                        KeyCap { label: "Alt" }
-                        KeyCap { label: "G" }
-                        StyledText {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: Translation.tr("view")
-                            font.pixelSize: Appearance.font.pixelSize.smaller
-                            color: root.hintColor
-                        }
-                        Item {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 10
-                            height: 1
-                        }
-                        KeyCap { label: "Alt" }
-                        KeyCap { label: "M" }
-                        StyledText {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: Translation.tr("scope")
-                            font.pixelSize: Appearance.font.pixelSize.smaller
-                            color: root.hintColor
-                        }
-                        Item {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 10
-                            height: 1
-                        }
-                        KeyCap { label: "Alt" }
-                        KeyCap { label: "Ctrl" }
-                        KeyCap { label: "Tab" }
-                        StyledText {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: Translation.tr("pin")
-                            font.pixelSize: Appearance.font.pixelSize.smaller
-                            color: root.hintColor
-                        }
-                        Item {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 10
-                            height: 1
-                        }
-                        KeyCap { label: "Esc" }
-                        StyledText {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: Translation.tr("cancel")
-                            font.pixelSize: Appearance.font.pixelSize.smaller
-                            color: root.hintColor
+                        Row {
+                            id: hintRow
+                            anchors.centerIn: parent
+                            spacing: 7
+
+                            KeyCap { label: "Alt" }
+                            KeyCap { label: "Tab" }
+                            StyledText {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: Translation.tr("cycle")
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                color: Appearance.colors.colOnSurfaceVariant
+                            }
+                            Item { anchors.verticalCenter: parent.verticalCenter; width: 10; height: 1 }
+                            KeyCap { label: "Alt" }
+                            KeyCap { label: "G" }
+                            StyledText {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: Translation.tr("view")
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                color: Appearance.colors.colOnSurfaceVariant
+                            }
+                            Item { anchors.verticalCenter: parent.verticalCenter; width: 10; height: 1 }
+                            KeyCap { label: "Alt" }
+                            KeyCap { label: "M" }
+                            StyledText {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: Translation.tr("scope")
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                color: Appearance.colors.colOnSurfaceVariant
+                            }
+                            Item { anchors.verticalCenter: parent.verticalCenter; width: 10; height: 1 }
+                            KeyCap { label: "Wheel" }
+                            StyledText {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: Translation.tr("zoom")
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                color: Appearance.colors.colOnSurfaceVariant
+                            }
+                            Item { anchors.verticalCenter: parent.verticalCenter; width: 10; height: 1 }
+                            KeyCap { label: "Alt" }
+                            KeyCap { label: "Ctrl" }
+                            KeyCap { label: "Tab" }
+                            StyledText {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: Translation.tr("pin")
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                color: Appearance.colors.colOnSurfaceVariant
+                            }
+                            Item { anchors.verticalCenter: parent.verticalCenter; width: 10; height: 1 }
+                            KeyCap { label: "Esc" }
+                            StyledText {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: Translation.tr("cancel")
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                color: Appearance.colors.colOnSurfaceVariant
+                            }
                         }
                     }
                 }
@@ -963,9 +1022,9 @@ Scope {
         implicitWidth: keyLabel.implicitWidth + 14
         implicitHeight: 22
         radius: 6
-        color: ColorUtils.applyAlpha("#ffffff", 0.14)
+        color: ColorUtils.applyAlpha(Appearance.colors.colOnSurface, 0.10)
         border.width: 1
-        border.color: ColorUtils.applyAlpha("#ffffff", 0.24)
+        border.color: ColorUtils.applyAlpha(Appearance.colors.colOutlineVariant, 0.7)
 
         StyledText {
             id: keyLabel
@@ -973,7 +1032,7 @@ Scope {
             text: keyCap.label
             font.pixelSize: 11
             font.family: Appearance.font.family.monospace
-            color: ColorUtils.applyAlpha("#ffffff", 0.92)
+            color: Appearance.colors.colOnSurface
         }
     }
 
@@ -1014,6 +1073,7 @@ Scope {
                 workspacesPerMonitor: root.workspacesPerMonitor,
                 screen: root.panelScreenName,
                 viewMode: root.viewMode,
+                gridZoom: root.gridZoom,
                 locked: root.locked,
                 gridColumns: root.gridColumns,
                 closing: root.closing,
