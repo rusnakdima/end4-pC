@@ -15,11 +15,17 @@ import Quickshell.Hyprland
 /**
  * Alt+Tab window switcher.
  *
- * The deck prefers the focused workspace, widens to the focused monitor, then
- * to every mapped window when the chosen scope has fewer than two candidates
- * (configurable). Cards are ordered by Hyprland's focusHistoryID (most recently
- * used first), and cycling only moves the highlight; the real focus change
- * happens on commit, which keeps the compositor's focus history honest.
+ * The deck defaults to every mapped window on every monitor. Workspace and
+ * monitor scopes remain opt-in and still widen to all windows when they offer
+ * fewer than two candidates. Cards are ordered by Hyprland's focusHistoryID
+ * (most recently used first), and cycling only moves the highlight; the real
+ * focus change happens on commit, which keeps the compositor's focus history
+ * honest. Committing a window on another monitor focuses that monitor first.
+ *
+ * Two view modes share the same entries: the list/coverflow and a grid that
+ * shows every window at once. Alt+G toggles them. Alt+Ctrl+Tab opens the
+ * overview locked: the Alt-release commit is ignored so the overview stays
+ * open for mouse selection, like Windows' sticky task view.
  *
  * Input comes from:
  *   - the bound Alt+Tab shortcut (Shift reverses via the tracked modifier),
@@ -66,10 +72,47 @@ Scope {
     property string openedScope: "workspace"
     property string panelScreenName: ""
     property bool closing: false
-    // Maintained from hyprland/window_switch.lua. Hyprland keeps delivering the
-    // Alt+Tab bind when Shift is also held, so the direction is decided here
-    // instead of with a second key translation.
+    // Maintained from hyprland/window_switch.lua. Tab is bound by keycode so
+    // the bind fires even when Shift changes the keysym; the direction is
+    // decided here instead of with a second key translation.
     property bool shiftHeld: false
+
+    // list = the coverflow deck, grid = every window as a tile. Mirrored into
+    // the config so the choice survives shell restarts.
+    property string viewMode: Config.options?.windowSwitcher?.viewMode ?? "list"
+    // True for Alt+Ctrl+Tab: the Alt-release commit is ignored until a window
+    // is clicked or the overview is cancelled.
+    property bool locked: false
+
+    // Two independent scope modes, available in both list and grid views:
+    //   monitor -> only this monitor's workspace range (1-10, 11-20, ...)
+    //   all     -> every workspace on every monitor
+    property string workspaceScope: Config.options?.windowSwitcher?.workspaceScope ?? "monitor"
+    readonly property int workspacesPerMonitor: Config.options?.windowSwitcher?.workspacesPerMonitor ?? 10
+    property string openedWorkspaceRangeLabel: ""
+    readonly property string workspaceScopeLabel: root.workspaceScope === "all"
+        ? Translation.tr("All WS")
+        : (root.openedWorkspaceRangeLabel !== "" ? root.openedWorkspaceRangeLabel : Translation.tr("This monitor"))
+
+    readonly property int configuredGridColumns: Config.options?.windowSwitcher?.gridColumns ?? 0
+    readonly property int gridColumns: Math.max(2, root.configuredGridColumns > 0
+        ? root.configuredGridColumns
+        : Math.ceil(Math.sqrt(root.entries.length || 1)))
+    readonly property int gridRows: Math.max(1, Math.ceil(root.entries.length / root.gridColumns))
+    readonly property real gridSpacing: 14
+    readonly property real gridCardWidth: {
+        const availW = Math.max(320, root.screenWidth - 96);
+        const availH = Math.max(240, root.screenHeight - 300);
+        let w = (availW - (root.gridColumns - 1) * root.gridSpacing) / root.gridColumns;
+        let h = w / 1.6;
+        const maxH = (availH - (root.gridRows - 1) * root.gridSpacing) / root.gridRows;
+        if (h > maxH) {
+            h = maxH;
+            w = h * 1.6;
+        }
+        return Math.max(120, w);
+    }
+    readonly property real gridCardHeight: root.gridCardWidth / 1.6
 
     readonly property var selectedEntry: root.entries.length > 0
         ? root.entries[Math.max(0, Math.min(root.selectedIndex, root.entries.length - 1))]
@@ -79,7 +122,7 @@ Scope {
     // the deck widens, follow the highlighted card instead, so the header
     // always shows the workspace the selected window actually belongs to.
     readonly property string headerLabel: {
-        if (root.openedScope === "workspace" || !root.selectedEntry)
+        if (root.openedScope === "workspace" || root.openedScope === "monitorWorkspaces" || !root.selectedEntry)
             return root.openedWorkspaceLabel;
         const workspace = root.selectedEntry.windowData?.workspace;
         return `${Translation.tr("Workspace")} ${workspace?.name ?? workspace?.id ?? ""}`;
@@ -97,6 +140,24 @@ Scope {
         // The workspace name is authoritative: numeric workspaces read as "1",
         // named ones keep their name instead of collapsing to an id.
         return workspace.name ?? String(workspace.id);
+    }
+
+    // Derive the block of workspace ids owned by a monitor. The smallest id
+    // reported for that monitor anchors the block (1-10, 11-20, ...); when no
+    // workspace is open there, fall back to the monitor's index.
+    function workspaceRangeFor(monitorName) {
+        const perMonitor = Math.max(1, root.workspacesPerMonitor);
+        const ids = (HyprlandData.workspaces ?? [])
+            .filter(ws => ws.monitor === monitorName)
+            .map(ws => ws.id);
+        if (ids.length > 0) {
+            const start = Math.min(...ids);
+            return [start, start + perMonitor - 1];
+        }
+        const monitors = Hyprland.monitors.values;
+        const index = monitors.findIndex(m => m.name === monitorName);
+        const start = (index < 0 ? 0 : index) * perMonitor + 1;
+        return [start, start + perMonitor - 1];
     }
 
     function buildEntries() {
@@ -129,6 +190,11 @@ Scope {
         const monitorId = root.focusedMonitor?.id ?? -1;
         const inWorkspace = windows.filter(w => w.windowData.workspace?.id === workspaceId);
         const onMonitor = windows.filter(w => w.windowData.monitor === monitorId);
+        const range = root.workspaceRangeFor(root.focusedMonitor?.name ?? "");
+        const inMonitorWorkspaces = windows.filter(w => {
+            const id = w.windowData.workspace?.id;
+            return id >= range[0] && id <= range[1];
+        });
 
         const configuredScope = Config.options?.windowSwitcher?.scope ?? "workspace";
         const allowFallback = Config.options?.windowSwitcher?.fallback ?? true;
@@ -139,8 +205,19 @@ Scope {
         // (the common one-window-per-workspace layout), widen to the monitor
         // and finally to every window, instead of turning Alt+Tab into a no-op.
         if (configuredScope === "all") {
-            selected = windows;
-            scope = "all";
+            // Two scope modes for the same list/grid deck: one monitor's
+            // workspace block, or every workspace on every monitor. Fall back
+            // to all windows when the block has fewer than two candidates.
+            if (root.workspaceScope === "all") {
+                selected = windows;
+                scope = "all";
+            } else if (inMonitorWorkspaces.length >= 2 || !allowFallback) {
+                selected = inMonitorWorkspaces;
+                scope = "monitorWorkspaces";
+            } else {
+                selected = windows;
+                scope = "all";
+            }
         } else if (configuredScope === "monitor") {
             if (onMonitor.length >= 2 || !allowFallback) {
                 selected = onMonitor;
@@ -163,15 +240,20 @@ Scope {
         }
 
         root.openedScope = scope;
+        root.openedWorkspaceRangeLabel = `${range[0]}-${range[1]}`;
         const workspaceName = root.focusedMonitor?.activeWorkspace?.name ?? String(workspaceId);
         root.openedWorkspaceLabel = scope === "workspace"
             ? `${Translation.tr("Workspace")} ${workspaceName}`
-            : (scope === "monitor" ? Translation.tr("This monitor") : Translation.tr("All windows"));
+            : (scope === "monitor"
+                ? Translation.tr("This monitor")
+                : (scope === "monitorWorkspaces"
+                    ? `${Translation.tr("Workspaces")} ${range[0]}-${range[1]}`
+                    : Translation.tr("All monitors")));
 
         return selected;
     }
 
-    function openSwitcher(direction = 1) {
+    function openSwitcher(direction = 1, locked = false) {
         if (!root.enabled)
             return;
 
@@ -186,6 +268,7 @@ Scope {
 
         closeTimer.stop();
         root.closing = false;
+        root.locked = locked;
         // The two full-screen overlays would stack; the switcher wins.
         GlobalStates.overviewOpen = false;
         root.entries = list;
@@ -196,7 +279,8 @@ Scope {
         root.panelScreenName = root.focusedMonitor?.name
             ?? (Quickshell.screens.length > 0 ? Quickshell.screens[0].name : "");
         GlobalStates.windowSwitcherOpen = true;
-        safetyTimer.restart();
+        if (!root.locked)
+            safetyTimer.restart();
     }
 
     function step(delta) {
@@ -206,11 +290,66 @@ Scope {
         if (count < 2)
             return;
         root.selectedIndex = (root.selectedIndex + delta + count) % count;
-        safetyTimer.restart();
+        if (!root.locked)
+            safetyTimer.restart();
+    }
+
+    // In grid mode Up/Down move by a whole row instead of a single tile.
+    function stepRows(delta) {
+        if (!GlobalStates.windowSwitcherOpen)
+            return;
+        const count = root.entries.length;
+        if (count < 2)
+            return;
+        const next = root.selectedIndex + delta * root.gridColumns;
+        root.selectedIndex = (next >= 0 && next < count)
+            ? next
+            : (root.selectedIndex + delta + count) % count;
+        if (!root.locked)
+            safetyTimer.restart();
     }
 
     function cycle(delta) {
         root.openSwitcher(root.shiftHeld ? -delta : delta);
+    }
+
+    // The compositor chord and the in-deck key can both arrive for the same
+    // physical press on some layouts; ignore the second one within 250 ms.
+    property real lastViewToggleMs: 0
+
+    function toggleView() {
+        if (!GlobalStates.windowSwitcherOpen)
+            return;
+        const now = Date.now();
+        if (now - root.lastViewToggleMs < 250)
+            return;
+        root.lastViewToggleMs = now;
+        root.viewMode = root.viewMode === "list" ? "grid" : "list";
+        Config.setNestedValue("windowSwitcher.viewMode", root.viewMode);
+        if (!root.locked)
+            safetyTimer.restart();
+    }
+
+    // Switch between one monitor's workspace block and every workspace.
+    // Entries are rebuilt with the same list/grid UI, so the choice works in
+    // both view modes; the fallback to all windows is applied in buildEntries.
+    property real lastScopeToggleMs: 0
+
+    function toggleWorkspaceScope() {
+        if (!GlobalStates.windowSwitcherOpen)
+            return;
+        const now = Date.now();
+        if (now - root.lastScopeToggleMs < 250)
+            return;
+        root.lastScopeToggleMs = now;
+        const previous = root.selectedEntry?.address;
+        root.workspaceScope = root.workspaceScope === "monitor" ? "all" : "monitor";
+        Config.setNestedValue("windowSwitcher.workspaceScope", root.workspaceScope);
+        root.entries = root.buildEntries();
+        const next = root.entries.findIndex(entry => entry.address === previous);
+        root.selectedIndex = next >= 0 ? next : Math.min(root.selectedIndex, Math.max(0, root.entries.length - 1));
+        if (!root.locked)
+            safetyTimer.restart();
     }
 
     function select(index) {
@@ -225,8 +364,26 @@ Scope {
             return;
         const entry = root.selectedEntry;
         root.close();
-        if (entry)
+        if (entry) {
+            // The deck spans every monitor, so the target may live on another
+            // output. Focus that output first, then the window itself.
+            const monitorId = entry.windowData?.monitor;
+            const target = monitorId !== undefined
+                ? Hyprland.monitors.values.find(m => m.id === monitorId)
+                : null;
+            if (target?.name && target.name !== root.focusedMonitor?.name)
+                WM.focusMonitor(target.name);
             WM.focusWindow(entry.address);
+        }
+    }
+
+    // The raw Alt-release hook dispatches windowSwitcherCommit for every
+    // session. A locked overview ignores that one automatic request so it can
+    // be used with the mouse; Enter and card clicks still call commit().
+    function commitFromAltRelease() {
+        if (root.locked)
+            return;
+        root.commit();
     }
 
     function cancel() {
@@ -236,6 +393,7 @@ Scope {
     }
 
     function close() {
+        root.locked = false;
         GlobalStates.windowSwitcherOpen = false;
         root.closing = true;
         safetyTimer.stop();
@@ -269,7 +427,11 @@ Scope {
     Timer {
         id: safetyTimer
         interval: 8000
-        onTriggered: root.commit()
+        onTriggered: {
+            if (root.locked)
+                return;
+            root.commit();
+        }
     }
 
     Timer {
@@ -347,11 +509,29 @@ Scope {
                 } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                     root.commit();
                     event.accepted = true;
-                } else if (event.key === Qt.Key_Left || event.key === Qt.Key_Up) {
+                } else if (event.key === Qt.Key_Left) {
                     root.step(-1);
                     event.accepted = true;
-                } else if (event.key === Qt.Key_Right || event.key === Qt.Key_Down) {
+                } else if (event.key === Qt.Key_Right) {
                     root.step(1);
+                    event.accepted = true;
+                } else if (event.key === Qt.Key_Up) {
+                    if (root.viewMode === "grid") root.stepRows(-1);
+                    else root.step(-1);
+                    event.accepted = true;
+                } else if (event.key === Qt.Key_Down) {
+                    if (root.viewMode === "grid") root.stepRows(1);
+                    else root.step(1);
+                    event.accepted = true;
+                } else if (event.nativeScanCode === 33 || event.nativeScanCode === 41 || event.key === Qt.Key_G) {
+                    // Fallback for layouts where the ALT+G compositor chord
+                    // does not match; date-based debounce in toggleView()
+                    // prevents a double toggle when both paths fire.
+                    root.toggleView();
+                    event.accepted = true;
+                } else if (event.nativeScanCode === 50 || event.nativeScanCode === 58 || event.key === Qt.Key_M) {
+                    // Same fallback for the workspace-scope toggle.
+                    root.toggleWorkspaceScope();
                     event.accepted = true;
                 }
             }
@@ -435,6 +615,90 @@ Scope {
                                 font.features: ({ "tnum": 1 })
                                 color: Appearance.colors.colOnSurfaceVariant
                             }
+                            // Clickable view-mode chip (Alt+G does the same).
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                implicitWidth: modeLabel.implicitWidth + 34
+                                implicitHeight: 22
+                                radius: 11
+                                color: ColorUtils.applyAlpha("#ffffff", 0.14)
+                                border.width: 1
+                                border.color: ColorUtils.applyAlpha("#ffffff", 0.24)
+                                MaterialSymbol {
+                                    id: modeIcon
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 7
+                                    text: root.viewMode === "grid" ? "grid_view" : "view_list"
+                                    iconSize: 14
+                                    color: "#ffffff"
+                                }
+                                StyledText {
+                                    id: modeLabel
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.left: modeIcon.right
+                                    anchors.leftMargin: 5
+                                    text: root.viewMode === "grid" ? Translation.tr("Grid") : Translation.tr("List")
+                                    font.pixelSize: Appearance.font.pixelSize.smaller
+                                    color: "#ffffff"
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.toggleView()
+                                }
+                            }
+                            // Clickable scope chip: one monitor's workspace
+                            // block (e.g. 1-10) vs every workspace.
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                implicitWidth: scopeLabel.implicitWidth + 34
+                                implicitHeight: 22
+                                radius: 11
+                                color: ColorUtils.applyAlpha("#ffffff", 0.14)
+                                border.width: 1
+                                border.color: ColorUtils.applyAlpha("#ffffff", 0.24)
+                                MaterialSymbol {
+                                    id: scopeIcon
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 7
+                                    text: root.workspaceScope === "all" ? "desktop_windows" : "workspaces"
+                                    iconSize: 14
+                                    color: "#ffffff"
+                                }
+                                StyledText {
+                                    id: scopeLabel
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.left: scopeIcon.right
+                                    anchors.leftMargin: 5
+                                    text: root.workspaceScopeLabel
+                                    font.pixelSize: Appearance.font.pixelSize.smaller
+                                    color: "#ffffff"
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.toggleWorkspaceScope()
+                                }
+                            }
+                            Rectangle {
+                                visible: root.locked
+                                anchors.verticalCenter: parent.verticalCenter
+                                implicitWidth: pinnedLabel.implicitWidth + 16
+                                implicitHeight: 22
+                                radius: 11
+                                color: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.32)
+                                border.width: 1
+                                border.color: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.75)
+                                StyledText {
+                                    id: pinnedLabel
+                                    anchors.centerIn: parent
+                                    text: Translation.tr("Pinned")
+                                    font.pixelSize: Appearance.font.pixelSize.smaller
+                                    color: "#ffffff"
+                                }
+                            }
                         }
                     }
                 }
@@ -444,6 +708,7 @@ Scope {
                 // opacity (one per side on a narrow monitor).
                 Item {
                     id: deckArea
+                    visible: root.viewMode === "list"
                     width: parent.width
                     height: root.cardHeight + 36
 
@@ -462,6 +727,7 @@ Scope {
                             selected: index === root.selectedIndex
                             cardWidth: root.cardWidth
                             cardHeight: root.cardHeight
+                            previewActive: root.viewMode === "list"
                             workspaceBadge: root.openedScope === "workspace"
                                 ? ""
                                 : root.workspaceBadgeFor(modelData)
@@ -493,6 +759,45 @@ Scope {
                             }
                             Behavior on opacity {
                                 animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(card)
+                            }
+                        }
+                    }
+                }
+
+                // Grid view: every window at once, in MRU order. Tiles reuse
+                // the same card component so badges, previews and click-to-
+                // commit behave exactly like the list.
+                Item {
+                    id: gridArea
+                    visible: root.viewMode === "grid"
+                    width: parent.width
+                    height: Math.min(root.screenHeight - 300,
+                        root.gridRows * root.gridCardHeight
+                        + (root.gridRows - 1) * root.gridSpacing + 8)
+
+                    Grid {
+                        anchors.centerIn: parent
+                        columns: root.gridColumns
+                        spacing: root.gridSpacing
+
+                        Repeater {
+                            model: root.entries
+
+                            delegate: WindowSwitcherCard {
+                                required property var modelData
+                                required property int index
+
+                                entry: modelData
+                                selected: index === root.selectedIndex
+                                cardWidth: root.gridCardWidth
+                                cardHeight: root.gridCardHeight
+                                previewActive: root.viewMode === "grid"
+                                workspaceBadge: root.workspaceBadgeFor(modelData)
+
+                                onRequestActivate: {
+                                    root.select(index);
+                                    root.commit();
+                                }
                             }
                         }
                     }
@@ -597,6 +902,46 @@ Scope {
                             width: 10
                             height: 1
                         }
+                        KeyCap { label: "Alt" }
+                        KeyCap { label: "G" }
+                        StyledText {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Translation.tr("view")
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            color: root.hintColor
+                        }
+                        Item {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 10
+                            height: 1
+                        }
+                        KeyCap { label: "Alt" }
+                        KeyCap { label: "M" }
+                        StyledText {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Translation.tr("scope")
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            color: root.hintColor
+                        }
+                        Item {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 10
+                            height: 1
+                        }
+                        KeyCap { label: "Alt" }
+                        KeyCap { label: "Ctrl" }
+                        KeyCap { label: "Tab" }
+                        StyledText {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Translation.tr("pin")
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            color: root.hintColor
+                        }
+                        Item {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 10
+                            height: 1
+                        }
                         KeyCap { label: "Esc" }
                         StyledText {
                             anchors.verticalCenter: parent.verticalCenter
@@ -646,6 +991,15 @@ Scope {
         function commit(): void {
             root.commit();
         }
+        function lock(): void {
+            root.openSwitcher(1, true);
+        }
+        function toggleView(): void {
+            root.toggleView();
+        }
+        function toggleScope(): void {
+            root.toggleWorkspaceScope();
+        }
         function status(): string {
             return JSON.stringify({
                 open: GlobalStates.windowSwitcherOpen,
@@ -654,7 +1008,13 @@ Scope {
                 selected: root.selectedIndex,
                 workspace: root.openedWorkspaceId,
                 scope: root.openedScope,
+                workspaceScope: root.workspaceScope,
+                workspaceRange: root.openedWorkspaceRangeLabel,
+                workspacesPerMonitor: root.workspacesPerMonitor,
                 screen: root.panelScreenName,
+                viewMode: root.viewMode,
+                locked: root.locked,
+                gridColumns: root.gridColumns,
                 closing: root.closing,
                 darkmode: Appearance.m3colors.darkmode,
                 m3background: String(Appearance.m3colors.m3background),
@@ -696,7 +1056,29 @@ Scope {
         name: "windowSwitcherCommit"
         description: "Applies the window switcher selection"
 
-        onPressed: root.commit()
+        // A locked overview ignores the automatic Alt-release commit.
+        onPressed: root.commitFromAltRelease()
+    }
+
+    CompositorGlobalShortcut {
+        name: "windowSwitcherToggleView"
+        description: "Toggles the window switcher between list and grid"
+
+        onPressed: root.toggleView()
+    }
+
+    CompositorGlobalShortcut {
+        name: "windowSwitcherToggleScope"
+        description: "Toggles between this monitor's workspaces and all workspaces"
+
+        onPressed: root.toggleWorkspaceScope()
+    }
+
+    CompositorGlobalShortcut {
+        name: "windowSwitcherLock"
+        description: "Opens the window switcher locked, so it stays after key release"
+
+        onPressed: root.openSwitcher(1, true)
     }
 
     CompositorGlobalShortcut {

@@ -23,6 +23,9 @@ Item {
     property real cardWidth: 400
     property real cardHeight: 250
     property string workspaceBadge: ""
+    // Only the active layout captures, so list and grid never create two
+    // live ScreencopyViews for the same window.
+    property bool previewActive: true
 
     signal requestActivate()
 
@@ -112,8 +115,10 @@ Item {
             width: fitWidth
             height: fitWidth / winAspect
             anchors.centerIn: parent
-            captureSource: root.visible && root.entry && root.entry.toplevel ? root.entry.toplevel : null
-            live: root.visible
+            captureSource: root.previewActive && root.visible && root.entry && root.entry.toplevel
+                ? root.entry.toplevel
+                : null
+            live: root.previewActive && root.visible
         }
 
         Rectangle {

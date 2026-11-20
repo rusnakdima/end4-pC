@@ -51,6 +51,7 @@ Singleton {
     readonly property var focusedMonitor: backend?.focusedMonitor ?? null
 
     function focusWindow(id) { backend?.focusWindow(id) }
+    function focusMonitor(name) { backend?.focusMonitor(name) }
     function closeWindow(id) { backend?.closeWindow(id) }
     function switchWorkspace(id) { backend?.switchWorkspace(id) }
     function moveWindowToWorkspace(id, wsId) { backend?.moveWindowToWorkspace(id, wsId) }

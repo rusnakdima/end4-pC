@@ -888,11 +888,21 @@ Singleton {
                 property bool enable: true
                 property int cardWidth: 400 // Width of the focused card in px
                 // workspace: current workspace first; monitor: all windows on
-                // the focused monitor; all: every mapped window.
-                property string scope: "workspace"
+                // the focused monitor; all: every mapped window on every
+                // monitor (default).
+                property string scope: "all"
                 // Widen the scope when the chosen one has fewer than two
                 // windows, instead of making Alt+Tab do nothing.
                 property bool fallback: true
+                // list: the coverflow deck; grid: every window as a tile.
+                property string viewMode: "list"
+                // 0 = pick a square-ish grid from the window count.
+                property int gridColumns: 0
+                // monitor: only this monitor's workspace range (1-10 on the
+                // first monitor, 11-20 on the second); all: every workspace.
+                property string workspaceScope: "monitor"
+                // How many workspace ids each monitor owns.
+                property int workspacesPerMonitor: 10
             }
 
             property JsonObject regionSelector: JsonObject {

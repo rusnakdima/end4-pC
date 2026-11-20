@@ -30,6 +30,9 @@ Scope {
     function focusWindow(id) {
         Hyprland.dispatch(`hl.dsp.focus({ window = "address:${id}" })`);
     }
+    function focusMonitor(name) {
+        Hyprland.dispatch(`hl.dsp.focus({ monitor = "${name}" })`);
+    }
     function closeWindow(id) {
         Hyprland.dispatch(`hl.dsp.window.close({ window = "address:${id}" })`);
     }
