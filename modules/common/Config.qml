@@ -625,7 +625,7 @@ Singleton {
                 }
 
                 property JsonObject layouts: JsonObject {
-                    property list<string> leftLayout: ["launcherButton", "workspaces", "activeWindow"]
+                    property list<string> leftLayout: ["launcherButton", "workspaces", "activeWindow", "windowControls"]
                     property list<string> middleLayout: ["clockWidget"]
                     property list<string> rightLayout: ["sysTray", "utilButtons", "systemIcons", "powerButton"]
                 }
@@ -1139,6 +1139,21 @@ Singleton {
             property JsonObject windows: JsonObject {
                 property bool showTitlebar: true // Client-side decoration for shell apps
                 property bool centerTitle: true
+
+                // Shell-drawn window controls (services/WindowControls.qml).
+                // Native buttons are toolkit-side and disabled by default by
+                // install.sh, so these live in the shell instead.
+                property JsonObject controls: JsonObject {
+                    property bool enable: true
+                    // "overlay" follows the active window, "bar" is the
+                    // fallback inside the bar's ActiveWindow widget, "off"
+                    // disables the cluster entirely.
+                    property string placement: "overlay"
+                    property string reveal: "always" // visible by default; "hover" for a quieter bar
+                    property int buttonSize: 36
+                    // Rendered in this order in both placements.
+                    property list<string> buttons: ["minimize", "maximize", "close", "type"]
+                }
             }
 
             property JsonObject hacks: JsonObject {

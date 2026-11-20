@@ -48,7 +48,7 @@ ShellRoot {
         "tst_settings_search.qml", "tst_online_wallpapers.qml", "tst_ai.qml",
         "tst_speech_to_text.qml", "tst_bar_content.qml",
         "tst_thumbnail_image.qml", "tst_persistent.qml",
-        "tst_directories.qml", "tst_window_mode.qml",
+        "tst_directories.qml", "tst_window_mode.qml", "tst_window_controls.qml",
         "tst_app_window_rules.qml", "tst_bind_overrides.qml",
         "tst_managed_keybinds.qml",
         "tst_keybinds.qml", "tst_xkbrules.qml",

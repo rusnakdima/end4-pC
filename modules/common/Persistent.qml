@@ -153,6 +153,13 @@ Singleton {
                 property list<string> ownedSpans: []
             }
 
+            // Windows hidden by the shell's minimize button, together with
+            // the workspace they came from. The service restores them when
+            // the dock or alt-tab activates them again.
+            property JsonObject windowControls: JsonObject {
+                property list<var> minimized: []
+            }
+
             property JsonObject record: JsonObject {
                 property bool enable: false
             }

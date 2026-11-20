@@ -19,6 +19,7 @@ QtObject {
         { id: "batteryIndicator", name: Translation.tr("Battery"), icon: "battery_android_frame_full" },
         { id: "bluetooth", name: Translation.tr("Bluetooth"), icon: "bluetooth" },
         { id: "activeWindow", name: Translation.tr("Active Window"), icon: "subtitles" },
+        { id: "windowControls", name: Translation.tr("Window Controls"), icon: "window" },
         { id: "powerButton", name: Translation.tr("Power Button"), icon: "power_settings_new" },
         { id: "updatesCount", name: Translation.tr("Updates"), icon: "deployed_code_update" },
         { id: "docktoPanel", name: Translation.tr("Dock to Panel"), icon: "apps" },

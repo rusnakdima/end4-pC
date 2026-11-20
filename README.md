@@ -224,6 +224,27 @@ GTK only removes the buttons; the headerbar itself is app UI and stays.
 Run the installer with `--keep-window-buttons` (or `DISABLE_WINDOW_BUTTONS=0`)
 to leave everything untouched.
 
+### Where are the shell's own window controls?
+
+Since native buttons are off by default, end4-pC provides a four-button
+cluster (minimize, maximize/restore, close, and a window-type selector) as a
+**bar widget**. Add **Window Controls** to any bar layout from
+Settings → Bar → Bar layout; it is in the default left group. It always acts
+on the focused window. The type button cycles the focused window between
+floating and tiling, switches the session between tiling and stacking, and can
+stretch an app over every monitor (span). Button visibility and size are under
+`windows.controls` and in Settings (search for "Window controls").
+
+Minimize is a real hide: the window is tagged and parked on the
+`special:minimized` workspace, so it disappears from the current workspace but
+stays in the dock and in alt-tab. Clicking it in either place activates it and
+the shell automatically moves it back to the workspace it came from. No window
+is ever closed by the minimize button.
+
+The same actions are available over IPC with `qs -c end4-pC ipc call
+windowControls <close|maximize|minimize|restore|setType|cycleType|status>`.
+Scripts can target a specific window with `minimizeAddress` / `restoreAddress`.
+
 ### Why doesn't Settings have a search bar?
 
 It doesn't need one — the launcher already does that job. Open the launcher (`SUPER`) and just type what you're looking for (e.g. `wallpaper`, `bar`, `blur`); it'll match against page names and section keywords and jump you straight to the right Settings page, so there's no need for a separate search inside Settings itself.
