@@ -20,7 +20,6 @@ MouseArea {
     property bool vertical: Config.options.bar.vertical
 
     readonly property string layoutCode: KeyboardLayouts.currentLayoutCode
-    readonly property string layoutName: KeyboardLayouts.currentLayoutName
     readonly property bool hasLayout: layoutCode.length > 0
 
     // Layout codes offered by the dropdown: the ones the compositor reports
@@ -104,10 +103,5 @@ MouseArea {
             }
             onMenuClosed: root.closeMenu()
         }
-    }
-
-    StyledToolTip {
-        extraVisibleCondition: root.containsMouse
-        text: root.layoutName.length > 0 ? root.layoutName : root.layoutCode
     }
 }

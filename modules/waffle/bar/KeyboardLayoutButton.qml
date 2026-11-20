@@ -57,9 +57,4 @@ BarButton {
             action: () => root.applyLayout(code)
         }))
     }
-
-    BarToolTip {
-        text: `${Translation.tr("Keyboard Layout")}: ${root.activeCode.toUpperCase()}`
-        extraVisibleCondition: root.shouldShowTooltip
-    }
 }
