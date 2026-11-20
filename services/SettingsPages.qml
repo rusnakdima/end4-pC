@@ -23,6 +23,7 @@ Singleton {
             { id: "interface",  name: Translation.tr("Interface"),  icon: "bottom_app_bar", file: "InterfaceConfig.qml" },
             { id: "docklock",   name: Translation.tr("Dock & Lock"), icon: "dock_to_bottom", file: "DockLockConfig.qml" },
             { id: "tools",      name: Translation.tr("Tools"),      icon: "construction",   file: "ToolsConfig.qml" },
+            { id: "advanced-paste", name: Translation.tr("Advanced Paste"), icon: "content_paste_go", file: "AdvancedPasteConfig.qml" },
             { id: "general",    name: Translation.tr("General"),    icon: "browse",         file: "GeneralConfig.qml" },
             { id: "keyboard",   name: Translation.tr("Keyboard"),   icon: "keyboard",       file: "KeyboardConfig.qml" },
             { id: "services",   name: Translation.tr("Services"),   icon: "settings",       file: "ServicesConfig.qml" },

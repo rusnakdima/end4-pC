@@ -17,14 +17,17 @@ import qs.modules.waffle.sessionScreen
 import qs.modules.waffle.taskView
 
 // Fallbacks
+import qs.modules.ii.advancedPaste
 import qs.modules.ii.cheatsheet
 import qs.modules.ii.onScreenKeyboard
 import qs.modules.ii.overlay
 import qs.modules.ii.screenTranslator
+import qs.modules.ii.utilities
 import qs.modules.ii.wallpaperSelector
 import qs.modules.ii.windowSwitcher
 
 Scope {
+    PanelLoader { component: AdvancedPaste {} }
     PanelLoader { component: WaffleActionCenter {} }
     PanelLoader { component: WaffleBar {} }
     PanelLoader { component: WaffleBackground {} }
@@ -43,6 +46,8 @@ Scope {
     PanelLoader { component: OnScreenKeyboard {} }
     PanelLoader { component: Overlay {} }
     PanelLoader { component: ScreenTranslator {} }
+    PanelLoader { component: FindMouseOverlay {} }
+    PanelLoader { component: ScreenRuler {} }
     PanelLoader { component: WallpaperSelector {} }
     PanelLoader { component: WindowSwitcher {} }
 }

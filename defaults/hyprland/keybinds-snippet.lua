@@ -23,3 +23,18 @@ for i = 1, 10 do
     end, { description = "Window: Send to workspace " .. i .. " and switch" })
 end
 -- <<< end4-pC workspace-follow keybinds
+
+-- >>> end4-pC utilities keybinds (managed by end4-pC)
+--##! Utilities
+--#/# bind = SUPER+SHIFT, V,, -- Advanced Paste: paste clipboard in another format --
+hl.bind("SUPER + SHIFT + V", hl.dsp.global("quickshell:advancedPaste"), {description = "Utilities: Advanced Paste"})
+--#/# bind = SUPER+SHIFT, F,, -- Find My Mouse: highlight the pointer --
+hl.bind("SUPER + SHIFT + F", hl.dsp.global("quickshell:findMouse"), {description = "Utilities: Find My Mouse"})
+--#/# bind = SUPER+SHIFT, U,, -- Toggle the on-screen ruler --
+hl.bind("SUPER + SHIFT + U", hl.dsp.global("quickshell:screenRuler"), {description = "Utilities: Screen ruler"})
+-- <<< end4-pC utilities keybinds
+
+-- >>> end4-pC advanced-paste window rule (managed by end4-pC)
+-- Keep Advanced Paste as a normal floating window with the theme's rounding.
+hl.window_rule({ match = { class = "org.quickshell", title = "Advanced Paste" }, float = true, rounding = 18 })
+-- <<< end4-pC advanced-paste window rule

@@ -107,6 +107,9 @@ Singleton {
                 property string tool: "functions" // search, functions, or none
                 property int ollamaNumCtx: 32768
                 property string vllmEndpoint: "http://localhost:8000"
+                property string ollamaEndpoint: "http://localhost:11434"
+                property string lmStudioEndpoint: "http://localhost:1234"
+                property string defaultProvider: "auto" // auto, gemini, mistral, ollama, lmstudio, vllm
                 property list<var> extraModels: [
                     {
                         "api_format": "openai", // Most of the time you want "openai". Use "gemini" for Google's models
@@ -943,6 +946,16 @@ Singleton {
             property JsonObject musicRecognition: JsonObject {
                 property int timeout: 16
                 property int interval: 4
+            }
+
+            property JsonObject advancedPaste: JsonObject {
+                property bool showAi: true // Offer the AI transform (falls back offline without an API key)
+                property string defaultTransform: "plain" // Selected transform when the popup opens
+                property string aiPrompt: "Rewrite this text clearly and concisely."
+                property string pasteCommand: "ydotool key -d 1 29:1 47:1 47:0 29:0"
+                property real pasteDelay: 0.08
+                property bool ocrOpensPopup: true // Hand screen-snip OCR text to Advanced Paste
+                property bool colorPickerOpensPopup: true // Offer HEX/RGB/HSL/CSS/Flutter after picking a color
             }
 
             property JsonObject search: JsonObject {

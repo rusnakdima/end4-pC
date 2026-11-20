@@ -338,7 +338,10 @@ PanelWindow {
         WToolbarIconButton {
             icon.name: "eyedropper"
             onClicked: {
-                Quickshell.execDetached(["bash", "-c", "sleep 0.2; hyprpicker -a"]);
+                const toAdvancedPaste = (Config.options?.advancedPaste?.colorPickerOpensPopup ?? true)
+                    ? " && sleep 0.1 && qs -c end4-pC ipc call advancedPaste open"
+                    : "";
+                Quickshell.execDetached(["bash", "-c", `sleep 0.2; hyprpicker -a${toAdvancedPaste}`]);
                 root.closed();
             }
             WToolTip {

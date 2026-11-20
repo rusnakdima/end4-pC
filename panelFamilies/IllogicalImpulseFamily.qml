@@ -3,6 +3,7 @@ import Quickshell
 
 import qs
 import qs.modules.common
+import qs.modules.ii.advancedPaste
 import qs.modules.ii.background
 import qs.modules.ii.bar
 import qs.modules.ii.dock
@@ -23,6 +24,7 @@ import qs.modules.ii.screenTranslator
 import qs.modules.ii.sessionScreen
 import qs.modules.ii.sidebarLeft
 import qs.modules.ii.sidebarRight
+import qs.modules.ii.utilities
 import qs.modules.ii.overlay
 import qs.modules.ii.verticalBar
 import qs.modules.ii.voiceInput
@@ -33,6 +35,7 @@ import qs.modules.ii.frame
 
 Scope {
     PanelLoader { extraCondition: !Config.options.bar.vertical; component: Bar {} }
+    PanelLoader { component: AdvancedPaste {} }
     PanelLoader { component: Background {} }
     PanelLoader { extraCondition: Config.options.dock.enable; component: Dock {} }
     PanelLoader { component: EqualizerPopup {} }
@@ -49,6 +52,8 @@ Scope {
     PanelLoader { component: RegionSelector {} }
     PanelLoader { component: ScreenCorners {} }
     PanelLoader { component: ScreenTranslator {} }
+    PanelLoader { component: FindMouseOverlay {} }
+    PanelLoader { component: ScreenRuler {} }
     PanelLoader { component: SessionScreen {} }
     PanelLoader { component: SidebarLeft {} }
     PanelLoader { component: SidebarRight {} }

@@ -155,6 +155,42 @@ hl.bind("SUPER + escape", hl.dsp.global("quickshell:settingsToggle"), {descripti
 
 ---
 
+### 📋 Advanced Paste
+
+Copy any text, then press the Advanced Paste shortcut. A popup appears near the cursor with the **detected format** (JSON, Markdown, URL, code, CSV, …) and a list of paste-as transforms:
+
+- **Plain text** — strip Markdown/HTML formatting
+- **Markdown** — convert HTML to Markdown, or tidy existing Markdown
+- **JSON (pretty)** — pretty-print valid JSON
+- **JSON string** — escape arbitrary text into a JSON string literal
+- **Code block** — wrap in triple backticks with the detected language
+- **Shell quote** — escape for the shell
+- **UPPERCASE / lowercase / Title Case**
+- **AI transform** — run your own prompt through the configured AI model (falls back to an offline transform when no API key is set).
+
+Select with the number keys or arrow keys, press `Enter` to paste the result into the focused app, `Esc` to cancel. Everything except the optional AI option runs fully offline.
+
+Add this to `~/.config/hypr/custom/keybinds.lua` (or your own keybind file) to bind `Super + Shift + V`:
+
+```lua
+hl.bind("SUPER + SHIFT + V", hl.dsp.global("quickshell:advancedPaste"), {description = "Utilities: Advanced Paste"})
+```
+
+You can also trigger it from a terminal with `qs ipc call advancedPaste toggle`. Settings for the feature live in Settings → **Tools → Advanced Paste**.
+
+### 🛠️ Desktop utilities
+
+The same keybind snippet also installs three small PowerToys-style shortcuts:
+
+- `Super + Shift + F` — **Find My Mouse**: highlights the pointer with animated rings for a couple of seconds.
+- `Super + Shift + U` — **Screen Ruler**: a draggable, resizable strip showing pixels and centimetres (`Esc` closes it).
+- **Keep Awake** (Caffeine) is the existing `Idle` service — toggle it from the quick toggles, or with `qs -c end4-pC ipc call awake toggle`.
+- **Always On Top** is Hyprland's window pin (`Super + P` by default), also available as `qs -c end4-pC ipc call utilities alwaysOnTop`.
+
+Extras: OCR from the screen-snip tool now feeds directly into Advanced Paste (toggle in its settings), and the color picker offers HEX / RGB / CSS rgba() / HSL / Flutter formats in the same popup.
+
+---
+
 ## ❓ FAQ
 
 ### How do I see my keybinds?

@@ -21,7 +21,10 @@ QuickToggleModel {
         interval: 300
         repeat: false
         onTriggered: {
-            Quickshell.execDetached(["hyprpicker", "-a"]);
+            const toAdvancedPaste = (Config.options?.advancedPaste?.colorPickerOpensPopup ?? true)
+                ? " && sleep 0.1 && qs -c end4-pC ipc call advancedPaste open"
+                : "";
+            Quickshell.execDetached(["bash", "-c", `hyprpicker -a${toAdvancedPaste}`]);
         }
     }
 

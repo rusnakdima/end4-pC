@@ -321,17 +321,33 @@ deploy_patches() {
 # the only part of custom/ that sync.sh ever writes.
 install_keybind_defaults() {
     local marker="end4-pC workspace-follow keybinds"
+    local ap_marker="end4-pC utilities keybinds"
+    local wr_marker="end4-pC advanced-paste window rule"
     [[ -f "$default_keybind_snippet" ]] || return 0
     mkdir -p "$(dirname "$custom_keybinds")"
     touch "$custom_keybinds"
-    if grep -qF "$marker" "$custom_keybinds"; then
-        echo "== default keybinds =="
-        echo "       already present in custom/keybinds.lua"
-        return 0
+    local added=0
+    if ! grep -qF "$marker" "$custom_keybinds"; then
+        { printf '\n'; cat "$default_keybind_snippet"; } >> "$custom_keybinds"
+        added=1
+    elif ! grep -qF "$ap_marker" "$custom_keybinds"; then
+        # Existing installs already carry the workspace-follow block. Append
+        # just the newer utilities block so they get the new shortcuts.
+        printf '\n' >> "$custom_keybinds"
+        sed -n "/>>> ${ap_marker}/,/<<< ${ap_marker}/p" "$default_keybind_snippet" >> "$custom_keybinds"
+        added=1
     fi
-    { printf '\n'; cat "$default_keybind_snippet"; } >> "$custom_keybinds"
+    if ! grep -qF "$wr_marker" "$custom_keybinds"; then
+        printf '\n' >> "$custom_keybinds"
+        sed -n "/>>> ${wr_marker}/,/<<< ${wr_marker}/p" "$default_keybind_snippet" >> "$custom_keybinds"
+        added=1
+    fi
     echo "== default keybinds =="
-    echo "       added to custom/keybinds.lua"
+    if [[ $added -eq 1 ]]; then
+        echo "       added to custom/keybinds.lua"
+    else
+        echo "       already present in custom/keybinds.lua"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -393,7 +409,9 @@ fi
 # The default keybinds live outside the synced trees, in the user-owned
 # custom/keybinds.lua. install.sh runs the same step on a fresh install.
 if [[ $dry_run -eq 1 ]]; then
-    if grep -qF "end4-pC workspace-follow keybinds" "$custom_keybinds" 2>/dev/null; then
+    if grep -qF "end4-pC workspace-follow keybinds" "$custom_keybinds" 2>/dev/null \
+        && grep -qF "end4-pC utilities keybinds" "$custom_keybinds" 2>/dev/null \
+        && grep -qF "end4-pC advanced-paste window rule" "$custom_keybinds" 2>/dev/null; then
         echo "== default keybinds =="
         echo "       already present in custom/keybinds.lua"
     else

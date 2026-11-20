@@ -58,6 +58,12 @@ ShellRoot {
         // is looked at: the rules file covers the windows that open from
         // now on, and this brings the ones that are already open in line.
         WindowMode.apply()
+
+        // Force the lazy singletons that own global shortcuts/IPC handlers to
+        // instantiate at startup. Otherwise their targets only appear after
+        // the first time the corresponding window happens to be opened.
+        AdvancedPaste.close();
+        DesktopUtilities.stopFindMouse();
     }
     
     // Panel families

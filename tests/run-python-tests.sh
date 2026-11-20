@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Runs the offline backend unit tests (tests/test_stt_*.py).
+# Runs the offline backend unit tests (tests/test_*.py).
 #
 # The tests fake the whisper model, CUDA and pw-record, so they need no
 # microphone, GPU, network or Wayland session. They use the shell venv when it
@@ -26,4 +26,4 @@ if [[ -z "$python" ]]; then
     exit 2
 fi
 
-exec "$python" -m unittest discover -s tests -p 'test_stt_*.py' -v
+exec "$python" -m unittest discover -s tests -p 'test_*.py' -v

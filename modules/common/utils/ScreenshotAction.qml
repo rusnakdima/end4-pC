@@ -66,9 +66,15 @@ Singleton {
             case ScreenshotAction.Action.Search:
                 return ["bash", "-c", `${cropInPlace} && xdg-open "${root.imageSearchEngineBaseUrl}$(${uploadAndGetUrl(screenshotPath)})" && ${cleanup}`]
                 break;
-            case ScreenshotAction.Action.CharRecognition:
-                return ["bash", "-c", `${cropInPlace} && tesseract '${StringUtils.shellSingleQuoteEscape(screenshotPath)}' stdout -l $(tesseract --list-langs | awk 'NR>1{print $1}' | tr '\\n' '+' | sed 's/\\+$/\\n/') | wl-copy && ${cleanup}`]
+            case ScreenshotAction.Action.CharRecognition: {
+                // Optionally hand the recognised text to Advanced Paste so it
+                // can be converted to Markdown, JSON, a code block, etc.
+                const toAdvancedPaste = (Config.options?.advancedPaste?.ocrOpensPopup ?? true)
+                    ? ` && sleep 0.1 && qs -c end4-pC ipc call advancedPaste open`
+                    : "";
+                return ["bash", "-c", `${cropInPlace} && tesseract '${StringUtils.shellSingleQuoteEscape(screenshotPath)}' stdout -l $(tesseract --list-langs | awk 'NR>1{print $1}' | tr '\\n' '+' | sed 's/\\+$/\\n/') | wl-copy && ${cleanup}${toAdvancedPaste}`]
                 break;
+            }
             case ScreenshotAction.Action.QrCode:
                 // NOTE: zxing-cpp handles 1px/module and inverted codes that zbar misses
                 return ["bash", "-c", `${cropInPlace} && { if ! command -v ZXingReader >/dev/null; then notify-send -a "Screen Snip" "QR scan unavailable" "Install the zxing-cpp package"; else qrText=$(ZXingReader -single -bytes '${StringUtils.shellSingleQuoteEscape(screenshotPath)}' 2>/dev/null); if [ -n "$qrText" ]; then printf '%s' "$qrText" | wl-copy && notify-send -a "Screen Snip" "QR code copied" "$qrText"; else notify-send -a "Screen Snip" "No QR code found" "Try a larger or sharper selection"; fi; fi; }; ${cleanup}`]
