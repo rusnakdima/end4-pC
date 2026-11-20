@@ -955,7 +955,7 @@ Singleton {
                 property string pasteCommand: "ydotool key -d 1 29:1 47:1 47:0 29:0"
                 property real pasteDelay: 0.08
                 property bool ocrOpensPopup: true // Hand screen-snip OCR text to Advanced Paste
-                property bool colorPickerOpensPopup: true // Offer HEX / RGB / CSS / Flutter after picking a color
+                property bool colorPickerOpensPopup: true // Offer HEX/RGB/HSL/CSS/Flutter after picking a color
             }
 
             property JsonObject imagePreview: JsonObject {
