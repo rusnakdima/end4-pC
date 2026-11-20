@@ -1,9 +1,8 @@
 [Unit]
 Description=WayVNC remote desktop for the active Hyprland session
 Documentation=man:wayvnc(1)
-After=graphical-session.target
-PartOf=graphical-session.target
-ConditionEnvironment=WAYLAND_DISPLAY
+After=network-online.target
+Wants=network-online.target
 StartLimitIntervalSec=30
 StartLimitBurst=5
 
@@ -16,4 +15,4 @@ KillMode=mixed
 TimeoutStopSec=10
 
 [Install]
-WantedBy=graphical-session.target
+WantedBy=default.target

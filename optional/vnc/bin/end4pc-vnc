@@ -44,6 +44,10 @@ LOCK_FILE = XDG_RUNTIME_DIR / "end4pc-vnc.lock"
 # Small, write-only-on-change file watched by the shell. The full status is
 # too expensive to poll continuously just to know whether someone is connected.
 CLIENT_STATE_FILE = XDG_RUNTIME_DIR / "end4pc-vnc-clients.json"
+# The headless VNC compositor uses a private runtime dir. wayvnc can attach
+# to either; client state is published to both so the shell always sees it.
+HEADLESS_RUNTIME = XDG_RUNTIME_DIR / "vnc-rt"
+ACTIVE_RUNTIME = XDG_RUNTIME_DIR
 
 DEFAULTS = {
     "version": 1,
@@ -192,7 +196,8 @@ def loopback(address: str) -> bool:
     return (address or "").strip() in {"127.0.0.1", "::1", "localhost"}
 
 
-def run(cmd: list[str], *, check: bool = False, timeout: float = 15.0) -> tuple[int, str, str]:
+def run(cmd: list[str], *, check: bool = False, timeout: float = 15.0,
+        env: dict[str, str] | None = None) -> tuple[int, str, str]:
     try:
         proc = subprocess.run(
             cmd,
@@ -200,7 +205,7 @@ def run(cmd: list[str], *, check: bool = False, timeout: float = 15.0) -> tuple[
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             timeout=timeout,
-            env=os.environ.copy(),
+            env=env if env is not None else os.environ.copy(),
         )
         if check and proc.returncode != 0:
             raise RuntimeError((proc.stderr or proc.stdout).strip() or f"{cmd[0]} failed")
@@ -265,10 +270,20 @@ def physical_outputs() -> list[dict]:
     return [m for m in monitors() if not m.get("disabled") and not str(m.get("name", "")).startswith("HEADLESS")]
 
 
+def wayvnc_runtime() -> Path:
+    """Where wayvnc's control socket lives (physical or headless runtime)."""
+    for rt in (ACTIVE_RUNTIME, HEADLESS_RUNTIME, XDG_RUNTIME_DIR):
+        if (rt / "wayvncctl").exists():
+            return rt
+    return ACTIVE_RUNTIME
+
+
 def wayvncctl(args: list[str], timeout: float = 5.0) -> tuple[int, str, str]:
     if not shutil.which("wayvncctl"):
         return 127, "", "wayvncctl: not found"
-    return run(["wayvncctl", "--json", *args], timeout=timeout)
+    env = os.environ.copy()
+    env["XDG_RUNTIME_DIR"] = str(wayvnc_runtime())
+    return run(["wayvncctl", "--json", *args], timeout=timeout, env=env)
 
 
 def service_state() -> tuple[bool, bool, str]:
@@ -702,7 +717,7 @@ def enrich_clients(raw: list[dict]) -> list[dict]:
 def clients() -> list[dict]:
     # wayvnc creates its control socket at startup. The watcher starts just
     # before it, so avoid a noisy "connection refused" on every boot.
-    if not (XDG_RUNTIME_DIR / "wayvncctl").exists():
+    if not (wayvnc_runtime() / "wayvncctl").exists():
         return []
     rc, out, _ = wayvncctl(["client-list"])
     if rc != 0:
@@ -1093,6 +1108,41 @@ def cmd_validate(_args: argparse.Namespace) -> int:
     return 0 if not errors else 1
 
 
+def live_session(hint: Path) -> tuple[Path, str] | None:
+    """Return (runtime, signature) of a responsive Hyprland in `hint`."""
+    root = hint / "hypr"
+    if not root.is_dir():
+        return None
+    try:
+        candidates = sorted(root.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+    except OSError:
+        return None
+    for sig in candidates[:6]:
+        env = os.environ.copy()
+        env["XDG_RUNTIME_DIR"] = str(hint)
+        env["HYPRLAND_INSTANCE_SIGNATURE"] = sig.name
+        rc, out, _ = run(["hyprctl", "monitors", "-j"], timeout=4, env=env)
+        if rc == 0:
+            try:
+                if json.loads(out or "[]"):
+                    return hint, sig.name
+            except ValueError:
+                pass
+    return None
+
+
+def select_session(timeout: float = 30.0) -> tuple[Path, str] | None:
+    """Prefer the physical session; fall back to the always-on headless one."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        for hint in (XDG_RUNTIME_DIR, HEADLESS_RUNTIME):
+            found = live_session(hint)
+            if found:
+                return found
+        time.sleep(1.0)
+    return None
+
+
 def wait_for_hyprland(timeout: float = 30.0) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -1111,9 +1161,17 @@ def cmd_run(_args: argparse.Namespace) -> int:
     if not shutil.which("wayvnc"):
         print(f"{APP}: wayvnc is not installed", file=sys.stderr)
         return 1
-    if not wait_for_hyprland():
-        print(f"{APP}: the Hyprland session did not expose any outputs", file=sys.stderr)
+    session = select_session()
+    if not session:
+        print(f"{APP}: no Hyprland session (physical or headless) is available", file=sys.stderr)
         return 1
+    runtime, signature = session
+    global ACTIVE_RUNTIME
+    ACTIVE_RUNTIME = runtime
+    os.environ["XDG_RUNTIME_DIR"] = str(runtime)
+    os.environ["WAYLAND_DISPLAY"] = "wayland-1"
+    os.environ["HYPRLAND_INSTANCE_SIGNATURE"] = signature
+    print(f"{APP}: attached to session {signature} in {runtime}", file=sys.stderr)
     if str((cfg.get("network") or {}).get("bindMode") or "auto") == "auto" and shutil.which("tailscale"):
         for _ in range(10):
             if any(entry["kind"] == "tailscale" for entry in detected_addresses()):
@@ -1194,10 +1252,15 @@ def publish_client_state(count: int) -> None:
         "count": count,
         "updated": int(time.time()),
     }
-    try:
-        atomic_write(CLIENT_STATE_FILE, json.dumps(payload, sort_keys=True) + "\n", 0o600)
-    except OSError:
-        pass
+    text = json.dumps(payload, sort_keys=True) + "\n"
+    # The physical shell and the headless VNC shell use different runtime
+    # dirs; publish to both so wallpaper suppression / lock hooks work in
+    # whichever session wayvnc is attached to.
+    for path in {CLIENT_STATE_FILE, HEADLESS_RUNTIME / CLIENT_STATE_FILE.name}:
+        try:
+            atomic_write(path, text, 0o600)
+        except OSError:
+            pass
 
 
 def watch_clients(cfg: dict, stop_event: threading.Event) -> None:
