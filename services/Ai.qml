@@ -267,6 +267,7 @@ Singleton {
             "key_get_link": "https://aistudio.google.com/app/apikey",
             "key_get_description": Translation.tr("**Pricing**: free. Data used for training.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
             "api_format": "gemini",
+            "provider": "gemini",
         }),
         "gemini-3-flash": aiModelComponent.createObject(this, {
             "name": "Gemini 3 Flash",
@@ -280,6 +281,7 @@ Singleton {
             "key_get_link": "https://aistudio.google.com/app/apikey",
             "key_get_description": Translation.tr("**Pricing**: free. Data used for training.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
             "api_format": "gemini",
+            "provider": "gemini",
         }),
         "mistral-medium-latest": aiModelComponent.createObject(this, {
             "name": "Mistral Medium Latest",
@@ -293,6 +295,7 @@ Singleton {
             "key_get_link": "https://console.mistral.ai/api-keys",
             "key_get_description": Translation.tr("**Instructions**: Log into Mistral account, go to Keys on the sidebar, click Create new key"),
             "api_format": "mistral",
+            "provider": "mistral",
         }),
         "mistral-small-2603": aiModelComponent.createObject(this, {
             "name": "Mistral Small 4",
@@ -306,14 +309,27 @@ Singleton {
             "key_get_link": "https://console.mistral.ai/api-keys",
             "key_get_description": Translation.tr("**Instructions**: Log into Mistral account, go to Keys on the sidebar, click Create new key"),
             "api_format": "mistral",
+            "provider": "mistral",
         }),
     }
     property var modelList: Object.keys(root.models)
+
+    // Pick a model from the configured default provider. "auto" prefers a
+    // detected local model (no key/network needed), then falls back online.
+    function preferredModelId(): string {
+        const ids = Object.keys(root.models);
+        const preferred = Config.options?.ai?.defaultProvider ?? "auto";
+        const fromProvider = provider => ids.find(id => root.models[id].provider === provider);
+        if (preferred !== "auto") return fromProvider(preferred) ?? ids[0];
+        return fromProvider("ollama") ?? fromProvider("lmstudio") ?? fromProvider("vllm")
+            ?? fromProvider("gemini") ?? fromProvider("mistral") ?? ids[0];
+    }
+
     property var currentModelId: {
         const saved = Persistent.states?.ai?.model;
         if (saved === "mistral-medium-3") return "mistral-medium-latest";
         if (saved === "mistral-small") return "mistral-small-2603";
-        return (saved && models[saved]) ? saved : modelList[0];
+        return (saved && models[saved]) ? saved : root.preferredModelId();
     }
 
     property var apiStrategies: {
@@ -396,9 +412,10 @@ Singleton {
                             "icon": guessModelLogo(model),
                             "description": Translation.tr("Local Ollama model | %1").arg(model),
                             "homepage": `https://ollama.com/library/${model}`,
-                            "endpoint": "http://localhost:11434/v1/chat/completions",
+                            "endpoint": `${(Config?.options?.ai?.ollamaEndpoint ?? "http://localhost:11434").replace(/\/+$/, '')}/v1/chat/completions`,
                             "model": model,
                             "requires_key": false,
+                            "provider": "ollama",
                             "extraParams": {
                                 "options": {
                                     "num_ctx": Config?.options?.ai?.ollamaNumCtx ?? 32768
@@ -437,6 +454,7 @@ Singleton {
                             "endpoint": `${vllmBase}/v1/chat/completions`,
                             "model": model,
                             "requires_key": false,
+                            "provider": "vllm",
                         });
                     });
 
@@ -449,11 +467,45 @@ Singleton {
         }
     }
 
+    Process {
+        id: getLmStudioModels
+        running: true
+        command: ["bash", "-c", `${Directories.scriptPath}/ai/show-running-lmstudio-models.sh "${Config?.options?.ai?.lmStudioEndpoint ?? "http://localhost:1234"}"`.replace(/file:\/\//, "")]
+        stdout: SplitParser {
+            onRead: data => {
+                try {
+                    if (data.length === 0) return;
+                    const dataJson = JSON.parse(data);
+                    const base = (Config?.options?.ai?.lmStudioEndpoint ?? "http://localhost:1234").replace(/\/+$/, '');
+                    dataJson.forEach(model => {
+                        const safeModelName = root.safeModelName("lmstudio-" + model);
+                        const cleanModel = model.includes('/') ? model.split('/').pop() : model;
+                        root.addModel(safeModelName, {
+                            "name": `LM Studio: ${guessModelName(cleanModel)}`,
+                            "icon": guessModelLogo(model),
+                            "description": Translation.tr("Local LM Studio model | %1").arg(model),
+                            "homepage": "https://lmstudio.ai",
+                            "endpoint": `${base}/v1/chat/completions`,
+                            "model": model,
+                            "requires_key": false,
+                            "provider": "lmstudio",
+                        });
+                    });
+                    root.modelList = Object.keys(root.models);
+                } catch (e) {
+                    console.log("Could not fetch LM Studio models:", e);
+                }
+            }
+        }
+    }
+
     function refreshLocalModels() {
         getOllamaModels.running = false;
         getOllamaModels.running = true;
         getVllmModels.running = false;
         getVllmModels.running = true;
+        getLmStudioModels.running = false;
+        getLmStudioModels.running = true;
     }
 
     Process {

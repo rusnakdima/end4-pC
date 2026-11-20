@@ -23,6 +23,7 @@ RowLayout {
     ]
     property var currentValue: null
     property bool textOnlyWhenActive: false
+    property bool showTooltips: false // Show each option's tooltip instead of relying on its label
 
     signal selected(var newValue)
 
@@ -115,6 +116,11 @@ RowLayout {
                 toggled: root.currentValue == modelData.value
                 onClicked: {
                     root.selected(modelData.value);
+                }
+
+                StyledToolTip {
+                    visible: root.showTooltips && ((modelData.tooltip ?? "") !== "" || (modelData.displayName ?? "") !== "")
+                    text: (modelData.tooltip ?? "") !== "" ? modelData.tooltip : modelData.displayName
                 }
             }
         }

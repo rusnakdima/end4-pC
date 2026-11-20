@@ -31,6 +31,58 @@ ContentPage {
                     });
                 }
             }
+
+            GroupedList {
+                ConfigSelectionArray {
+                    text: Translation.tr("Default AI provider")
+                    icon: "neurology"
+                    showTooltips: true
+                    currentValue: Config.options.ai.defaultProvider
+                    onSelected: newValue => {
+                        Config.options.ai.defaultProvider = newValue;
+                        Ai.refreshLocalModels();
+                        Qt.callLater(() => Ai.setModel(Ai.preferredModelId()));
+                    }
+                    options: [
+                        { icon: "auto_awesome",    tooltip: Translation.tr("Auto (local first)"), value: "auto" },
+                        { icon: "smart_toy",       tooltip: "Ollama",                             value: "ollama" },
+                        { icon: "model_training",  tooltip: "LM Studio",                          value: "lmstudio" },
+                        { icon: "dns",             tooltip: "vLLM",                               value: "vllm" },
+                        { icon: "wand_stars",      tooltip: "Gemini",                             value: "gemini" },
+                        { icon: "psychology",      tooltip: "Mistral",                            value: "mistral" }
+                    ]
+                }
+                ConfigTextArea {
+                    id: ollamaEndpointField
+                    Layout.fillWidth: true
+                    fieldWidth: 360
+                    buttonIcon: "smart_toy"
+                    text: Translation.tr("Ollama endpoint")
+                    value: Config.options.ai.ollamaEndpoint
+                    onValueChanged: ollamaEndpointDebounce.restart()
+                    Timer {
+                        id: ollamaEndpointDebounce
+                        interval: 600
+                        repeat: false
+                        onTriggered: { Config.options.ai.ollamaEndpoint = ollamaEndpointField.value; Ai.refreshLocalModels(); }
+                    }
+                }
+                ConfigTextArea {
+                    id: lmStudioEndpointField
+                    Layout.fillWidth: true
+                    fieldWidth: 360
+                    buttonIcon: "model_training"
+                    text: Translation.tr("LM Studio endpoint")
+                    value: Config.options.ai.lmStudioEndpoint
+                    onValueChanged: lmStudioEndpointDebounce.restart()
+                    Timer {
+                        id: lmStudioEndpointDebounce
+                        interval: 600
+                        repeat: false
+                        onTriggered: { Config.options.ai.lmStudioEndpoint = lmStudioEndpointField.value; Ai.refreshLocalModels(); }
+                    }
+                }
+            }
         }
 
         ContentSection {
