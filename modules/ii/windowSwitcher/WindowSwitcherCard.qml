@@ -37,6 +37,14 @@ Item {
     width: cardWidth
     height: cardHeight
 
+    // Grid zoom changes the tile size; animate it so reflow is smooth.
+    Behavior on width {
+        NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+    }
+    Behavior on height {
+        NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+    }
+
     StyledRectangularShadow {
         target: surface
         visible: root.selected

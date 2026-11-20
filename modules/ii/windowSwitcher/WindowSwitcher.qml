@@ -95,21 +95,18 @@ Scope {
         : (root.openedWorkspaceRangeLabel !== "" ? root.openedWorkspaceRangeLabel : Translation.tr("This monitor"))
 
     readonly property int configuredGridColumns: Config.options?.windowSwitcher?.gridColumns ?? 0
-    readonly property int gridColumns: Math.max(2, root.configuredGridColumns > 0
+    readonly property int baseGridColumns: root.configuredGridColumns > 0
         ? root.configuredGridColumns
-        : Math.ceil(Math.sqrt(root.entries.length || 1)))
+        : Math.max(2, Math.ceil(Math.sqrt(root.entries.length || 1)))
+    // Zooming in shrinks the number of tiles per row, making each preview
+    // bigger; zooming out fits more per row. Rows then scroll when needed.
+    readonly property int gridColumns: Math.max(1, Math.min(root.entries.length || 1,
+        Math.round(root.baseGridColumns / root.gridZoom)))
     readonly property int gridRows: Math.max(1, Math.ceil(root.entries.length / root.gridColumns))
     readonly property real gridSpacing: 14
     readonly property real gridCardWidth: {
         const availW = Math.max(320, root.screenWidth - 96);
-        const availH = Math.max(240, root.screenHeight - 300);
-        let w = (availW - (root.gridColumns - 1) * root.gridSpacing) / root.gridColumns;
-        let h = w / 1.6;
-        const maxH = (availH - (root.gridRows - 1) * root.gridSpacing) / root.gridRows;
-        if (h > maxH) {
-            h = maxH;
-            w = h * 1.6;
-        }
+        const w = (availW - (root.gridColumns - 1) * root.gridSpacing) / root.gridColumns;
         return Math.max(120, w);
     }
     readonly property real gridCardHeight: root.gridCardWidth / 1.6
@@ -126,6 +123,24 @@ Scope {
         if (root.viewMode !== "grid")
             return;
         root.gridZoom = Math.max(root.minGridZoom, Math.min(root.maxGridZoom, root.gridZoom + delta));
+    }
+
+    // Wheel scrolls rows when the grid is taller than the viewport; with
+    // Ctrl (or when everything already fits) it zooms instead.
+    function handleGridWheel(delta, zoomOnly) {
+        if (root.viewMode !== "grid") {
+            root.step(delta < 0 ? 1 : -1);
+            return;
+        }
+        const dir = delta < 0 ? 1 : -1;
+        const overflow = gridFlick.contentHeight > gridFlick.height + 1;
+        if (!zoomOnly && overflow) {
+            gridFlick.contentY = Math.max(0, Math.min(
+                gridFlick.contentHeight - gridFlick.height,
+                gridFlick.contentY + dir * 120));
+        } else {
+            root.zoomGrid(dir * 0.12);
+        }
     }
 
     readonly property var selectedEntry: root.entries.length > 0
@@ -513,10 +528,7 @@ Scope {
                 onWheel: wheel => {
                     if (wheel.angleDelta.y === 0)
                         return;
-                    if (root.viewMode === "grid" && !(wheel.modifiers & Qt.ControlModifier))
-                        root.zoomGrid(wheel.angleDelta.y < 0 ? -0.12 : 0.12);
-                    else
-                        root.step(wheel.angleDelta.y < 0 ? 1 : -1);
+                    root.handleGridWheel(wheel.angleDelta.y, (wheel.modifiers & Qt.ControlModifier) !== 0);
                 }
             }
         }
@@ -566,6 +578,12 @@ Scope {
                     event.accepted = true;
                 } else if (event.key === Qt.Key_Minus) {
                     root.zoomGrid(-0.12);
+                    event.accepted = true;
+                } else if (event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) {
+                    const dir = event.key === Qt.Key_PageDown ? 1 : -1;
+                    gridFlick.contentY = Math.max(0, Math.min(
+                        gridFlick.contentHeight - gridFlick.height,
+                        gridFlick.contentY + dir * gridFlick.height * 0.8));
                     event.accepted = true;
                 }
             }
@@ -824,36 +842,44 @@ Scope {
                     id: gridArea
                     visible: root.viewMode === "grid"
                     width: parent.width
-                    height: Math.min(root.screenHeight - 300,
-                        root.gridRows * root.gridCardHeight
-                        + (root.gridRows - 1) * root.gridSpacing + 8)
+                    height: Math.max(240, root.screenHeight - 300)
 
-                    Grid {
-                        anchors.centerIn: parent
-                        columns: root.gridColumns
-                        spacing: root.gridSpacing
-                        scale: root.gridZoom
-                        transformOrigin: Item.Center
+                    Flickable {
+                        id: gridFlick
+                        anchors.fill: parent
+                        clip: true
+                        flickableDirection: Flickable.VerticalFlick
+                        boundsBehavior: Flickable.StopAtBounds
+                        contentWidth: Math.max(gridLayout.implicitWidth, gridFlick.width)
+                        contentHeight: Math.max(gridLayout.implicitHeight, gridFlick.height)
 
-                        Repeater {
-                            model: root.entries
+                        Grid {
+                            id: gridLayout
+                            x: Math.max(0, (gridFlick.width - gridLayout.implicitWidth) / 2)
+                            y: 0
+                            columns: root.gridColumns
+                            spacing: root.gridSpacing
 
-                            delegate: WindowSwitcherCard {
-                                required property var modelData
-                                required property int index
+                            Repeater {
+                                model: root.entries
 
-                                entry: modelData
-                                selected: index === root.selectedIndex
-                                cardWidth: root.gridCardWidth
-                                cardHeight: root.gridCardHeight
-                                previewActive: root.viewMode === "grid"
-                                workspaceBadge: root.workspaceBadgeFor(modelData)
+                                delegate: WindowSwitcherCard {
+                                    required property var modelData
+                                    required property int index
 
-                                onRequestActivate: {
-                                    root.select(index);
-                                    root.commit();
+                                    entry: modelData
+                                    selected: index === root.selectedIndex
+                                    cardWidth: root.gridCardWidth
+                                    cardHeight: root.gridCardHeight
+                                    previewActive: root.viewMode === "grid"
+                                    workspaceBadge: root.workspaceBadgeFor(modelData)
+
+                                    onRequestActivate: {
+                                        root.select(index);
+                                        root.commit();
+                                    }
+                                    onRequestWheel: delta => root.handleGridWheel(delta, false)
                                 }
-                                onRequestWheel: delta => root.zoomGrid(delta < 0 ? -0.12 : 0.12)
                             }
                         }
                     }
@@ -986,6 +1012,14 @@ Scope {
                             KeyCap { label: "Wheel" }
                             StyledText {
                                 anchors.verticalCenter: parent.verticalCenter
+                                text: Translation.tr("scroll")
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                color: Appearance.colors.colOnSurfaceVariant
+                            }
+                            Item { anchors.verticalCenter: parent.verticalCenter; width: 10; height: 1 }
+                            KeyCap { label: "+ / -" }
+                            StyledText {
+                                anchors.verticalCenter: parent.verticalCenter
                                 text: Translation.tr("zoom")
                                 font.pixelSize: Appearance.font.pixelSize.smaller
                                 color: Appearance.colors.colOnSurfaceVariant
@@ -1076,6 +1110,10 @@ Scope {
                 gridZoom: root.gridZoom,
                 locked: root.locked,
                 gridColumns: root.gridColumns,
+                gridRows: root.gridRows,
+                gridScrollY: gridFlick.contentY,
+                gridContentHeight: gridFlick.contentHeight,
+                gridViewportHeight: gridFlick.height,
                 closing: root.closing,
                 darkmode: Appearance.m3colors.darkmode,
                 m3background: String(Appearance.m3colors.m3background),
