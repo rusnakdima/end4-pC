@@ -2,7 +2,7 @@ translations/es_MX.json
 *.bak
 /.omp/
 /file:/
-/dots/
+# dots/ holds the dotfile configs vendored by this theme.
 __pycache__/
 *.pyc
 .pytest_cache/

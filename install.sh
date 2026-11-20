@@ -194,6 +194,17 @@ install_keybind_defaults() {
         { printf '\n'; cat "$snippet"; } >> "$dest"
         echo "[install] default keybinds written to custom/keybinds.lua"
     fi
+    if grep -qF 'quickshell:imagePreview' "$dest"; then
+        echo "[install] image preview keybind already present"
+    else
+        {
+            printf '\n-- >>> end4-pC image-preview keybind >>>\n'
+            printf -- '--#/# bind = SUPER+SHIFT, I,, -- Image Preview: view a file or clipboard image --\n'
+            printf 'hl.bind("SUPER + SHIFT + I", hl.dsp.global("quickshell:imagePreview"), {description = "Utilities: Image preview"})\n'
+            printf -- '-- <<< end4-pC image-preview keybind <<<\n'
+        } >> "$dest"
+        echo "[install] image preview keybind written to custom/keybinds.lua"
+    fi
     # The installer may run under sudo: hand the file back to its owner.
     if [[ $(id -u) -eq 0 && -n "${TARGET_USER:-}" ]]; then
         chown "$TARGET_USER:" "$dest" 2>/dev/null || true
@@ -384,6 +395,43 @@ install_nvim_bootstrap() {
     [[ -f "$src" ]] || { echo "[install] WARN: lazy-lock.json not found at $src"; return; }
     mkdir -p "$TARGET_HOME/.config/nvim"
     [[ -f "$TARGET_HOME/.config/nvim/lazy-lock.json" ]] || cp "$src" "$TARGET_HOME/.config/nvim/lazy-lock.json"
+}
+
+# ---------------------------------------------------------------------------
+# Image preview config (fish + nvim)
+# ---------------------------------------------------------------------------
+# The fish abbreviation and the nvim keymaps/command are shipped as snippets
+# and installed into the user's existing configs behind markers, so repeated
+# install.sh runs never duplicate them.
+install_image_preview_configs() {
+    echo "[install] Installing image preview config..."
+    local snippets="$SOURCE_DIR/features/image-preview"
+    [[ -d "$snippets" ]] || return 0
+
+    mkdir -p "$TARGET_HOME/.config/fish/conf.d"
+    deploy_atomic "$snippets/fish.fish" "$TARGET_HOME/.config/fish/conf.d/image-preview.fish"
+
+    mkdir -p "$TARGET_HOME/.config/nvim/lua/plugins"
+    deploy_atomic "$snippets/nvim-image.lua" "$TARGET_HOME/.config/nvim/lua/plugins/image.lua"
+
+    local keymaps="$TARGET_HOME/.config/nvim/lua/config/keymaps.lua"
+    local marker="end4-pC image-preview keymaps"
+    mkdir -p "$(dirname "$keymaps")"
+    touch "$keymaps"
+    if grep -qF "$marker" "$keymaps"; then
+        echo "[install] image preview keymaps already present"
+    else
+        {
+            printf '\n-- >>> %s >>>\n' "$marker"
+            cat "$snippets/nvim-keymaps.lua"
+            printf -- '-- <<< %s <<<\n' "$marker"
+        } >> "$keymaps"
+    fi
+
+    if [[ $(id -u) -eq 0 && -n "${TARGET_USER:-}" ]]; then
+        chown "$TARGET_USER:" "$TARGET_HOME/.config/fish/conf.d/image-preview.fish" \
+            "$TARGET_HOME/.config/nvim/lua/plugins/image.lua" "$keymaps" 2>/dev/null || true
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -801,6 +849,7 @@ main() {
     install_kitty_config
     install_omp_config
     install_nvim_bootstrap
+    install_image_preview_configs
     install_python_venv
     install_ii_config
     install_sddm_theme
