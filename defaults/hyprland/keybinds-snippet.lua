@@ -32,9 +32,16 @@ hl.bind("SUPER + SHIFT + V", hl.dsp.global("quickshell:advancedPaste"), {descrip
 hl.bind("SUPER + SHIFT + F", hl.dsp.global("quickshell:findMouse"), {description = "Utilities: Find My Mouse"})
 --#/# bind = SUPER+SHIFT, U,, -- Toggle the on-screen ruler --
 hl.bind("SUPER + SHIFT + U", hl.dsp.global("quickshell:screenRuler"), {description = "Utilities: Screen ruler"})
+--#/# bind = SUPER+SHIFT, I,, -- Image Preview: view a file or clipboard image --
+hl.bind("SUPER + SHIFT + I", hl.dsp.global("quickshell:imagePreview"), {description = "Utilities: Image preview"})
 -- <<< end4-pC utilities keybinds
 
 -- >>> end4-pC advanced-paste window rule (managed by end4-pC)
 -- Keep Advanced Paste as a normal floating window with the theme's rounding.
 hl.window_rule({ match = { class = "org.quickshell", title = "Advanced Paste" }, float = true, rounding = 18 })
 -- <<< end4-pC advanced-paste window rule
+
+-- >>> end4-pC image-preview window rule (managed by end4-pC)
+-- Keep the image preview overlay floating with the theme's rounding.
+hl.window_rule({ match = { class = "org.quickshell", title = "Image Preview" }, float = true, rounding = 18 })
+-- <<< end4-pC image-preview window rule

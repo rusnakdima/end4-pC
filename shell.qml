@@ -63,6 +63,7 @@ ShellRoot {
         // instantiate at startup. Otherwise their targets only appear after
         // the first time the corresponding window happens to be opened.
         AdvancedPaste.close();
+        ImagePreview.close();
         DesktopUtilities.stopFindMouse();
     }
     

@@ -11,6 +11,7 @@ Singleton {
     id: root
     signal requestBluetoothDialog()
     property bool advancedPasteOpen: false
+    property bool imagePreviewOpen: false
     property bool barOpen: true
     // True while the bar is hidden by its auto hide, so that everything the
     // bar draws below itself (the music line under the island pill) can go

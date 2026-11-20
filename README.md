@@ -178,6 +178,24 @@ hl.bind("SUPER + SHIFT + V", hl.dsp.global("quickshell:advancedPaste"), {descrip
 
 You can also trigger it from a terminal with `qs ipc call advancedPaste toggle`. Settings for the feature live in Settings → **Tools → Advanced Paste**.
 
+### 🖼️ Image Preview
+
+Press **Super+Shift+I** to view a screenshot from the clipboard, or an image
+file. When the clipboard holds a path instead of pixel data it is opened
+directly; otherwise a file picker appears. The overlay follows the theme
+(Material 3 card, rounded corners) and supports fit/zoom controls and
+`Escape`, `+`, `-`, `0` keys.
+
+From a terminal: `qs ipc call imagePreview toggle`, or
+`qs ipc call imagePreview openPath /path/to/image.png`. In fish, `img` shows an
+image inline (kitty graphics, or a chafa fallback outside kitty), and
+`ishow --widget <path>` sends it to the shell widget. In nvim, `<leader>i`
+hovers an image reference, `<leader>I` opens an image path, and `:ImagePreview
+<path>` previews any readable file.
+
+Companion snippets live in `features/image-preview/`; the QML service is in
+`services/ImagePreview.qml` and the panel in `modules/ii/imagePreview/`.
+
 ### 🛠️ Desktop utilities
 
 The same keybind snippet also installs three small PowerToys-style shortcuts:

@@ -18,6 +18,7 @@ import qs.modules.waffle.taskView
 
 // Fallbacks
 import qs.modules.ii.advancedPaste
+import qs.modules.ii.imagePreview
 import qs.modules.ii.cheatsheet
 import qs.modules.ii.onScreenKeyboard
 import qs.modules.ii.overlay
@@ -28,6 +29,7 @@ import qs.modules.ii.windowSwitcher
 
 Scope {
     PanelLoader { component: AdvancedPaste {} }
+    PanelLoader { component: ImagePreview {} }
     PanelLoader { component: WaffleActionCenter {} }
     PanelLoader { component: WaffleBar {} }
     PanelLoader { component: WaffleBackground {} }

@@ -4,6 +4,7 @@ import Quickshell
 import qs
 import qs.modules.common
 import qs.modules.ii.advancedPaste
+import qs.modules.ii.imagePreview
 import qs.modules.ii.background
 import qs.modules.ii.bar
 import qs.modules.ii.dock
@@ -36,6 +37,7 @@ import qs.modules.ii.frame
 Scope {
     PanelLoader { extraCondition: !Config.options.bar.vertical; component: Bar {} }
     PanelLoader { component: AdvancedPaste {} }
+    PanelLoader { component: ImagePreview {} }
     PanelLoader { component: Background {} }
     PanelLoader { extraCondition: Config.options.dock.enable; component: Dock {} }
     PanelLoader { component: EqualizerPopup {} }

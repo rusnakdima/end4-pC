@@ -955,7 +955,13 @@ Singleton {
                 property string pasteCommand: "ydotool key -d 1 29:1 47:1 47:0 29:0"
                 property real pasteDelay: 0.08
                 property bool ocrOpensPopup: true // Hand screen-snip OCR text to Advanced Paste
-                property bool colorPickerOpensPopup: true // Offer HEX/RGB/HSL/CSS/Flutter after picking a color
+                property bool colorPickerOpensPopup: true // Offer HEX / RGB / CSS / Flutter after picking a color
+            }
+
+            property JsonObject imagePreview: JsonObject {
+                property int maxWidth: 960
+                property int maxHeight: 720
+                property string filePickerCommand: "zenity --file-selection --title='Select an image' --file-filter='Images | *.png *.jpg *.jpeg *.gif *.bmp *.webp *.tiff'"
             }
 
             property JsonObject search: JsonObject {
