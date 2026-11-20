@@ -3,7 +3,7 @@
 # Provided by the theme repo (features/image-preview/fish.fish).
 
 # `img` is an alias for `ishow` so it works inside AND outside kitty.
-abbr --add --force img ishow
+abbr --add img ishow
 
 function ishow -d 'Show an image inline (kitty graphics / chafa fallback / QML widget)'
     set -l widget 0
