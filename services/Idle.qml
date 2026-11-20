@@ -1,5 +1,6 @@
 pragma Singleton
 import qs.modules.common
+import qs.services
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -66,6 +67,22 @@ Singleton {
         interval: 500
         running: true
         onTriggered: root.inhibitorWindowReady = true
+    }
+
+    // PowerToys "Awake"-style external control.
+    IpcHandler {
+        target: "awake"
+
+        function toggle(): void { root.toggleInhibit() }
+        function enable(): void { root.toggleInhibit(true) }
+        function disable(): void { root.toggleInhibit(false) }
+        function status(): bool { return root.inhibit }
+    }
+
+    CompositorGlobalShortcut {
+        name: "awakeToggle"
+        description: "Toggle Keep Awake (Caffeine)"
+        onPressed: root.toggleInhibit()
     }
 
     IdleInhibitor {
