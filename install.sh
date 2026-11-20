@@ -123,6 +123,11 @@ install_qs_config() {
     mkdir -p "$(dirname "$dest")"
     rsync -av --delete --exclude '/dots/' --exclude '/.omp/' --exclude '/file:/' "$SOURCE_DIR/" "$dest/"
 
+    # The keep-awake idle lock is held by a fixed-name user unit so a shell
+    # reload cannot orphan it (and leave idle timeouts permanently disabled).
+    install -Dm644 "$SOURCE_DIR/systemd/user/end4pc-keep-awake.service" \
+        "$TARGET_HOME/.config/systemd/user/end4pc-keep-awake.service"
+
     # Patch QUICKSHELL_CONFIG_NAME="ii" → "end4-pC" in installed scripts
     find "$dest/scripts" -type f -name '*.sh' -print0 | while IFS= read -r -d '' f; do
         if grep -q 'QUICKSHELL_CONFIG_NAME="ii"' "$f" 2>/dev/null; then

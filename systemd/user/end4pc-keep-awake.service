@@ -1,0 +1,15 @@
+[Unit]
+Description=Keep system awake (end4-pC idle inhibitor)
+
+[Service]
+Type=simple
+# Reap idle inhibitors leaked by older shell versions/reloads. The "syste[m]"
+# spelling keeps pkill from matching its own command line.
+ExecStartPre=/usr/bin/bash -c 'pkill -TERM -f "systemd-inhibit --what=idle --who=end4-pC --why=Keep syste[m] awake" || true'
+ExecStart=/usr/bin/systemd-inhibit --what=idle --who=end4-pC --why="Keep system awake" --mode=block /usr/bin/sleep infinity
+Restart=no
+KillMode=control-group
+TimeoutStopSec=5
+
+[Install]
+WantedBy=default.target

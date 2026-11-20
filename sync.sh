@@ -355,6 +355,14 @@ if [[ $keybinds_only -eq 0 ]]; then
         ${qs_root_owned[@]+"${qs_root_owned[@]}"} \
         "$src/" "$qs_dest/"
 
+    # Keep-awake inhibitor unit: systemd owns its lifetime, so a shell reload
+    # or crash can never leave an idle-inhibitor lock behind.
+    if [[ $dry_run -eq 0 ]]; then
+        install -Dm644 "$src/systemd/user/end4pc-keep-awake.service" \
+            "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/end4pc-keep-awake.service"
+        systemctl --user daemon-reload 2>/dev/null || true
+    fi
+
     # dots/ is vendored and git-ignored, so a checkout that never carried it
     # (or lost it) must not turn the whole sync into a failure.
     if [[ -d "$src/dots/.config/hypr" ]]; then

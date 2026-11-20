@@ -22,12 +22,14 @@ Singleton {
 
     Component.onCompleted: {
         root.inhibit = Persistent.states.idle.inhibit;
+        root.applyInhibit();
     }
 
     Connections {
         target: Persistent
         function onReadyChanged() {
             root.inhibit = Persistent.states.idle.inhibit;
+            root.applyInhibit();
         }
     }
 
@@ -38,6 +40,7 @@ Singleton {
             root.inhibit = !root.inhibit;
         }
         Persistent.states.idle.inhibit = root.inhibit;
+        root.applyInhibit();
     }
 
     // hypridle can be told to ignore Wayland, D-Bus or systemd inhibitors,
@@ -45,14 +48,18 @@ Singleton {
     // surface. A logind idle inhibitor is the one form hypridle honours in
     // every configuration, and it also covers compositors that do not honour
     // a Wayland inhibitor at all.
-    Process {
-        running: root.inhibit
-        command: ["systemd-inhibit", "--what=idle", "--who=end4-pC",
-            "--why=Keep system awake", "--mode=block", "sleep", "infinity"]
-        onExited: (exitCode, exitStatus) => {
-            if (root.inhibit && exitCode !== 0)
-                console.warn(`Idle: logind inhibitor exited with code ${exitCode}`);
-        }
+    //
+    // The lock is held by a fixed-name user unit instead of a Process owned by
+    // this shell. A shell reload used to orphan the old systemd-inhibit child
+    // with its lock still held, so every reload added another permanent
+    // "Keep system awake" lock and idle timeouts stopped firing altogether.
+    // systemd now owns the lifetime (teardown at logout, one unit name), and
+    // the unit's ExecStartPre reaps any locks left by older shell versions.
+    readonly property string inhibitorUnit: "end4pc-keep-awake.service"
+
+    function applyInhibit() {
+        Quickshell.execDetached(["systemctl", "--user",
+            root.inhibit ? "start" : "stop", root.inhibitorUnit])
     }
 
     Timer {
