@@ -323,6 +323,7 @@ install_keybind_defaults() {
     local marker="end4-pC workspace-follow keybinds"
     local ap_marker="end4-pC utilities keybinds"
     local wr_marker="end4-pC advanced-paste window rule"
+    local launcher_marker="end4-pC tap-super launcher keybinds"
     [[ -f "$default_keybind_snippet" ]] || return 0
     mkdir -p "$(dirname "$custom_keybinds")"
     touch "$custom_keybinds"
@@ -340,6 +341,13 @@ install_keybind_defaults() {
     if ! grep -qF "$wr_marker" "$custom_keybinds"; then
         printf '\n' >> "$custom_keybinds"
         sed -n "/>>> ${wr_marker}/,/<<< ${wr_marker}/p" "$default_keybind_snippet" >> "$custom_keybinds"
+        added=1
+    fi
+    # Enforce tap-only launcher: an inherited `global` shortcut cannot be
+    # shadowed by Hyprland, so it would open the launcher on Super + <key>.
+    if ! grep -qF "$launcher_marker" "$custom_keybinds"; then
+        printf '\n' >> "$custom_keybinds"
+        sed -n "/>>> ${launcher_marker}/,/<<< ${launcher_marker}/p" "$default_keybind_snippet" >> "$custom_keybinds"
         added=1
     fi
     echo "== default keybinds =="
@@ -411,7 +419,8 @@ fi
 if [[ $dry_run -eq 1 ]]; then
     if grep -qF "end4-pC workspace-follow keybinds" "$custom_keybinds" 2>/dev/null \
         && grep -qF "end4-pC utilities keybinds" "$custom_keybinds" 2>/dev/null \
-        && grep -qF "end4-pC advanced-paste window rule" "$custom_keybinds" 2>/dev/null; then
+        && grep -qF "end4-pC advanced-paste window rule" "$custom_keybinds" 2>/dev/null \
+        && grep -qF "end4-pC tap-super launcher keybinds" "$custom_keybinds" 2>/dev/null; then
         echo "== default keybinds =="
         echo "       already present in custom/keybinds.lua"
     else

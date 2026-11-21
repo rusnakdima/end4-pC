@@ -57,3 +57,21 @@ hl.window_rule({ match = { class = "org.quickshell", title = "Advanced Paste" },
 -- Keep the image preview overlay floating with the theme's rounding.
 hl.window_rule({ match = { class = "org.quickshell", title = "Image Preview" }, float = true, rounding = 18 })
 -- <<< end4-pC image-preview window rule
+
+-- >>> end4-pC tap-super launcher keybinds (managed by end4-pC)
+-- Tap Super alone opens the launcher. Super + any other key must NOT.
+--
+-- `release = true` is what makes the bind tap-only: Hyprland shadows
+-- (cancels) it as soon as another key is pressed while Super is held.
+-- A `global` shortcut is exempt from shadowing and would fire even when
+-- Super was only a modifier for another action -- that is why this
+-- override exists.
+--
+-- Unbind first so an inherited (possibly global) bind on the same key
+-- cannot double-toggle the launcher.
+hl.unbind("SUPER + SUPER_L")
+hl.unbind("SUPER + SUPER_R")
+local end4pcTapSearchToggle = hl.dsp.exec_cmd("qs -c $qsConfig ipc call search toggle || pkill fuzzel || fuzzel")
+hl.bind("SUPER + SUPER_L", end4pcTapSearchToggle, { release = true, description = "Shell: Toggle search" })
+hl.bind("SUPER + SUPER_R", end4pcTapSearchToggle, { release = true })
+-- <<< end4-pC tap-super launcher keybinds
