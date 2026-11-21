@@ -7,12 +7,21 @@ from typing import Dict, List, Optional
 
 HIDE_MARKERS = ["[hidden]", "# [hidden]"]
 
+# Tap-super launcher binds are runtime-only: they open the launcher on a Super
+# tap and must never appear in the exported keybind list (not deletable, not a
+# conflict source, not rebindable). Everything between these markers is skipped
+# by the parser. The start marker may carry a trailing "(managed by ...)" note,
+# so match on the marker prefix.
+LAUNCHER_START = "-- >>> end4-pC tap-super launcher keybinds"
+LAUNCHER_END = "-- <<< end4-pC tap-super launcher keybinds"
+
 parser = argparse.ArgumentParser(description='Hyprland Lua keybind reader')
 parser.add_argument('--path', type=str, default="$HOME/.config/hypr/hyprland/keybinds.lua")
 args = parser.parse_args()
 
 content_lines = []
 reading_line = 0
+in_launcher_block = False
 
 
 class KeyBinding(dict):
@@ -26,10 +35,11 @@ class KeyBinding(dict):
 
 
 class Section(dict):
-    def __init__(self, children, keybinds, name):
-        self["children"] = children
-        self["keybinds"] = keybinds
-        self["name"]     = name
+    def __init__(self, children, keybinds, name, hiddenCombos=None):
+        self["children"]     = children
+        self["keybinds"]     = keybinds
+        self["name"]         = name
+        self["hiddenCombos"] = hiddenCombos if hiddenCombos is not None else []
 
 
 def read_content(path: str) -> str:
@@ -65,6 +75,40 @@ def is_hidden(line: str) -> bool:
         if marker in line:
             return True
     return False
+
+
+def is_launcher_start(line: str) -> bool:
+    return line.strip().startswith(LAUNCHER_START)
+
+
+def is_launcher_end(line: str) -> bool:
+    return line.strip().startswith(LAUNCHER_END)
+
+
+def combo_from_line(line: str) -> str:
+    """Best-effort combo (" + ".join([*mods, key])) for a bind source line.
+
+    Returns "" when the line is not a hl.bind/bindAction call we can read.
+    """
+    m = re.match(r'\s*(hl\.bind|bindAction)\s*\(\s*"([^"]+)"\s*,\s*(.*)', line, re.DOTALL)
+    if not m:
+        return ""
+    mods, key = parse_key_string(m.group(2).strip())
+    return " + ".join([*mods, key])
+
+
+def record_hidden(section: Section, line: str) -> None:
+    """Remember a hidden bind's combo so suggestions can avoid it."""
+    combo = combo_from_line(line)
+    if combo:
+        section["hiddenCombos"].append(combo)
+
+
+def attach_source(bind: KeyBinding, source: str, line: int, end_line: int) -> None:
+    """Stamp a parsed bind with where it came from (1-based, inclusive)."""
+    bind["sourcePath"] = source
+    bind["line"] = line
+    bind["endLine"] = end_line
 
 
 def parse_lua_bind(line: str, override_comment: str = "") -> Optional[KeyBinding]:
@@ -125,11 +169,28 @@ def parse_lua_bind(line: str, override_comment: str = "") -> Optional[KeyBinding
     return KeyBinding(mods, key, dispatcher, params, comment, action)
 
 
-def get_binds_recursive(current_content: Section, scope: int) -> Section:
-    global content_lines, reading_line
+def get_binds_recursive(current_content: Section, scope: int, source: str) -> Section:
+    global content_lines, reading_line, in_launcher_block
 
     while reading_line < len(content_lines):
         line = content_lines[reading_line]
+
+        # ── Tap-super launcher marker block ───────────────────────────
+        # Binds in this block are runtime-only. Toggle a flag on the exact
+        # marker lines and skip everything in between, at top level or inside
+        # a section: no binds emitted, no hidden combos recorded. Keep
+        # advancing reading_line so source line numbers stay correct.
+        if is_launcher_start(line):
+            in_launcher_block = True
+            reading_line += 1
+            continue
+        if is_launcher_end(line):
+            in_launcher_block = False
+            reading_line += 1
+            continue
+        if in_launcher_block:
+            reading_line += 1
+            continue
 
         # ── Section headings ──────────────────────────────────────────
         # --##! Title  (scope 2)
@@ -143,7 +204,7 @@ def get_binds_recursive(current_content: Section, scope: int) -> Section:
                 return current_content
             reading_line += 1
             current_content["children"].append(
-                get_binds_recursive(Section([], [], section_name), heading_scope)
+                get_binds_recursive(Section([], [], section_name), heading_scope, source)
             )
             reading_line += 1
             continue
@@ -153,6 +214,7 @@ def get_binds_recursive(current_content: Section, scope: int) -> Section:
         # e.g.: --#/# bind = SUPER + ←/↑/→/↓,, -- Focus in direction
         comment_bind_match = re.match(r'^--#/#\s*(.*)', line)
         if comment_bind_match:
+            start_line = reading_line + 1
             rest = comment_bind_match.group(1).strip()
             # It might be a descriptive comment like "bind = SUPER + ←, -- Focus left"
             # Extract the comment after "--"
@@ -160,6 +222,7 @@ def get_binds_recursive(current_content: Section, scope: int) -> Section:
             if " -- " in rest:
                 comment_part = rest.split(" -- ", 1)[1].strip()
                 if is_hidden(comment_part):
+                    record_hidden(current_content, rest)
                     reading_line += 1
                     continue
             # Try to parse as hl.bind/bindAction if it starts with one
@@ -167,6 +230,9 @@ def get_binds_recursive(current_content: Section, scope: int) -> Section:
                 kb = parse_lua_bind(rest, override_comment=comment_part)
                 if kb:
                     current_content["keybinds"].append(kb)
+                    attach_source(kb, source, start_line, start_line)
+                elif is_hidden(rest):
+                    record_hidden(current_content, rest)
             elif comment_part:
                 # It's a descriptive placeholder like "bind = SUPER + ←/→ -- Focus in direction"
                 # Extract key hint from before " -- "
@@ -174,11 +240,13 @@ def get_binds_recursive(current_content: Section, scope: int) -> Section:
                 # Build a synthetic KeyBinding for display
                 kb = KeyBinding([], key_hint, "comment", "", comment_part)
                 current_content["keybinds"].append(kb)
+                attach_source(kb, source, start_line, start_line)
             reading_line += 1
             continue
 
         # ── Normal hl.bind(...) / bindAction(...) ─────────────────────
         if re.match(r'\s*(hl\.bind|bindAction)\s*\(', line):
+            start_line = reading_line + 1
             # Handle multiline binds by collecting until closing paren+bracket
             full_line = line
             depth = full_line.count("(") - full_line.count(")")
@@ -192,12 +260,16 @@ def get_binds_recursive(current_content: Section, scope: int) -> Section:
             # Check trailing comment for hidden marker
             # e.g. ) -- # [hidden]
             if is_hidden(full_line):
+                record_hidden(current_content, full_line)
                 reading_line = lookahead
                 continue
 
             kb = parse_lua_bind(full_line)
             if kb:
                 current_content["keybinds"].append(kb)
+                # lookahead is the 0-based index of the next unread line, so
+                # the last line consumed is 1-based `lookahead` (inclusive).
+                attach_source(kb, source, start_line, lookahead)
             reading_line = lookahead
             continue
 
@@ -206,14 +278,17 @@ def get_binds_recursive(current_content: Section, scope: int) -> Section:
     return current_content
 
 
-def parse_file(path: str) -> Section:
-    global content_lines, reading_line
+def parse_file(path: str, source: str = None) -> Section:
+    global content_lines, reading_line, in_launcher_block
+    if source is None:
+        source = os.path.expanduser(os.path.expandvars(path))
     raw = read_content(path)
     if raw == "error":
         return Section([], [], "error")
     content_lines = raw.splitlines()
     reading_line  = 0
-    return get_binds_recursive(Section([], [], ""), 0)
+    in_launcher_block = False
+    return get_binds_recursive(Section([], [], ""), 0, source)
 
 
 def parse_keys(path: str) -> Section:
@@ -228,14 +303,16 @@ def parse_keys(path: str) -> Section:
             for fname in sorted(files):
                 if not fname.endswith(".lua"):
                     continue
-                section = parse_file(os.path.join(root_dir, fname))
+                file_path = os.path.join(root_dir, fname)
+                section = parse_file(file_path, file_path)
                 if section["name"] == "error":
                     continue
                 merged["children"].extend(section["children"])
                 merged["keybinds"].extend(section["keybinds"])
+                merged["hiddenCombos"].extend(section["hiddenCombos"])
         return merged
 
-    return parse_file(path)
+    return parse_file(path, expanded)
 
 
 if __name__ == "__main__":

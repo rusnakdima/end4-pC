@@ -3,6 +3,7 @@ import QtTest
 import Quickshell
 import Quickshell.Io
 import qs.services
+import "modules/common/functions/KeybindStore.js" as KeybindStore
 
 /**
  * The write path of the keybind manager: a keybind created in the settings
@@ -263,5 +264,55 @@ TestCase {
 
         compare(ManagedKeybinds.pendingWrite, false, "an unknown id must not write");
         compare(ManagedKeybinds.entries.length, entriesBefore, "an unknown id must not change the block");
+    }
+
+    // parseBlock stamps each parsed line with its 1-based location in the
+    // file. The conflict resolver matches a bind's sourcePath + line range
+    // against these to decide whether a holder belongs to the managed block.
+    function test_parse_block_records_line_metadata() {
+        const text = "-- before\n"
+            + testCase.startMarker + "\n"
+            + "--##! Utilities\n"
+            + "-- panel-id: abc123\n"
+            + "hl.bind(\"SUPER + F12\", hl.dsp.exec_cmd(\"true\"), {description = \"One\"})\n"
+            + "hl.bind(\"SUPER + F11\", hl.dsp.exec_cmd(\"false\"), {description = \"Two\"})\n"
+            + testCase.endMarker + "\n"
+            + "-- after\n";
+        const entries = KeybindStore.parseBlock(text);
+        compare(entries.length, 2);
+        // The marker is on line 2; the two binds are on lines 5 and 6.
+        compare(entries[0].line, 5);
+        compare(entries[0].endLine, 5);
+        compare(entries[1].line, 6);
+        compare(entries[1].endLine, 6);
+    }
+
+    // entryForSource is the lookup the conflict fix uses: a bind from the
+    // managed block resolves to its entry, a bind from elsewhere resolves to
+    // null (so the caller falls back to an override).
+    function test_entry_for_source_matches_managed_bind_and_rejects_outside() {
+        let generation = ManagedKeybinds.loadGeneration;
+        const created = ManagedKeybinds.create({
+            name: "Source bind", category: "", command: "true", combo: "SUPER + F7"
+        });
+        verify(created.ok, "create failed: " + created.error);
+        waitForSave(generation);
+
+        const entry = ManagedKeybinds.entries.find(e => e.id === created.id);
+        verify(entry !== undefined, "the managed entry is missing after save");
+        verify(typeof entry.line === "number", "the managed entry has no line metadata");
+
+        const inside = { sourcePath: testCase.tempPath, line: entry.line, endLine: entry.endLine };
+        const found = ManagedKeybinds.entryForSource(inside);
+        verify(found !== null, "entryForSource returned null for a bind inside the managed block");
+        compare(found.id, created.id);
+
+        const outsideLine = { sourcePath: testCase.tempPath, line: 1, endLine: 1 };
+        verify(ManagedKeybinds.entryForSource(outsideLine) === null,
+            "entryForSource must reject a bind outside the managed block");
+
+        const outsideFile = { sourcePath: "/some/other/keybinds.lua", line: entry.line, endLine: entry.endLine };
+        verify(ManagedKeybinds.entryForSource(outsideFile) === null,
+            "entryForSource must reject a bind from a different file");
     }
 }

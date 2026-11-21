@@ -8,6 +8,8 @@ import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.common.functions as CF
 import "../../../common/functions/KeybindLabels.js" as KeybindLabels
+import "../../../common/functions/KeybindConflicts.js" as KeybindConflicts
+import "../../../common/functions/SettingsEscape.js" as SettingsEscape
 
 /**
  * Keyboard backlight colour, shell shortcuts and the other keybinds.
@@ -87,6 +89,72 @@ ContentPage {
 
     readonly property int keybindMatchCount: page.visibleManaged.length
         + page.visibleShell.length + page.visibleOtherSections.length
+
+    // ------------------------------------------------------
+    // Deleting shell / compositor binds (recoverable)
+    // ------------------------------------------------------
+    // The delete service may only write the two keybind files it owns. Mirror
+    // those paths here so the delete affordance is hidden for a bind that came
+    // from anywhere else — the service would refuse it anyway.
+    readonly property var deletablePaths: [
+        CF.FileUtils.trimFileProtocol(DisabledKeybinds.defaultKeybindConfigPath),
+        CF.FileUtils.trimFileProtocol(DisabledKeybinds.userKeybindConfigPath)
+    ]
+
+    function canDeleteBind(bind) {
+        if (bind === undefined || bind === null) return false;
+        const path = CF.FileUtils.trimFileProtocol(String(bind.sourcePath ?? ""));
+        return path !== "" && page.deletablePaths.indexOf(path) !== -1;
+    }
+
+    function canDeleteBinds(binds) {
+        const list = binds ?? [];
+        return list.length > 0 && list.every(bind => page.canDeleteBind(bind));
+    }
+
+    // ------------------------------------------------------
+    // Conflicting key combinations
+    // ------------------------------------------------------
+    // A combo held by two or more binds dispatches all of them when pressed.
+    // The analyzer returns plain {combo, holders} groups, each holder reduced
+    // to {id, label, file}. One fix moves exactly one holder to a free combo,
+    // through one service — a group with several others gets one Move action
+    // per holder, so each click is one write and one reload.
+    readonly property var conflictGroups: KeybindConflicts.groupsFrom(HyprlandKeybinds.repeatIndex)
+
+    // A short confirmation after a fix. The group itself usually disappears
+    // on the reload that follows, so the flag keeps the message visible.
+    property bool conflictResolved: false
+
+    Timer {
+        id: conflictResolvedTimer
+        interval: 4000
+        onTriggered: page.conflictResolved = false
+    }
+
+    // The group projection drops `bind` on purpose, so recover the real holder
+    // (which carries it) from the index before asking which service owns it.
+    function originalConflictHolder(group, holder) {
+        const holders = HyprlandKeybinds.repeatIndex.get(group.combo) ?? [];
+        // Two plain binds in the same file share `id`, so match by uid when
+        // the holder has one. Otherwise (shell actions) id is the identity.
+        const wanted = KeybindConflicts.identityOf(holder);
+        return holders.find(candidate => KeybindConflicts.identityOf(candidate) === wanted) ?? holder;
+    }
+
+    function moveConflictHolder(group, holder, combo) {
+        if (String(combo ?? "") === "") return;
+        const original = page.originalConflictHolder(group, holder);
+        const service = KeybindConflicts.fixHolder(
+            original, combo,
+            bind => ManagedKeybinds.entryForSource(bind),
+            ManagedKeybinds,
+            HyprlandBindOverrides);
+        if (service === "managed" || service === "override") {
+            page.conflictResolved = true;
+            conflictResolvedTimer.restart();
+        }
+    }
 
     // ------------------------------------------------------
     // Keyboard colour
@@ -323,22 +391,25 @@ ContentPage {
     // combination was taken and the event must not travel on.
     function handleCapturedKey(event) {
         if (page.capturing === "") {
-            // Escape closes the form first; only the next press closes the
-            // panel, so one key never throws away the draft.
-            if (page.formOpen && event.key === Qt.Key_Escape) {
-                page.closeForm();
-                return true;
+            if (event.key === Qt.Key_Escape) {
+                // Escape closes the edit form, but never the settings panel.
+                const decision = SettingsEscape.decide({
+                    source: "capture", formOpen: page.formOpen
+                });
+                if (decision.closeForm) page.closeForm();
+                if (decision.accept) return true;
             }
             return false;
         }
 
         if (event.key === Qt.Key_Escape) {
-            const formCapture = page.capturing === "form";
-            // Cancel the capture, but let the press travel on: the panel
-            // closes on Escape as well. The form capture only cancels
-            // itself — the draft below is still open.
-            page.stopCapture();
-            return formCapture;
+            // Every active capture consumes Escape so the settings window
+            // never sees it. The draft below stays open after cancellation.
+            const decision = SettingsEscape.decide({
+                source: "capture", capturing: true
+            });
+            if (decision.stopCapture) page.stopCapture();
+            return decision.accept;
         }
 
         const combo = CF.StringUtils.keyEventToCombo(event);
@@ -872,6 +943,343 @@ ContentPage {
                 }
             }
         }
+
+        // One combination held by two or more binds fires all of them when
+        // pressed. Hyprland-only like the bind lists it reads, and present
+        // only while there is a repeat to resolve (plus a moment after a fix
+        // so the result stays visible through the reload).
+        Loader {
+            Layout.fillWidth: true
+            active: WM.compositor === "hyprland"
+                && (page.conflictGroups.length > 0 || page.conflictResolved)
+            sourceComponent: Component {
+                ContentSection {
+                    icon: "warning"
+                    title: Translation.tr("Conflicts")
+                    hint: Translation.tr("Key conflicts")
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+
+                        StyledText {
+                            Layout.fillWidth: true
+                            visible: page.conflictResolved
+                            text: Translation.tr("Conflicts resolved")
+                            font.pixelSize: Appearance.font.pixelSize.normal
+                            color: Appearance.colors.colPrimary
+                        }
+
+                        Repeater {
+                            model: page.conflictGroups
+                            delegate: ConflictGroupPanel { }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Recoverable deletions live in the two config files as marker
+        // blocks. This section lists them so a delete can be undone. Like the
+        // keybind block it is Hyprland-only, and it only exists while there
+        // is something to restore.
+        Loader {
+            Layout.fillWidth: true
+            active: WM.compositor === "hyprland" && DisabledKeybinds.disabled.length > 0
+            sourceComponent: Component {
+                ContentSection {
+                    icon: "delete"
+                    title: Translation.tr("Deleted keybinds")
+                    hint: Translation.tr("A fresh install can restore deleted base keybinds")
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+
+                        Repeater {
+                            model: DisabledKeybinds.disabled
+                            delegate: Rectangle {
+                                id: deletedRow
+                                required property var modelData
+                                Layout.fillWidth: true
+                                implicitHeight: deletedRowLayout.implicitHeight + 16
+                                color: Appearance.colors.colLayer1
+                                radius: Appearance.rounding.normal
+
+                                RowLayout {
+                                    id: deletedRowLayout
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    spacing: 12
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        StyledText {
+                                            Layout.fillWidth: true
+                                            // Blocks read back from disk have no
+                                            // persisted label; the service falls
+                                            // back to the id, which is shown here.
+                                            text: (deletedRow.modelData.label ?? "") !== ""
+                                                ? deletedRow.modelData.label
+                                                : (deletedRow.modelData.id ?? "")
+                                            font.pixelSize: Appearance.font.pixelSize.normal
+                                            color: Appearance.colors.colOnLayer1
+                                            elide: Text.ElideRight
+                                        }
+
+                                        StyledText {
+                                            Layout.fillWidth: true
+                                            text: deletedRow.modelData.file ?? ""
+                                            font.pixelSize: Appearance.font.pixelSize.smaller
+                                            color: Appearance.colors.colSubtext
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    Item {
+                                        id: restoreButton
+                                        implicitWidth: 24
+                                        implicitHeight: 24
+                                        property bool hovered: restoreMouseArea.containsMouse
+                                        Accessible.name: Translation.tr("Restore")
+                                        Accessible.role: Accessible.Button
+
+                                        MaterialSymbol {
+                                            anchors.centerIn: parent
+                                            text: "restart_alt"
+                                            iconSize: Appearance.font.pixelSize.larger
+                                            color: Appearance.colors.colSubtext
+                                        }
+
+                                        MouseArea {
+                                            id: restoreMouseArea
+                                            anchors.fill: parent
+                                            anchors.margins: -6
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: DisabledKeybinds.restore(deletedRow.modelData.id)
+                                        }
+
+                                        StyledToolTip {
+                                            text: Translation.tr("Restore")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // One conflicted combination. The first holder is the default keeper, so
+    // a panel always leaves at least one binding on the original key. Every
+    // other holder gets its own Move action; a click writes exactly one fix.
+    component ConflictGroupPanel: Rectangle {
+        id: panel
+        required property var modelData
+
+        // uid for plain bind holders (two same-file binds on one combo share
+        // an id), id for shell actions.
+        property string keeperId: KeybindConflicts.identityOf(panel.modelData?.holders?.[0])
+        readonly property var choice: KeybindConflicts.chooseKeeper(panel.modelData, panel.keeperId)
+        readonly property var suggestions: KeybindConflicts.freeCombos(
+            HyprlandKeybinds.allUsedCombos, 3, panel.modelData?.combo ?? "")
+
+        Layout.fillWidth: true
+        implicitHeight: panelContent.implicitHeight + 24
+        color: Appearance.colors.colLayer1
+        radius: Appearance.rounding.normal
+
+        ColumnLayout {
+            id: panelContent
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 8
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Repeater {
+                    model: String(panel.modelData?.combo ?? "").split(" + ")
+                    delegate: KeyboardKey {
+                        required property var modelData
+                        key: modelData
+                        pixelSize: Appearance.font.pixelSize.smaller
+                    }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: Translation.tr("Used by %1 bindings").arg(panel.modelData?.holders?.length ?? 0)
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.colors.colSubtext
+                }
+            }
+
+            // Which binding keeps the original combination.
+            Repeater {
+                model: panel.modelData?.holders ?? []
+                delegate: Rectangle {
+                    id: keeperRow
+                    required property var modelData
+                    Layout.fillWidth: true
+                    implicitHeight: keeperInner.implicitHeight + 12
+                    color: "transparent"
+                    border.width: panel.keeperId === KeybindConflicts.identityOf(keeperRow.modelData) ? 1 : 0
+                    border.color: Appearance.colors.colPrimary
+                    radius: Appearance.rounding.small
+
+                    RowLayout {
+                        id: keeperInner
+                        anchors.fill: parent
+                        anchors.margins: 6
+                        spacing: 8
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: keeperRow.modelData.label ?? ""
+                                font.pixelSize: Appearance.font.pixelSize.normal
+                                color: Appearance.colors.colOnLayer1
+                                elide: Text.ElideRight
+                            }
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: keeperRow.modelData.file ?? ""
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                color: Appearance.colors.colSubtext
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        Item {
+                            id: keepButton
+                            implicitWidth: keepText.implicitWidth + 16
+                            implicitHeight: keepText.implicitHeight + 12
+                            Accessible.name: Translation.tr("Keep this one")
+                            Accessible.role: Accessible.Button
+
+                            StyledText {
+                                id: keepText
+                                anchors.centerIn: parent
+                                text: Translation.tr("Keep this one")
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                color: panel.keeperId === KeybindConflicts.identityOf(keeperRow.modelData)
+                                    ? Appearance.colors.colPrimary
+                                    : Appearance.colors.colSubtext
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: panel.keeperId = KeybindConflicts.identityOf(keeperRow.modelData)
+                            }
+                        }
+                    }
+                }
+            }
+
+            StyledText {
+                Layout.fillWidth: true
+                visible: panel.choice.others.length > 0
+                text: Translation.tr("Move other bindings to")
+                font.pixelSize: Appearance.font.pixelSize.normal
+                color: Appearance.colors.colOnLayer1
+            }
+
+            // One row per non-keeper holder: pick a free combo, then Move.
+            Repeater {
+                model: panel.choice.others
+                delegate: Rectangle {
+                    id: moveRow
+                    required property var modelData
+                    property string selectedCombo: ""
+
+                    Layout.fillWidth: true
+                    implicitHeight: moveInner.implicitHeight + 12
+                    color: "transparent"
+
+                    ColumnLayout {
+                        id: moveInner
+                        anchors.fill: parent
+                        anchors.margins: 6
+                        spacing: 6
+
+                        StyledText {
+                            Layout.fillWidth: true
+                            text: moveRow.modelData.label ?? ""
+                            font.pixelSize: Appearance.font.pixelSize.small
+                            color: Appearance.colors.colSubtext
+                            elide: Text.ElideRight
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Repeater {
+                                model: panel.suggestions
+                                delegate: Rectangle {
+                                    id: comboChip
+                                    required property var modelData
+                                    readonly property bool isSelected:
+                                        moveRow.selectedCombo === comboChip.modelData
+
+                                    implicitWidth: chipText.implicitWidth + 16
+                                    implicitHeight: chipText.implicitHeight + 10
+                                    radius: Appearance.rounding.small
+                                    color: comboChip.isSelected
+                                        ? Appearance.colors.colPrimaryContainer
+                                        : Appearance.colors.colLayer1
+                                    border.width: 1
+                                    border.color: comboChip.isSelected
+                                        ? Appearance.colors.colPrimary
+                                        : Appearance.colors.colOutline
+
+                                    StyledText {
+                                        id: chipText
+                                        anchors.centerIn: parent
+                                        text: comboChip.modelData
+                                        font.pixelSize: Appearance.font.pixelSize.smaller
+                                        color: Appearance.colors.colOnLayer1
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: moveRow.selectedCombo = comboChip.modelData
+                                    }
+                                }
+                            }
+                        }
+
+                        StyledText {
+                            Layout.fillWidth: true
+                            visible: panel.suggestions.length === 0
+                            text: Translation.tr("No free combination found")
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            color: page.conflictColor
+                            wrapMode: Text.Wrap
+                        }
+
+                        RippleButton {
+                            Layout.alignment: Qt.AlignLeft
+                            enabled: moveRow.selectedCombo !== ""
+                            buttonText: Translation.tr("Move")
+                            buttonRadius: Appearance.rounding.full
+                            onClicked: page.moveConflictHolder(
+                                panel.modelData, moveRow.modelData, moveRow.selectedCombo)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // An editable shell shortcut.
@@ -879,6 +1287,13 @@ ContentPage {
         id: shortcutRow
         required property var actionData
         property bool capturing: false
+
+        // One id for the whole action: a loop shortcut generates several
+        // binds (possibly in both files), and one recoverable deletion must
+        // own all of them. The action name is already unique per group.
+        readonly property string deleteId: "shell:" + (shortcutRow.actionData?.action ?? "")
+        readonly property bool deleteEnabled: !DisabledKeybinds.isDisabled(shortcutRow.deleteId)
+            && page.canDeleteBinds(shortcutRow.actionData?.binds ?? [])
 
         // The search index builds this exact string; ContentPage.goTo() uses
         // `title` to find the row a search result points at.
@@ -1014,6 +1429,45 @@ ContentPage {
                     }
                 }
             }
+
+            // Delete is recoverable: the service comments out every bind the
+            // action generates and moves them to the Deleted section.
+            Item {
+                id: shortcutDeleteButton
+                visible: !shortcutRow.capturing && shortcutRow.deleteEnabled
+                implicitWidth: 20
+                implicitHeight: 20
+                property bool hovered: shortcutDeleteMouseArea.containsMouse
+                Accessible.name: Translation.tr("Delete keybind")
+                Accessible.role: Accessible.Button
+
+                MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "delete"
+                    iconSize: Appearance.font.pixelSize.normal
+                    color: Appearance.colors.colError
+                }
+
+                MouseArea {
+                    id: shortcutDeleteMouseArea
+                    anchors.fill: parent
+                    anchors.margins: -6
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: DisabledKeybinds.disableBinds(
+                        shortcutRow.deleteId,
+                        (shortcutRow.actionData?.description ?? "") !== ""
+                            ? shortcutRow.actionData.description
+                            : (shortcutRow.actionData?.action ?? ""),
+                        shortcutRow.actionData?.binds ?? [])
+                }
+
+                StyledToolTip {
+                    text: (shortcutRow.actionData?.binds?.length ?? 0) > 1
+                        ? Translation.tr("Delete keybind") + "\n" + Translation.tr("Deleting a loop-shortcut disables every key it generates")
+                        : Translation.tr("Delete keybind")
+                }
+            }
         }
     }
 
@@ -1029,6 +1483,16 @@ ContentPage {
     component OtherBindRow: Rectangle {
         id: otherBindRow
         required property var bindData
+
+        // One id per source line, labelled by the owning file. Two plain
+        // binds can share a combo (or a line number in different files), so a
+        // combo-only id would collapse them. Only marker-safe characters are
+        // used: the id is written verbatim into a "-- " comment line.
+        readonly property string deleteId: "bind:"
+            + (otherBindRow.bindData?.file ?? "") + ":"
+            + (otherBindRow.bindData?.line ?? "")
+        readonly property bool deleteEnabled: !DisabledKeybinds.isDisabled(otherBindRow.deleteId)
+            && page.canDeleteBinds([otherBindRow.bindData])
 
         // Deep-link target; the index uses KeybindLabels.other() with the
         // same combo so the two strings are identical.
@@ -1156,6 +1620,43 @@ ContentPage {
                     }
                 }
             }
+
+            // Delete is recoverable: the service comments out this source
+            // line and moves it to the Deleted section.
+            Item {
+                id: otherBindDeleteButton
+                visible: !otherBindRow.capturing && otherBindRow.deleteEnabled
+                implicitWidth: 20
+                implicitHeight: 20
+                property bool hovered: otherBindDeleteMouseArea.containsMouse
+                Accessible.name: Translation.tr("Delete keybind")
+                Accessible.role: Accessible.Button
+
+                MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "delete"
+                    iconSize: Appearance.font.pixelSize.normal
+                    color: Appearance.colors.colError
+                }
+
+                MouseArea {
+                    id: otherBindDeleteMouseArea
+                    anchors.fill: parent
+                    anchors.margins: -6
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: DisabledKeybinds.disableBinds(
+                        otherBindRow.deleteId,
+                        (otherBindRow.bindData?.comment ?? "") !== ""
+                            ? otherBindRow.bindData.comment
+                            : otherBindRow.originalCombo,
+                        [otherBindRow.bindData])
+                }
+
+                StyledToolTip {
+                    text: Translation.tr("Delete keybind")
+                }
+            }
         }
     }
 
@@ -1165,6 +1666,11 @@ ContentPage {
     component ManagedRow: Rectangle {
         id: managedRow
         required property var entry
+
+        // Managed binds are removed outright rather than moved to the
+        // Deleted section. Once the entry leaves the model the icon hides.
+        readonly property bool deleteEnabled: ManagedKeybinds.editableEntries
+            .some(item => item.id === managedRow.entry?.id)
 
         // Deep-link target; kept in sync with SettingsSearchIndex by the
         // shared KeybindLabels helper.
@@ -1272,6 +1778,7 @@ ContentPage {
 
             // Delete removes the line from custom/keybinds.lua and reloads.
             Item {
+                visible: managedRow.deleteEnabled
                 implicitWidth: 20
                 implicitHeight: 20
 

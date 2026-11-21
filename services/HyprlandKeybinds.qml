@@ -22,6 +22,14 @@ Singleton {
     property var userKeybinds: {"children": []}
     property var keybinds: ({
         name: "",
+        // A [hidden] bind can sit above the first section marker, so the
+        // parser records its combo on each tree's root Section. Keep the
+        // merged tree complete: allUsedCombos walks this tree for hidden
+        // combos, and dropping the root level would offer taken keys.
+        hiddenCombos: [
+            ...(defaultKeybinds.hiddenCombos ?? []),
+            ...(userKeybinds.hiddenCombos ?? []),
+        ],
         children: [
             ...(defaultKeybinds.children ?? []),
             ...(userKeybinds.children ?? []),
@@ -112,20 +120,31 @@ Singleton {
         };
         const collect = (tree, file) => {
             const actions = new Map();
+            let plainSeq = 0;
             const walk = section => {
                 for (const bind of (section?.keybinds ?? [])) {
                     const action = bind?.action ?? "";
                     const combo = root.comboOf(bind);
                     if (action !== "") {
-                        if (!actions.has(action)) actions.set(action, { combos: [], comment: bind?.comment ?? "" });
+                        if (!actions.has(action)) actions.set(action, { combos: [], comment: bind?.comment ?? "", bind: bind });
                         const entry = actions.get(action);
                         if (!entry.combos.includes(combo)) entry.combos.push(combo);
                     } else {
                         const id = "bind_" + combo.replace(/[^A-Za-z0-9_]/g, "_");
+                        const sourceLine = String(bind?.line ?? ("seq" + (++plainSeq)));
                         put(HyprlandBindOverrides.comboFor(id, combo), {
+                            // `id` stays the NUL-separated token that rows
+                            // pass to repeatUsers for self-exclusion. It is
+                            // NOT an overrides key and must never be written
+                            // to one. `overrideId` is the bare bind_<combo>
+                            // key OtherBindRow uses; `uid` gives two binds of
+                            // the same combo in the same file distinct rows.
                             "id": file + "\u0000" + id,
+                            "uid": file + "\u0000" + sourceLine + "\u0000" + id,
+                            "overrideId": id,
                             "label": (bind?.comment ?? "") !== "" ? bind.comment : combo,
-                            "file": file
+                            "file": file,
+                            "bind": bind
                         });
                     }
                 }
@@ -137,12 +156,12 @@ Singleton {
                 const override = HyprlandBindOverrides.comboFor(action, "");
                 if (override !== "") {
                     // The override moves every line of the action onto one key.
-                    put(override, { "id": action, "label": label, "file": file });
+                    put(override, { "id": action, "label": label, "file": file, "bind": entry.bind });
                 } else {
                     // Without one each line keeps its own key, and an alias
                     // is a real binding that can be repeated too.
                     for (const combo of entry.combos) {
-                        put(combo, { "id": action, "label": label, "file": file });
+                        put(combo, { "id": action, "label": label, "file": file, "bind": entry.bind });
                     }
                 }
             }
@@ -150,6 +169,26 @@ Singleton {
         collect(root.defaultKeybinds, "main");
         collect(root.userKeybinds, "custom");
         return index;
+    }
+
+    // Every combination already spoken for: the indexed (possibly overridden)
+    // combos, the combos of binds hidden with [hidden] in the config files and
+    // the combos of every emitted bind. Suggestions use this to avoid offering
+    // a key that is already taken. Recomputed from the freshly parsed trees on
+    // every reload — line metadata is never cached across writes.
+    readonly property var allUsedCombos: {
+        const out = new Set();
+        for (const combo of root.repeatIndex.keys()) out.add(combo);
+        const walk = section => {
+            for (const combo of (section?.hiddenCombos ?? [])) out.add(combo);
+            for (const bind of (section?.keybinds ?? [])) {
+                const combo = root.comboOf(bind);
+                if (combo !== "") out.add(combo);
+            }
+            for (const child of (section?.children ?? [])) walk(child);
+        };
+        walk(root.keybinds);
+        return Array.from(out);
     }
 
     // The other binds that hold the same combination right now, so a row can

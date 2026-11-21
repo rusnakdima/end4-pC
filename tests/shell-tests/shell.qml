@@ -51,6 +51,9 @@ ShellRoot {
         "tst_directories.qml", "tst_window_mode.qml", "tst_window_controls.qml",
         "tst_app_window_rules.qml", "tst_bind_overrides.qml",
         "tst_managed_keybinds.qml",
+        "tst_keybind_disable_store.qml",
+        "tst_disabled_keybinds.qml",
+        "tst_keybind_conflicts.qml",
         "tst_keybinds.qml", "tst_xkbrules.qml",
         "tst_collapsible_section_header.qml",
         "tst_ConfigMultiSelect.qml",
@@ -60,7 +63,9 @@ ShellRoot {
         "tst_projection.qml",
         "tst_cast.qml",
         "tst_wallpaper_video.qml",
-        "tst_hotspot_clients.qml"
+        "tst_hotspot_clients.qml",
+        "tst_settings_escape.qml",
+        "tst_navigation_rail.qml"
     ]
 
     property int doneCount: 0

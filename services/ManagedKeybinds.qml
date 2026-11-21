@@ -139,6 +139,32 @@ Singleton {
         Quickshell.execDetached(["hyprctl", "reload"]);
     }
 
+    // The managed entry a parsed bind came from, or null when the bind is not
+    // one of ours. A bind carries the source path and 1-based line range the
+    // keybind parser stamped on it (get_keybinds.py attach_source); parseBlock
+    // stamps the same numbers on the entries it reads back. Matching both the
+    // path and an overlapping line range keeps a hand-written line elsewhere
+    // in the same file from being mistaken for a managed entry.
+    function entryForSource(bind) {
+        if (bind === undefined || bind === null) return null;
+        const source = FileUtils.trimFileProtocol(String(bind.sourcePath ?? ""));
+        const managedPath = FileUtils.trimFileProtocol(String(root.keybindsPath ?? ""));
+        if (source === "" || managedPath === "" || source !== managedPath) return null;
+
+        const from = Number(bind.line);
+        const to = Number(bind.endLine);
+        if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
+
+        for (const entry of root.entries) {
+            if (typeof entry.raw === "string") continue;
+            const start = Number(entry.line);
+            const finish = Number(entry.endLine);
+            if (!Number.isFinite(start) || !Number.isFinite(finish)) continue;
+            if (start <= to && finish >= from) return entry;
+        }
+        return null;
+    }
+
     // The validation code of KeybindStore.validate, or "" when the entry
     // can be saved. The caller translates the code.
     function validate(entry) {

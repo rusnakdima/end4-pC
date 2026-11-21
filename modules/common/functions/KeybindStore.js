@@ -115,11 +115,20 @@ function parseBlock(text) {
     const end = source.indexOf(MARKER_END, afterStart);
     const region = source.slice(afterStart, end === -1 ? source.length : end);
 
+    // 1-based line number of the line that holds the start marker. region
+    // begins with the rest of that line, so region line i sits on markerLine+i;
+    // a bind's line/endLine then matches the numbers get_keybinds.py stamps on
+    // it, which is what entryForSource matches against.
+    const markerLine = source.slice(0, start).split("\n").length;
+    const regionLines = region.split("\n");
+
     const entries = [];
     let category = "";
     let pendingId = null;
-    for (const line of region.split("\n")) {
+    for (let i = 0; i < regionLines.length; i++) {
+        const line = regionLines[i];
         const trimmed = line.trim();
+        const lineNo = markerLine + i;
         if (trimmed === "") continue;
         const heading = HEADING_RE.exec(trimmed);
         if (heading !== null) {
@@ -139,7 +148,9 @@ function parseBlock(text) {
                 combo: bind[1],
                 command: unescapeString(bind[2]),
                 name: unescapeString(bind[3]),
-                category: category
+                category: category,
+                line: lineNo,
+                endLine: lineNo
             });
             pendingId = null;
             continue;
@@ -150,7 +161,9 @@ function parseBlock(text) {
             category: category,
             name: "",
             command: "",
-            combo: ""
+            combo: "",
+            line: lineNo,
+            endLine: lineNo
         });
     }
     return entries;
