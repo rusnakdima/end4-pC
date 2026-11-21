@@ -20,7 +20,7 @@ end, { desc = "Image: Open preview" })
 -- Send the current file to the QuickShell Image Preview widget.
 vim.keymap.set("n", "<leader><leader>i", function()
   local path = vim.fn.expand("%:p")
-  vim.fn.system({ "qs", "ipc", "call", "imagePreview", "openPath", path })
+  vim.fn.system({ "qs", "ipc", "-p", "/home/dmitriy/.config/quickshell/end4-pC", "call", "imagePreview", "openPath", path })
 end, { desc = "Image: Send path to shell widget" })
 
 vim.api.nvim_create_user_command("ImagePreview", function(opts)
