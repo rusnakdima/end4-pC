@@ -50,18 +50,18 @@ Item {
             anchors {
                 top: tabBarColumn.top
                 left: tabBarColumn.left
+                // Icon-only mode shows a round indicator behind the square
+                // icon: width and height match, so offset it to stay centred
+                // in the rail. Expanded mode keeps the pill at the left.
+                leftMargin: root.expanded ? 0 : Math.max(0, (tabBarColumn.width - baseHighlightHeight) / 2)
                 topMargin: itemHeight * root.currentIndex + (root.expanded ? 0 : ((itemHeight - baseHighlightHeight) / 2))
             }
             radius: Config.options.settings.style === "minimal" ? Appearance.rounding.small : Appearance.rounding.full
             color: root.colToggled
             implicitHeight: root.expanded ? itemHeight : baseHighlightHeight
-            // In collapsed mode the pill belongs to the rail, not to the
-            // tab. Compact tabs are narrower (44px) than the rail (56px,
-            // the FAB width), so the tab's visualWidth would leave the
-            // highlight short and off-centre behind the centred icon.
             implicitWidth: root.expanded
                 ? (railScroll.tabButtons[root.currentIndex]?.visualWidth ?? tabBarColumn.width)
-                : tabBarColumn.width
+                : baseHighlightHeight
 
             Behavior on anchors.topMargin {
                 NumberAnimation {
