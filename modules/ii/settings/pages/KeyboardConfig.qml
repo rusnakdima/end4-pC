@@ -15,10 +15,11 @@ import "../../../common/functions/SettingsEscape.js" as SettingsEscape
  * Keyboard backlight colour, shell shortcuts and the other keybinds.
  *
  * The colour picker drives the system keyboard backlight helper; the
- * shortcut list comes from the same parser the cheatsheet uses, so it
- * always matches the config the compositor loaded. A rebind is written
- * to ~/.config/hypr/custom/keybind_overrides.conf and Hyprland is
- * reloaded. The keybind sections only exist on Hyprland.
+ * shortcut list comes from the same JSON catalog + user overlay the
+ * cheatsheet uses, so it always matches the binds Hyprland loaded. A new
+ * keybind is written only to ~/.config/hypr/custom/keybind-overlay.json;
+ * the generator then rebuilds the Lua files and Hyprland is reloaded.
+ * The keybind sections only exist on Hyprland.
  */
 ContentPage {
     id: page
@@ -765,7 +766,7 @@ ContentPage {
                 ContentSection {
                     icon: "keyboard"
                     title: Translation.tr("Keybinds")
-                    hint: Translation.tr("Search, create and rebind keyboard shortcuts. New keybinds are written to ~/.config/hypr/custom/keybinds.lua.")
+                    hint: Translation.tr("Search, create and rebind keyboard shortcuts. New keybinds are written to ~/.config/hypr/custom/keybind-overlay.json.")
 
                     ColumnLayout {
                         Layout.fillWidth: true

@@ -16,17 +16,17 @@
 #   ./sync.sh --check      run tests/qml-compile-check.sh first, abort on failure
 #   ./sync.sh --force      sync even while the session is locked (dangerous)
 #   ./sync.sh --keybinds-only
-#                          only inject the default keybinds into
-#                          ~/.config/hypr/custom/keybinds.lua and reload
+#                          only regenerate the keybind Lua files and the
+#                          command bridge from the catalog/overlay, then reload
+#   ./sync.sh --user NAME  target NAME's config instead of the detected user
+#
+# User edits win: files the user changed in the live tree are saved into
+# <qs_dest>/.sync/user/ and restored on top of a fresh deploy. A timestamped
+# copy of every such file is also kept in <qs_dest>/.sync/backups/.
 #
 set -uo pipefail
 
 src="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-qs_dest="${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/end4-pC"
-hypr_dest="${XDG_CONFIG_HOME:-$HOME/.config}/hypr"
-sddm_hook="$HOME/.config/ii-sddm-theme/sddm-wallpaper-sync.sh"
-default_keybind_snippet="$src/defaults/hyprland/keybinds-snippet.lua"
-custom_keybinds="$hypr_dest/custom/keybinds.lua"
 
 # -c compares by checksum, so a file whose content already matches is left
 # alone even when its timestamp differs -- several live files are owned by root
@@ -39,6 +39,7 @@ do_reload=1
 do_check=0
 force=0
 keybinds_only=0
+target_user_override=""
 for arg in "$@"; do
     case "$arg" in
         --dry-run|-n) dry_run=1 ;;
@@ -46,10 +47,71 @@ for arg in "$@"; do
         --check)      do_check=1 ;;
         --force)      force=1 ;;
         --keybinds-only) keybinds_only=1 ;;
-        -h|--help)    sed -n '2,22p' "${BASH_SOURCE[0]}"; exit 0 ;;
+        --user)
+            echo "sync.sh: --user needs a name (use --user=NAME)" >&2
+            exit 2
+            ;;
+        --user=*) target_user_override="${arg#--user=}" ;;
+        -h|--help) awk 'NR>1 && /^set -/{exit} NR>1{print}' "${BASH_SOURCE[0]}"; exit 0 ;;
         *) echo "sync.sh: unknown option: $arg" >&2; exit 2 ;;
     esac
 done
+
+# Resolve the target the same way install.sh does, so a sync started under
+# sudo still updates the invoking user's config instead of /root.
+resolve_target_home() {
+    local user home
+    if [[ $(id -u) -eq 0 ]]; then
+        if [[ -n "${SUDO_USER:-}" ]]; then
+            user="$SUDO_USER"
+            home=$(eval echo "~$user")
+        else
+            local -a candidates=()
+            mapfile -t candidates < <(find /home -maxdepth 1 -mindepth 1 -type d -printf '%f\n' 2>/dev/null | sort)
+            if ((${#candidates[@]} == 0)); then
+                echo "sync.sh: cannot detect target user (root without SUDO_USER, no /home user)" >&2
+                exit 2
+            fi
+            user="${candidates[0]}"
+            home="/home/$user"
+        fi
+    else
+        user=$(id -un)
+        home="$HOME"
+    fi
+    TARGET_USER="$user"
+    TARGET_HOME="$home"
+}
+resolve_target_home
+if [[ -n "$target_user_override" ]]; then
+    TARGET_USER="$target_user_override"
+    TARGET_HOME=$(getent passwd "$TARGET_USER" 2>/dev/null | cut -d: -f6)
+    if [[ -z "$TARGET_HOME" || ! -d "$TARGET_HOME" ]]; then
+        echo "sync.sh: unknown user: $TARGET_USER" >&2
+        exit 2
+    fi
+fi
+export TARGET_USER TARGET_HOME
+
+config_home="$TARGET_HOME/.config"
+qs_dest="$config_home/quickshell/end4-pC"
+hypr_dest="$config_home/hypr"
+sddm_hook="$config_home/ii-sddm-theme/sddm-wallpaper-sync.sh"
+default_keybind_snippet="$src/defaults/hyprland/keybinds-snippet.lua"
+custom_keybinds="$hypr_dest/custom/keybinds.lua"
+# The live keybind Lua files and the quickshell command bridge are generated
+# from the frozen catalog plus the optional user overlay. Every path below is
+# derived from TARGET_USER/TARGET_HOME, never from a bare $HOME.
+keybind_catalog="$src/defaults/hyprland/keybinds.json"
+keybind_generator="$src/scripts/hyprland/generate_keybinds.py"
+keybind_overlay="$hypr_dest/custom/keybind-overlay.json"
+main_keybinds="$hypr_dest/hyprland/keybinds.lua"
+commands_json="$qs_dest/state/generated-commands.json"
+# Persistent user layer + safety backups, deliberately inside the deployed
+# quickshell config but under a dot-directory rsync/QML both ignore.
+sync_state="$qs_dest/.sync"
+user_layer="$sync_state/user"
+backups_dir="$sync_state/backups"
 
 # Never write to a locked session. quickshell hot-reloads on every config
 # file change, and reloading while the session-lock surface is up destroys
@@ -85,7 +147,7 @@ command -v rsync >/dev/null 2>&1 || { echo "sync.sh: rsync is required" >&2; exi
 
 # ---------------------------------------------------------------------------
 # What stays on the live side
-# ----------------------------------------------------------------
+# ---------------------------------------------------------------------------
 
 # The colour pipeline (matugen, applied through scripts/colors) rewrites these
 # from the wallpaper; the copies in the repo are only as fresh as the last time
@@ -99,14 +161,7 @@ hypr_keep=(
     --exclude='/custom/'
     --exclude='/monitors.lua'
     --exclude='/profiles/'
-    # hyprland.lua is the user's live entrypoint. This checkout's vendored
-    # dots/ tree lost it, so a --delete sync would erase the only copy and
-    # leave Hyprland reporting "cannot open ... hyprland.lua". Never let the
-    # sync delete or overwrite it. The colour pipeline and shell regenerate
-    # the contents of hyprland/ and hyprlock/, so keep those whole trees too.
-    --exclude='/hyprland.lua'
-    --exclude='/hyprland/'
-    --exclude='/hyprlock/'
+    # hypridle.conf is generated by the shell from config.json.
     --exclude='/hypridle.conf'
 )
 
@@ -114,7 +169,7 @@ hypr_keep=(
 # excluded because install.sh copied the whole checkout once and the live tree
 # therefore carries a stale 57M repository: without this every commit would
 # push object files into the config and the verification pass would then
-# report them as unsynced forever.
+# report them as unsynced forever. .sync/ is our own user layer/backups.
 qs_keep=(
     --exclude='/dots/'
     --exclude='/.omp/'
@@ -122,13 +177,18 @@ qs_keep=(
     --exclude='/.git/'
     --exclude='/verification_complete.txt'
     --exclude='/.backup-*/'
+    --exclude='/.sync/'
+    # state/generated-commands.json is written by generate_keybind_lua(); it is
+    # runtime output, not part of the checkout, so --delete must not eat it.
+    --exclude='/state/'
     --exclude='__pycache__/'
 )
 
 # diff's --exclude takes a pattern relative to the root and no leading slash,
 # so the same exclusions are spelled out again for the verification pass.
 qs_diff_keep=(--exclude=dots --exclude=.omp --exclude='file:'
-              --exclude=.git --exclude=verification_complete.txt --exclude='.backup-*' --exclude=__pycache__)
+              --exclude=.git --exclude=verification_complete.txt --exclude='.backup-*'
+              --exclude=.sync --exclude=state --exclude=__pycache__)
 hypr_diff_keep=(--exclude=custom --exclude=monitors.lua --exclude=profiles
                 --exclude=shellOverrides --exclude=colors.lua --exclude=colors.conf
                 --exclude=hypridle.conf --exclude=hyprland.lua --exclude=hyprland
@@ -143,7 +203,7 @@ hypr_diff_keep=(--exclude=custom --exclude=monitors.lua --exclude=profiles
 #   2. the SDDM wallpaper hook appended after the switch() call
 #
 # See install.sh:126 (name) and install.sh:606 (SDDM hook).
-# ----------------------------------------------------------------
+# ------------------------------------------------------------------------
 
 patch_form() {
     local f="$1" hook=""
@@ -164,8 +224,8 @@ patch_form() {
 }
 
 # Scripts install.sh patches, and the per-file skip list: a script is skipped
-# only when the live copy already equals its patched form, so a real edit in the
-# checkout still gets through while an untouched file is not rewritten and
+# only when the live copy already equals its patched form, so a real edit in
+# the checkout still gets through while an untouched file is not rewritten and
 # re-patched on every single run.
 qs_patched=()
 qs_rsync_skip=()
@@ -212,19 +272,30 @@ collect_root_owned "$hypr_dest" "$hypr_dest" hypr_root_owned
 
 # ---------------------------------------------------------------------------
 # Helpers
-# ----------------------------------------------------------------
+# ---------------------------------------------------------------------------
 
 fail=0
 
 # rsync one tree, then print only what actually changed. itemize-changes emits
 # ">f... path" for a transfer, "*deleting path" for a removal, "cd... path" for
 # a directory; everything else is a no-op and is dropped from the report.
+# Pass --no-delete as the first argument for trees that own live-only files:
+# the hypr tree must never have files erased by a --delete pass.
 sync_tree() {
     local label="$1"; shift
+    local no_delete=0
+    if [[ "${1:-}" == "--no-delete" ]]; then no_delete=1; shift; fi
     local log err rc changes
     log=$(mktemp) err=$(mktemp)
 
-    local -a flags=("${rsync_flags[@]}")
+    # rsync has no `--no-delete`; build the flag list without --delete for
+    # trees whose live side owns files the checkout does not carry.
+    local -a flags=()
+    local flag
+    for flag in "${rsync_flags[@]}"; do
+        if [[ $no_delete -eq 1 && "$flag" == "--delete" ]]; then continue; fi
+        flags+=("$flag")
+    done
     [[ $dry_run -eq 1 ]] && flags+=(-n)
 
     rsync "${flags[@]}" "$@" >"$log" 2>"$err"
@@ -243,8 +314,6 @@ sync_tree() {
 
     if [[ $rc -ne 0 ]]; then
         echo "  !! rsync exited $rc:" >&2
-        # Show the real reason, not just a pattern this script happens to look
-        # for -- the common case here is "chgrp ... Operation not permitted".
         sed 's/^/       /' "$err" | head -25 >&2
         fail=1
     fi
@@ -321,52 +390,400 @@ deploy_patches() {
     done
 }
 
-# The theme's default keybinds that cannot live in the deployed dots tree are
-# injected into the user-owned custom/keybinds.lua behind a marker. This is
-# the same step install.sh runs; the marker makes it idempotent, and this is
-# the only part of custom/ that sync.sh ever writes.
+# ---------------------------------------------------------------------------
+# User layer: keep the user's own edits, never lose them to a fresh deploy.
+#
+# A file is only a "user edit" if it differs from the project AND it changed
+# since the last sync (per .sync/manifest). A plain project update -- live is
+# exactly what we deployed last time but the checkout now differs -- is NOT a
+# user edit, so it is allowed through. The layer is persistent; the manifest
+# is rewritten after every successful deploy so the next run can tell the two
+# apart. A timestamped backup is kept for every file saved.
+# ---------------------------------------------------------------------------
+
+manifest="$sync_state/manifest"
+
+# Raw bytes, not `awk '1'` -- awk would mangle binary assets (fonts, sounds,
+# images) into fake differences. Only the install-patched scripts are compared
+# through awk so their EOF-newline style matches patch_form()'s output.
+is_patched() {
+    local rel="$1" p
+    for p in ${qs_patched[@]+"${qs_patched[@]}"}; do
+        [[ "$p" == "$rel" ]] && return 0
+    done
+    return 1
+}
+
+raw_sha() { sha256sum "$1" 2>/dev/null | awk '{print $1}'; }
+stream_sha() { sha256sum 2>/dev/null | awk '{print $1}'; }
+
+live_sha() {
+    local ns="$1" rel="$2" live="$3"
+    if [[ "$ns" == "quickshell" ]] && is_patched "$rel"; then
+        awk '1' "$live" | stream_sha
+    else
+        raw_sha "$live"
+    fi
+}
+
+project_sha_of() {
+    local ns="$1" rel="$2" srcfile="$3"
+    [[ -f "$srcfile" ]] || return 1
+    if [[ "$ns" == "quickshell" ]] && is_patched "$rel"; then
+        patch_form "$srcfile" | awk '1' | stream_sha
+    else
+        raw_sha "$srcfile"
+    fi
+}
+
+declare -A MAN_LIVE=() MAN_PROJ=()
+load_manifest() {
+    MAN_LIVE=(); MAN_PROJ=()
+    [[ -f "$manifest" ]] || return 0
+    local k lv pv
+    while IFS=$'\t' read -r k lv pv; do
+        [[ -n "$k" ]] || continue
+        MAN_LIVE["$k"]="$lv"
+        MAN_PROJ["$k"]="$pv"
+    done < "$manifest"
+}
+
+write_manifest() {
+    [[ $dry_run -eq 1 ]] && return 0
+    local tmp rel live srcfile lv pv
+    tmp=$(mktemp)
+    while IFS= read -r -d '' live; do
+        rel="${live#"$qs_dest"/}"
+        [[ "$rel" == .sync/* ]] && continue
+        [[ -f "$live" ]] || continue
+        srcfile="$src/$rel"
+        pv=$(project_sha_of "quickshell" "$rel" "$srcfile" 2>/dev/null || true)
+        lv=$(live_sha "quickshell" "$rel" "$live")
+        printf 'quickshell/%s\t%s\t%s\n' "$rel" "$lv" "$pv" >> "$tmp"
+    done < <(find "$qs_dest" -type f -not -path "$qs_dest/.sync/*" -print0 2>/dev/null)
+    if [[ -d "$src/dots/.config/hypr" ]]; then
+        while IFS= read -r -d '' live; do
+            rel="${live#"$hypr_dest"/}"
+            [[ -f "$live" ]] || continue
+            srcfile="$src/dots/.config/hypr/$rel"
+            pv=$(project_sha_of "hypr" "$rel" "$srcfile" 2>/dev/null || true)
+            lv=$(live_sha "hypr" "$rel" "$live")
+            printf 'hypr/%s\t%s\t%s\n' "$rel" "$lv" "$pv" >> "$tmp"
+        done < <(find "$hypr_dest" -type f -print0 2>/dev/null)
+    fi
+    mv -f "$tmp" "$manifest"
+}
+
+# Return 0 when the live file is a genuine user edit.
+is_user_edit() {
+    local ns="$1" rel="$2" live="$3" project_sha="$4"
+    # sync.sh is the sync tool itself, never user config.
+    if [[ "$ns" == "quickshell" && "$rel" == "sync.sh" ]]; then return 1; fi
+    local key="$ns/$rel" lv prev_live
+    [[ -n "$project_sha" ]] || return 1
+    lv=$(live_sha "$ns" "$rel" "$live")
+    [[ "$lv" == "$project_sha" ]] && return 1
+    prev_live="${MAN_LIVE[$key]:-}"
+    if [[ -n "$prev_live" ]]; then
+        # Live still equals what we deployed last time: the user did not
+        # touch it, so let a newer project version replace it.
+        [[ "$lv" == "$prev_live" ]] && return 1
+        return 0
+    fi
+    # No baseline yet (first run): be conservative and keep the live copy.
+    return 0
+}
+
+# Extend the persistent user layer with new edits and keep a timestamped copy.
+snapshot_user_edits() {
+    [[ $dry_run -eq 1 ]] && return 0
+    load_manifest
+    mkdir -p "$user_layer" "$backups_dir"
+    local stamp rel live srcfile project_sha saved_count=0 lv
+    local ns f key
+    stamp=$(date +%Y%m%d-%H%M%S)
+    : > "$sync_state/last-user-edits.txt"
+
+    # Drop layer entries that are no longer edits (user reverted, or the
+    # project caught up), otherwise a stale layer would overwrite a fix.
+    for ns in quickshell hypr; do
+        [[ -d "$user_layer/$ns" ]] || continue
+        while IFS= read -r -d '' f; do
+            rel="${f#"$user_layer/$ns"/}"
+            if [[ "$ns" == "quickshell" ]]; then live="$qs_dest/$rel"; else live="$hypr_dest/$rel"; fi
+            if [[ ! -f "$live" ]]; then rm -f "$f"; continue; fi
+            if [[ "$ns" == "quickshell" ]]; then project_sha=$(project_sha_of "quickshell" "$rel" "$src/$rel" 2>/dev/null || true)
+            else project_sha=$(project_sha_of "hypr" "$rel" "$src/dots/.config/hypr/$rel" 2>/dev/null || true); fi
+            # Keep a known edit as long as live still differs from the project.
+            # The manifest cannot be used here: after a restore it records the
+            # user's own bytes as the baseline, so is_user_edit would report
+            # "no change" and we would drop the edit on the second run.
+            lv=$(live_sha "$ns" "$rel" "$live")
+            if [[ -n "$project_sha" && "$lv" == "$project_sha" ]]; then rm -f "$f"; fi
+        done < <(find "$user_layer/$ns" -type f -print0 2>/dev/null)
+    done
+
+    # New edits in the quickshell tree.
+    while IFS= read -r -d '' live; do
+        rel="${live#"$qs_dest"/}"
+        [[ "$rel" == .sync/* ]] && continue
+        [[ -r "$live" ]] || continue
+        srcfile="$src/$rel"
+        [[ -f "$srcfile" ]] || continue
+        project_sha=$(project_sha_of "quickshell" "$rel" "$srcfile")
+        is_user_edit "quickshell" "$rel" "$live" "$project_sha" || continue
+        key="quickshell/$rel"
+        [[ -f "$user_layer/$key" ]] && continue   # already a known edit
+        mkdir -p "$user_layer/quickshell/$(dirname "$rel")" \
+                 "$backups_dir/$stamp/quickshell/$(dirname "$rel")"
+        cp -p "$live" "$user_layer/quickshell/$rel"
+        cp -p "$live" "$backups_dir/$stamp/quickshell/$rel"
+        echo "$key" >> "$sync_state/last-user-edits.txt"
+        saved_count=$((saved_count + 1))
+    done < <(find "$qs_dest" -type f -not -path "$qs_dest/.sync/*" -print0 2>/dev/null)
+
+    # New edits in the hypr tree (only where the project ships a baseline).
+    if [[ -d "$src/dots/.config/hypr" ]]; then
+        while IFS= read -r -d '' live; do
+            rel="${live#"$hypr_dest"/}"
+            [[ -r "$live" ]] || continue
+            srcfile="$src/dots/.config/hypr/$rel"
+            [[ -f "$srcfile" ]] || continue
+            project_sha=$(project_sha_of "hypr" "$rel" "$srcfile")
+            is_user_edit "hypr" "$rel" "$live" "$project_sha" || continue
+            key="hypr/$rel"
+            [[ -f "$user_layer/$key" ]] && continue   # already a known edit
+            mkdir -p "$user_layer/hypr/$(dirname "$rel")" \
+                     "$backups_dir/$stamp/hypr/$(dirname "$rel")"
+            cp -p "$live" "$user_layer/hypr/$rel"
+            cp -p "$live" "$backups_dir/$stamp/hypr/$rel"
+            echo "$key" >> "$sync_state/last-user-edits.txt"
+            saved_count=$((saved_count + 1))
+        done < <(find "$hypr_dest" -type f -print0 2>/dev/null)
+    fi
+
+    if [[ $saved_count -gt 0 ]]; then
+        echo "== user edits =="
+        echo "       saved $saved_count file(s) to .sync/user/ and .sync/backups/$stamp/"
+    fi
+}
+
+# Put the saved user edits back on top of the freshly deployed files.
+restore_user_edits() {
+    [[ $dry_run -eq 1 ]] && return 0
+    local ns rel live f
+    for ns in quickshell hypr; do
+        [[ -d "$user_layer/$ns" ]] || continue
+        while IFS= read -r -d '' f; do
+            rel="${f#"$user_layer/$ns"/}"
+            if [[ "$ns" == "quickshell" ]]; then live="$qs_dest/$rel"; else live="$hypr_dest/$rel"; fi
+            mkdir -p "$(dirname "$live")"
+            cp -p "$f" "$live"
+            echo "  restored user edit: $ns/$rel"
+        done < <(find "$user_layer/$ns" -type f -print0 2>/dev/null)
+    done
+}
+
+# ---------------------------------------------------------------------------
+# Keybind blocks. The theme's default binds are injected into the user-owned
+# custom/keybinds.lua behind markers. Every -- >>> ... -- <<< block in the
+# snippet is managed: refreshed in place when the project changes, appended
+# when missing. Everything outside the markers (the user's own binds, the
+# waydroid block, the panel-managed block) is never touched. This replaces the
+# old append-only, four-hardcoded-marker logic, which could never update an
+# existing install and ignored the image-preview window-rule block entirely.
+# ---------------------------------------------------------------------------
+
+declare -a kb_starts=() kb_ends=() kb_blocks=()
+read_keybind_blocks() {
+    kb_starts=(); kb_ends=(); kb_blocks=()
+    [[ -f "$default_keybind_snippet" ]] || return 0
+    local line start="" block=""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ -z "$start" && "$line" == "-- >>> "* ]]; then
+            start="$line"
+            block="$line"
+        elif [[ -n "$start" ]]; then
+            block+=$'\n'"$line"
+            if [[ "$line" == "-- <<<"* ]]; then
+                kb_starts+=("$start")
+                kb_ends+=("$line")
+                kb_blocks+=("$block")
+                start=""
+            fi
+        fi
+    done < "$default_keybind_snippet"
+}
+
+# Replace one marker block in a file. Return 0 = replaced, 2 = already
+# identical, 1 = error (start marker without a matching end marker).
+replace_managed_block() {
+    local file="$1" start="$2" end="$3" replacement="$4"
+    local tmp
+    tmp=$(mktemp)
+    if MSTART="$start" MEND="$end" REPL="$replacement" awk '
+        BEGIN {
+            inside = 0; done = 0
+            MSTART = ENVIRON["MSTART"]; MEND = ENVIRON["MEND"]; REPL = ENVIRON["REPL"]
+        }
+        {
+            if (!done && index($0, MSTART) == 1) {
+                inside = 1
+                printf "%s\n", REPL
+                next
+            }
+            if (inside) {
+                if (index($0, MEND) == 1) { inside = 0; done = 1 }
+                next
+            }
+            print
+        }
+        END { exit inside ? 2 : 0 }
+    ' "$file" > "$tmp"; then
+        if cmp -s "$file" "$tmp"; then
+            rm -f "$tmp"
+            return 2
+        fi
+        cat "$tmp" > "$file"
+        rm -f "$tmp"
+        return 0
+    fi
+    rm -f "$tmp"
+    return 1
+}
+
+# Pre-generator marker injector, kept only as documentation of the old format.
+# The generated custom/keybinds.lua already reproduces every managed block, so
+# this is a no-op: calling it on the generated path would duplicate them.
 install_keybind_defaults() {
-    local marker="end4-pC workspace-follow keybinds"
-    local ap_marker="end4-pC utilities keybinds"
-    local wr_marker="end4-pC advanced-paste window rule"
-    local launcher_marker="end4-pC tap-super launcher keybinds"
+    return 0
     [[ -f "$default_keybind_snippet" ]] || return 0
     mkdir -p "$(dirname "$custom_keybinds")"
     touch "$custom_keybinds"
-    local added=0
-    if ! grep -qF "$marker" "$custom_keybinds"; then
-        { printf '\n'; cat "$default_keybind_snippet"; } >> "$custom_keybinds"
-        added=1
-    elif ! grep -qF "$ap_marker" "$custom_keybinds"; then
-        # Existing installs already carry the workspace-follow block. Append
-        # just the newer utilities block so they get the new shortcuts.
-        printf '\n' >> "$custom_keybinds"
-        sed -n "/>>> ${ap_marker}/,/<<< ${ap_marker}/p" "$default_keybind_snippet" >> "$custom_keybinds"
-        added=1
-    fi
-    if ! grep -qF "$wr_marker" "$custom_keybinds"; then
-        printf '\n' >> "$custom_keybinds"
-        sed -n "/>>> ${wr_marker}/,/<<< ${wr_marker}/p" "$default_keybind_snippet" >> "$custom_keybinds"
-        added=1
-    fi
-    # Enforce tap-only launcher: an inherited `global` shortcut cannot be
-    # shadowed by Hyprland, so it would open the launcher on Super + <key>.
-    if ! grep -qF "$launcher_marker" "$custom_keybinds"; then
-        printf '\n' >> "$custom_keybinds"
-        sed -n "/>>> ${launcher_marker}/,/<<< ${launcher_marker}/p" "$default_keybind_snippet" >> "$custom_keybinds"
-        added=1
-    fi
+    read_keybind_blocks
+
+    local i rc added=0 refreshed=0 unchanged=0 failed=0
+    local start end block label
     echo "== default keybinds =="
-    if [[ $added -eq 1 ]]; then
-        echo "       added to custom/keybinds.lua"
+    for i in "${!kb_starts[@]}"; do
+        start="${kb_starts[$i]}"; end="${kb_ends[$i]}"; block="${kb_blocks[$i]}"
+        label="${start#-- >>> }"
+        if grep -qF -- "$start" "$custom_keybinds"; then
+            replace_managed_block "$custom_keybinds" "$start" "$end" "$block"
+            rc=$?
+            case $rc in
+                0) printf '  refreshed: %s\n' "$label"; refreshed=$((refreshed + 1)) ;;
+                2) unchanged=$((unchanged + 1)) ;;
+                *) printf '  !! could not refresh: %s\n' "$label" >&2; failed=$((failed + 1)) ;;
+            esac
+        else
+            printf '\n%s\n' "$block" >> "$custom_keybinds"
+            printf '  added: %s\n' "$label"
+            added=$((added + 1))
+        fi
+    done
+    printf '  keybind blocks: %d added, %d refreshed, %d unchanged\n' \
+        "$added" "$refreshed" "$unchanged"
+    [[ $failed -eq 0 ]] || fail=1
+}
+
+# Dry-run counterpart: report what the real run would add/refresh.
+keybind_report() {
+    [[ -f "$default_keybind_snippet" ]] || return 0
+    read_keybind_blocks
+    local i start label added=0 present=0
+    echo "== default keybinds =="
+    for i in "${!kb_starts[@]}"; do
+        start="${kb_starts[$i]}"; label="${start#-- >>> }"
+        if grep -qF -- "$start" "$custom_keybinds" 2>/dev/null; then
+            present=$((present + 1))
+        else
+            printf '  would add: %s\n' "$label"
+            added=$((added + 1))
+        fi
+    done
+    printf '  keybind blocks: %d would be added, %d present (all refreshed on a real run)\n' \
+        "$added" "$present"
+}
+
+# ---------------------------------------------------------------------------
+# Generated keybind Lua.
+#
+# The frozen catalog plus the optional user overlay are now the single source
+# of truth for both keybinds.lua files and for the quickshell command bridge.
+# The generator rewrites those files wholesale, so install_keybind_defaults()
+# (the old marker injector) must NOT run on this path: the generated
+# custom/keybinds.lua already reproduces every managed block and appending the
+# old blocks again would duplicate them.
+# ---------------------------------------------------------------------------
+
+keybind_gen_report() {
+    echo "== generated keybind lua (dry run) =="
+    echo "       catalog: $keybind_catalog"
+    if [[ -f "$keybind_overlay" ]]; then
+        echo "       overlay: $keybind_overlay (would be applied)"
     else
-        echo "       already present in custom/keybinds.lua"
+        echo "       overlay: none ($keybind_overlay not present)"
     fi
+    echo "       would write: $main_keybinds"
+    echo "       would write: $custom_keybinds"
+    echo "       would write: $commands_json"
+}
+
+generate_keybind_lua() {
+    if [[ $dry_run -eq 1 ]]; then
+        keybind_gen_report
+        return 0
+    fi
+
+    if [[ ! -f "$keybind_catalog" || ! -f "$keybind_generator" ]]; then
+        echo "sync.sh: keybind catalog or generator is missing; nothing generated" >&2
+        fail=1
+        return 1
+    fi
+
+    local -a gen_cmd=(python3 "$keybind_generator"
+                      --catalog "$keybind_catalog"
+                      --main-out "$main_keybinds"
+                      --custom-out "$custom_keybinds"
+                      --commands-out "$commands_json")
+    # The overlay is strictly opt-in: only feed it to the generator when the
+    # user actually has one. The generator never writes back to it.
+    local overlay_note="none (defaults only)"
+    if [[ -f "$keybind_overlay" ]]; then
+        gen_cmd+=(--overlay "$keybind_overlay")
+        overlay_note="$keybind_overlay (applied, never modified)"
+    fi
+
+    mkdir -p "$(dirname "$main_keybinds")" "$(dirname "$custom_keybinds")" \
+             "$(dirname "$commands_json")"
+
+    echo "== generated keybind lua =="
+    echo "       catalog: $keybind_catalog"
+    echo "       overlay: $overlay_note"
+
+    local out rc
+    out=$("${gen_cmd[@]}" 2>&1); rc=$?
+    [[ -n "$out" ]] && printf '%s\n' "$out" | sed 's/^/       /'
+    if [[ $rc -ne 0 ]]; then
+        echo "  !! keybind generator exited $rc" >&2
+        fail=1
+        return 1
+    fi
+
+    # A sync started under sudo must leave the generated files (and the dir
+    # holding the bridge JSON) owned by the target user -- same pattern as
+    # install.sh's `chown "$TARGET_USER:" "$dest" 2>/dev/null || true`.
+    if [[ $(id -u) -eq 0 ]]; then
+        chown "$TARGET_USER:" "$(dirname "$commands_json")" "$commands_json" \
+              "$main_keybinds" "$custom_keybinds" 2>/dev/null || true
+    fi
+    echo "OK  generated: ${main_keybinds#"$TARGET_HOME"/}, ${custom_keybinds#"$TARGET_HOME"/}, ${commands_json#"$TARGET_HOME"/}"
 }
 
 # ---------------------------------------------------------------------------
 # Run
-# ----------------------------------------------------------------
+# ---------------------------------------------------------------------------
 
 if [[ $do_check -eq 1 && $dry_run -eq 0 ]]; then
     echo "== qml-compile-check =="
@@ -376,9 +793,13 @@ if [[ $do_check -eq 1 && $dry_run -eq 0 ]]; then
     fi
 fi
 
+echo "target: $TARGET_USER ($TARGET_HOME)"
 [[ $dry_run -eq 1 ]] && echo "-- dry run: nothing will be written --"
 
 if [[ $keybinds_only -eq 0 ]]; then
+    # Snapshot user edits BEFORE rsync --delete can overwrite them.
+    snapshot_user_edits
+
     sync_tree "quickshell ($qs_dest)" \
         "${qs_keep[@]}" \
         ${qs_rsync_skip[@]+"${qs_rsync_skip[@]}"} \
@@ -389,14 +810,16 @@ if [[ $keybinds_only -eq 0 ]]; then
     # or crash can never leave an idle-inhibitor lock behind.
     if [[ $dry_run -eq 0 ]]; then
         install -Dm644 "$src/systemd/user/end4pc-keep-awake.service" \
-            "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/end4pc-keep-awake.service"
+            "$config_home/systemd/user/end4pc-keep-awake.service"
         systemctl --user daemon-reload 2>/dev/null || true
     fi
 
     # dots/ is vendored and git-ignored, so a checkout that never carried it
-    # (or lost it) must not turn the whole sync into a failure.
+    # (or lost it) must not turn the whole sync into a failure. The hypr tree
+    # is synced WITHOUT --delete: live-only files (hyprland.lua, colors.lua,
+    # monitors.lua, hypridle.conf) are never erased.
     if [[ -d "$src/dots/.config/hypr" ]]; then
-        sync_tree "hyprland ($hypr_dest)" \
+        sync_tree "hyprland ($hypr_dest)" --no-delete \
             "${hypr_keep[@]}" \
             ${hypr_root_owned[@]+"${hypr_root_owned[@]}"} \
             "$src/dots/.config/hypr/" "$hypr_dest/"
@@ -405,36 +828,55 @@ if [[ $keybinds_only -eq 0 ]]; then
         echo "       skipped: dots/.config/hypr is not in this checkout"
     fi
 
+    # User edits win: put them back on top of the fresh deploy.
+    restore_user_edits
+
     # After both copies, so nothing a copy just brought in is left unpatched.
     if [[ $dry_run -eq 0 ]]; then
         deploy_patches
     fi
 
+    # Files restored from the user layer are expected to differ from the
+    # checkout, so exclude them from the drift check (they were reported above).
+    verify_user_qs_skip=()
+    verify_user_hypr_skip=()
+    for ns in quickshell hypr; do
+        [[ -d "$user_layer/$ns" ]] || continue
+        while IFS= read -r -d '' f; do
+            rel="${f#"$user_layer/$ns"/}"
+            if [[ "$ns" == "quickshell" ]]; then
+                verify_user_qs_skip+=(--exclude="$(basename "$rel")")
+            else
+                verify_user_hypr_skip+=(--exclude="$(basename "$rel")")
+            fi
+        done < <(find "$user_layer/$ns" -type f -print0 2>/dev/null)
+    done
+
     verify_tree "quickshell" "$src" "$qs_dest" \
-        "${qs_diff_keep[@]}" ${qs_diff_skip[@]+"${qs_diff_skip[@]}"}
+        "${qs_diff_keep[@]}" ${qs_diff_skip[@]+"${qs_diff_skip[@]}"} \
+        ${verify_user_qs_skip[@]+"${verify_user_qs_skip[@]}"}
     verify_patched
     if [[ -d "$src/dots/.config/hypr" ]]; then
-        verify_tree "hyprland" "$src/dots/.config/hypr" "$hypr_dest" "${hypr_diff_keep[@]}"
+        verify_tree "hyprland" "$src/dots/.config/hypr" "$hypr_dest" \
+            "${hypr_diff_keep[@]}" \
+            ${verify_user_hypr_skip[@]+"${verify_user_hypr_skip[@]}"}
     fi
 else
     echo "== tree sync skipped (--keybinds-only) =="
 fi
 
-# The default keybinds live outside the synced trees, in the user-owned
-# custom/keybinds.lua. install.sh runs the same step on a fresh install.
-if [[ $dry_run -eq 1 ]]; then
-    if grep -qF "end4-pC workspace-follow keybinds" "$custom_keybinds" 2>/dev/null \
-        && grep -qF "end4-pC utilities keybinds" "$custom_keybinds" 2>/dev/null \
-        && grep -qF "end4-pC advanced-paste window rule" "$custom_keybinds" 2>/dev/null \
-        && grep -qF "end4-pC tap-super launcher keybinds" "$custom_keybinds" 2>/dev/null; then
-        echo "== default keybinds =="
-        echo "       already present in custom/keybinds.lua"
-    else
-        echo "== default keybinds =="
-        echo "       would be added to custom/keybinds.lua"
-    fi
-else
-    install_keybind_defaults
+# Regenerate the live keybind Lua from the frozen catalog + user overlay. This
+# runs after deploy/restore (so a restored user edit cannot shadow it) and in
+# --keybinds-only mode too. install_keybind_defaults() is deliberately NOT
+# called: the generated custom/keybinds.lua already carries every managed
+# block, and the old injected-block path would duplicate them.
+generate_keybind_lua
+
+# Record the deployed state so the next run can tell a user edit from a
+# project update. Written after generation so the manifest's baseline is the
+# generated bytes. Skipped in --keybinds-only mode, which never deploys trees.
+if [[ $dry_run -eq 0 && $keybinds_only -eq 0 ]]; then
+    write_manifest
 fi
 
 # Colour output is owned by the runtime, not by this sync -- say so rather than
@@ -450,7 +892,7 @@ if [[ ${#root_owned_note[@]} -gt 0 ]]; then
     echo "not synced -- owned by root (content is compared anyway):"
     printf '  %s\n' "${root_owned_note[@]}"
     echo "  To let this script update them in future:"
-    echo "    sudo chown -R $USER:$USER \"$hypr_dest\" \"$qs_dest\""
+    echo "    sudo chown -R $TARGET_USER:$TARGET_USER \"$hypr_dest\" \"$qs_dest\""
 fi
 
 if [[ -f "$qs_dest/scripts/colors/switchwall.sh" ]] \

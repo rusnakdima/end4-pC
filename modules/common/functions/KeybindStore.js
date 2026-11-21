@@ -169,6 +169,165 @@ function parseBlock(text) {
     return entries;
 }
 
+// =====================================================================
+// JSON overlay store (the current, overlay-backed keybind path)
+// =====================================================================
+// The functions above are kept intact because tst_keybindstore.qml still
+// exercises the legacy Lua managed block. The live settings path below uses
+// ~/.config/hypr/custom/keybind-overlay.json instead: Settings writes only
+// this file, and scripts/hyprland/generate_keybinds.py turns the frozen
+// catalog plus this overlay into the two Lua files Hyprland actually loads.
+//
+// Overlay shape (see the generator):
+//   { "overrides": { "<bind-id>": { combo, description, category,
+//                                    dispatch, options, enabled } },
+//     "adds": [ { id, category, combo, description, dispatch, options,
+//                 code } ],
+//     "disabled": [ "<bind-id>", ... ] }
+
+var OVERLAY_DEFAULT = { overrides: {}, adds: [], disabled: [] };
+
+function newOverlay() {
+    return { overrides: {}, adds: [], disabled: [] };
+}
+
+// Parse the overlay defensively: a partial or hand-broken file must not take
+// the settings page down. Anything unrecognised falls back to empty sections.
+function parseOverlay(text) {
+    const result = newOverlay();
+    if (typeof text !== "string" || text.trim() === "") return result;
+    try {
+        const parsed = JSON.parse(text);
+        if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return result;
+        if (parsed.overrides !== null && typeof parsed.overrides === "object"
+                && !Array.isArray(parsed.overrides))
+            result.overrides = parsed.overrides;
+        if (Array.isArray(parsed.adds)) result.adds = parsed.adds;
+        if (Array.isArray(parsed.disabled)) result.disabled = parsed.disabled;
+    } catch (e) {
+        console.error("[KeybindStore] overlay parse failed: " + e);
+    }
+    return result;
+}
+
+// A stable, readable JSON document. JSON.parse can read it back verbatim, so
+// there is no marker splicing to get wrong.
+function renderOverlay(data) {
+    const overlay = data ?? newOverlay();
+    return JSON.stringify({
+        overrides: overlay.overrides ?? {},
+        adds: overlay.adds ?? [],
+        disabled: overlay.disabled ?? []
+    }, null, 2) + "\n";
+}
+
+// Lua string literal, used for the `code` fallback emitted for new binds.
+function luaLiteral(text) {
+    return '"' + String(text ?? "")
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"')
+        .replace(/\r/g, "\\r")
+        .replace(/\n/g, "\\n")
+        .replace(/\t/g, "\\t") + '"';
+}
+
+// The overlay's flat, effective bind list: the frozen catalog with disabled
+// binds removed and overrides applied, then the user's adds appended. This is
+// the single list Settings and HyprlandKeybinds both read from.
+function effectiveBinds(catalog, overlay) {
+    const ov = overlay ?? newOverlay();
+    const overrides = ov.overrides ?? {};
+    const adds = ov.adds ?? [];
+    const disabled = new Set(ov.disabled ?? []);
+    const out = [];
+    for (const b of (catalog?.binds ?? [])) {
+        if (disabled.has(b.id)) continue;
+        const override = overrides[b.id];
+        if (override && override.enabled === false) continue;
+        const next = Object.assign({}, b);
+        if (override) {
+            // Keep the catalog's combo so an override written through the
+            // older keybind_overrides.conf still keys off the original line.
+            next.originalCombo = b.combo;
+            // Only these fields are user-editable. `code`, `source`, `line`
+            // and the dispatch of a command bind stay with the frozen catalog.
+            for (const key of ["combo", "description", "category", "dispatch", "options"]) {
+                if (Object.prototype.hasOwnProperty.call(override, key)) next[key] = override[key];
+            }
+        }
+        out.push(next);
+    }
+    for (const a of adds) {
+        const next = Object.assign({}, a);
+        if (next.source === undefined) next.source = "custom";
+        if (next.options === undefined) next.options = {};
+        if (next.description === undefined) next.description = next.name ?? "";
+        if (next.category === undefined) next.category = "";
+        if (next.dispatch === undefined)
+            next.dispatch = { kind: "command", id: next.id ?? "", command: next.command ?? "" };
+        out.push(next);
+    }
+    return out;
+}
+
+// The overlay `adds` entry for a form entry. `code` is the legacy-mode
+// fallback: the generator emits it verbatim for command binds when it runs
+// with --exec-mode legacy, while `dispatch.id` serves the bridge mode.
+function makeAdd(entry, id) {
+    const newId = String(id ?? entry?.id ?? "");
+    const combo = String(entry?.combo ?? "");
+    const command = String(entry?.command ?? entry?.dispatch?.command ?? "");
+    const name = String(entry?.name ?? entry?.description ?? "");
+    return {
+        id: newId,
+        category: String(entry?.category ?? ""),
+        combo: combo,
+        description: name,
+        dispatch: { kind: "command", id: newId, command: command },
+        options: {},
+        source: "custom",
+        code: "hl.bind(" + luaLiteral(combo) + ", hl.dsp.exec_cmd(" + luaLiteral(command)
+            + "), { description = " + luaLiteral(name) + " })"
+    };
+}
+
+// The editable view of an add: the form and the filter still speak
+// name/command, while the overlay file stores description/dispatch.
+function addToEntry(add) {
+    return {
+        id: String(add?.id ?? ""),
+        name: String(add?.description ?? add?.name ?? ""),
+        category: String(add?.category ?? ""),
+        combo: String(add?.combo ?? ""),
+        command: String(add?.dispatch?.command ?? add?.command ?? ""),
+        code: String(add?.code ?? ""),
+        raw: false
+    };
+}
+
+// Immutable updates, so a rejected write never leaves a half-mutated overlay.
+function withAdds(overlay, adds) {
+    const next = newOverlay();
+    next.overrides = overlay?.overrides ?? {};
+    next.disabled = overlay?.disabled ?? [];
+    next.adds = adds;
+    return next;
+}
+
+function withOverrides(overlay, overrides) {
+    const next = newOverlay();
+    next.adds = overlay?.adds ?? [];
+    next.disabled = overlay?.disabled ?? [];
+    next.overrides = overrides;
+    return next;
+}
+
+// A narrow override patch: only combo/description/category/enabled are ever
+// written. A command bind's dispatch and options stay untouched.
+function comboOverride(combo) {
+    return { combo: String(combo ?? "") };
+}
+
 // The file with only the marker region replaced. The block is appended
 // (after a blank line) when the markers are missing, and a dangling start
 // marker is healed by treating everything to the end of file as the block.

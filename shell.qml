@@ -65,6 +65,9 @@ ShellRoot {
         AdvancedPaste.close();
         ImagePreview.close();
         DesktopUtilities.stopFindMouse();
+        // Owns the generated "quickshell:runCommand:<id>" shortcuts; reading
+        // it here registers them before any Hyprland bind can dispatch one.
+        GeneratedCommandShortcuts.reload();
     }
     
     // Panel families

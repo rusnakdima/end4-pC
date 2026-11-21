@@ -47,19 +47,50 @@ hl.window_rule({ match = { class = "org.quickshell", title = "Image Preview" }, 
 -- <<< end4-pC image-preview window rule
 
 -- >>> end4-pC tap-super launcher keybinds (managed by end4-pC)
--- Tap Super alone opens the launcher. Super + any other key must NOT.
+-- Tap Super alone opens the launcher; Super + <key> must not.
 --
--- `release = true` is what makes the bind tap-only: Hyprland shadows
--- (cancels) it as soon as another key is pressed while Super is held.
--- A `global` shortcut is exempt from shadowing and would fire even when
--- Super was only a modifier for another action -- that is why this
--- override exists.
+-- Hyprland 0.57.2's Lua `release = true` binds never fire, and its
+-- `hl.dsp.exec_cmd()` dispatcher is a no-op, so neither the classic
+-- release bind nor its exec command can open the launcher at all.
+-- Detect a real tap from key state instead: a Lua hook marks Super going
+-- down and notes any other key pressed while it is held; a repeating
+-- timer watches for Super coming back up and dispatches the global
+-- shortcut only when it was a genuine tap. 133/134 are Super_L/Super_R
+-- in Hyprland's keycode space (evdev code + 8).
 --
 -- Unbind first so an inherited (possibly global) bind on the same key
 -- cannot double-toggle the launcher.
 hl.unbind("SUPER + SUPER_L")
 hl.unbind("SUPER + SUPER_R")
-local end4pcTapSearchToggle = hl.dsp.exec_cmd("qs -c $qsConfig ipc call search toggle || pkill fuzzel || fuzzel")
-hl.bind("SUPER + SUPER_L", end4pcTapSearchToggle, { release = true, description = "Shell: Toggle search" })
-hl.bind("SUPER + SUPER_R", end4pcTapSearchToggle, { release = true })
+local end4pcSuperWasDown = false
+local end4pcSuperCombo = false
+local function end4pcSuperDown()
+    return hl.is_key_down(133) or hl.is_key_down(134)
+end
+local function end4pcOtherKeyDown()
+    for c = 8, 255 do
+        if c ~= 133 and c ~= 134 and hl.is_key_down(c) then return true end
+    end
+    return false
+end
+hl.on("input.keyboard.key", function()
+    if end4pcSuperDown() then
+        if not end4pcSuperWasDown then
+            end4pcSuperWasDown = true
+            end4pcSuperCombo = false
+        end
+        if end4pcOtherKeyDown() then end4pcSuperCombo = true end
+    end
+end)
+hl.timer(function()
+    if not end4pcSuperWasDown then return end
+    if end4pcSuperDown() then
+        if end4pcOtherKeyDown() then end4pcSuperCombo = true end
+        return
+    end
+    end4pcSuperWasDown = false
+    if not end4pcSuperCombo then
+        hl.dispatch(hl.dsp.global("quickshell:searchToggle"))
+    end
+end, { timeout = 30, type = "repeat" })
 -- <<< end4-pC tap-super launcher keybinds

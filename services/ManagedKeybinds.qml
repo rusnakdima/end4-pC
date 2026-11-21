@@ -9,108 +9,150 @@ import Quickshell.Io
 import "../modules/common/functions/KeybindStore.js" as KeybindStore
 
 /**
- * Owns the panel-managed block of ~/.config/hypr/custom/keybinds.lua.
+ * Owns ~/.config/hypr/custom/keybind-overlay.json — the only file the settings
+ * panel writes for keybinds.
  *
- * The block is delimited by the markers of KeybindStore.js and is the only
- * part of the file this config writes: everything outside it belongs to the
- * user and must survive every save byte-for-byte. The file itself lives in
- * hypr/custom, which the Hyprland config requires only when it exists, so
- * creating it here is what makes the new binds take effect on the reload
- * that follows each write.
+ * The frozen catalog lives in the shell (defaults/hyprland/keybinds.json) and
+ * is never edited here. This singleton reads the user overlay, exposes its
+ * adds as editable entries, and after every write runs the catalog generator
+ * (scripts/hyprland/generate_keybinds.py) so the two Lua files Hyprland loads
+ * always match what the panel shows. A compositor reload follows the write.
  *
- * All parsing and rendering is in KeybindStore.js; this singleton is the
- * IO half — read the file, splice the block, write it back, reload.
- * The path is a property so the test can point it at a temp file.
+ * All JSON parsing/rendering is in KeybindStore.js; this singleton is the IO
+ * half. keybindsPath is a property so a test can point it at a temp file.
  */
 Singleton {
     id: root
 
     readonly property string keybindsDir: FileUtils.trimFileProtocol(`${Directories.config}/hypr/custom`)
-    property string keybindsPath: `${root.keybindsDir}/keybinds.lua`
+    property string keybindsPath: `${root.keybindsDir}/keybind-overlay.json`
 
-    // Every parsed item of the managed block, including the lines the
-    // parser did not recognise ({raw}), so renderBlock can keep them.
+    // Frozen inputs / generated outputs, all absolute for the bash -lc call.
+    readonly property string catalogPath: Quickshell.shellPath("defaults/hyprland/keybinds.json")
+    readonly property string generatorPath: Quickshell.shellPath("scripts/hyprland/generate_keybinds.py")
+    readonly property string mainOutPath: FileUtils.trimFileProtocol(`${Directories.config}/hypr/hyprland/keybinds.lua`)
+    readonly property string customOutPath: `${root.keybindsDir}/keybinds.lua`
+    readonly property string commandsOutPath: FileUtils.trimFileProtocol(
+        Quickshell.shellPath("state/generated-commands.json"))
+
+    // The parsed overlay. The generator and HyprlandKeybinds read the same
+    // object, so the list, the cheatsheet and the live config cannot drift.
+    property var overlay: KeybindStore.newOverlay()
+
+    // Every add in the overlay, as the form/filter view objects. There is no
+    // raw residue in a JSON file, so every entry is editable.
     property var entries: []
 
-    // The entries the form can edit: raw residue lines are preserved but
-    // never shown, because there is nothing to edit them with.
-    readonly property var editableEntries: root.entries.filter(entry => typeof entry.raw !== "string")
+    readonly property var editableEntries: root.entries
 
     // A write is in flight. The file belongs to that write until it is done.
     property bool pendingWrite: false
-
-    // The file was written at least once. A load of a file that does not
-    // exist must not empty the entries after that.
+    // The overlay was written at least once: a late "missing file" load must
+    // not empty the entries after that.
     property bool wrote: false
-
-    // The file has been loaded once (or reported missing), so its text is
-    // known and a write cannot splice against an unread file.
+    // The overlay has been read once (or reported missing).
     property bool loaded: false
-
-    // Bumped on every parse of the file. The test switches the path or
-    // resets the block and waits for the next parse instead of guessing
-    // how long the read takes.
+    // Bumped on every parse so a test can wait for the next read.
     property int loadGeneration: 0
+    // The custom directory exists (startup mkdir finished).
+    property bool dirReady: false
+    // A setText is awaiting its onSaved confirmation before the generator runs.
+    property bool awaitGeneration: false
 
     FileView {
-        id: keybindsFile
+        id: overlayFile
         path: root.keybindsPath
         preload: true
         watchChanges: true
 
         onLoaded: root.reload()
         onFileChanged: root.reload()
-        onSaved: root.reload()
+        onSaved: {
+            if (root.awaitGeneration) {
+                root.awaitGeneration = false;
+                root.runGenerator();
+            } else {
+                root.reload();
+            }
+        }
+        onSaveFailed: error => {
+            console.error("[kbd] overlay save failed: " + error);
+            root.awaitGeneration = false;
+        }
         onLoadFailed: error => {
-            // No file yet: the managed block starts empty, which is the
-            // normal state before the first keybind is created.
-            console.log("[kbd] loadFailed path=" + root.keybindsPath
-                + " error=" + error + " pendingWrite=" + root.pendingWrite
-                + " wrote=" + root.wrote);
             root.loaded = true;
             root.loadGeneration += 1;
             if (error === FileViewError.FileNotFound && !root.pendingWrite && !root.wrote) {
+                root.overlay = KeybindStore.newOverlay();
                 root.entries = [];
             }
         }
     }
 
     // hypr/custom is user owned and normally already there, but a fresh
-    // installation has no custom directory at all. The mkdir runs once at
-    // startup so that by the time the user saves, the directory is known
-    // to exist and the write can happen inside the same event — a save
-    // must not depend on a process hop that a config reload could kill.
+    // installation can have no custom directory at all. Create it once at
+    // startup so a save does not depend on a process hop.
     Process {
         id: mkdirProc
         running: true
         command: ["mkdir", "-p", root.keybindsDir]
         onExited: (exitCode, exitStatus) => {
             root.dirReady = true;
-            if (!root.pendingWrite) return;
-            root.pendingWrite = false;
-            root.writeFile();
+            if (root.pendingWrite) {
+                root.pendingWrite = false;
+                root.writeFile();
+            }
         }
     }
 
-    // The directory exists (startup mkdir finished), so a save writes
-    // directly instead of queueing behind a process.
-    property bool dirReady: false
+    function shq(value) {
+        return "'" + String(value ?? "").replace(/'/g, "'\\''") + "'";
+    }
+
+    // Exactly the generator contract sync.sh uses, with absolute paths.
+    function generatorCommand() {
+        return "mkdir -p " + shq(FileUtils.trimFileProtocol(Quickshell.shellPath("state")))
+            + "; python3 " + shq(root.generatorPath)
+            + " --catalog " + shq(root.catalogPath)
+            + " --overlay " + shq(root.keybindsPath)
+            + " --main-out " + shq(root.mainOutPath)
+            + " --custom-out " + shq(root.customOutPath)
+            + " --commands-out " + shq(root.commandsOutPath);
+    }
+
+    Process {
+        id: generateProc
+        command: ["bash", "-lc", root.generatorCommand()]
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode !== 0) {
+                console.error("[kbd] keybind generator exited " + exitCode);
+                return;
+            }
+            // Same reload mechanism the old managed-block writer used.
+            Quickshell.execDetached(["hyprctl", "reload"]);
+        }
+    }
 
     function reload() {
         // A write in flight owns the file. Reading it now would drop the
         // change that is about to be written.
-        if (root.pendingWrite) { console.log("[kbd] reload skipped (pendingWrite)"); return; }
+        if (root.pendingWrite) return;
 
         root.loaded = true;
         root.loadGeneration += 1;
-        root.entries = KeybindStore.parseBlock(keybindsFile.text() ?? "");
-        console.log("[kbd] reload gen=" + root.loadGeneration
-            + " entries=" + root.entries.length);
+        const parsed = KeybindStore.parseOverlay(overlayFile.text() ?? "");
+        root.overlay = parsed;
+        root.entries = (parsed.adds ?? []).map(add => KeybindStore.addToEntry(add));
+        console.log("[kbd] overlay reload gen=" + root.loadGeneration
+            + " adds=" + root.entries.length);
+    }
+
+    function runGenerator() {
+        generateProc.running = false;
+        generateProc.running = true;
     }
 
     function write() {
-        console.log("[kbd] write() dirReady=" + root.dirReady
-            + " entries=" + root.entries.length);
         if (root.dirReady) {
             root.writeFile();
             return;
@@ -120,59 +162,34 @@ Singleton {
     }
 
     function writeFile() {
-        // From here on the file exists, or is about to. A load that reports
-        // the file as missing must not empty the entries anymore.
         root.wrote = true;
-
-        const block = KeybindStore.renderBlock(root.entries);
-        let current = "";
-        try {
-            current = keybindsFile.text() ?? "";
-        } catch (e) {
-            console.error("[kbd] writeFile: reading the current text failed: " + e);
-            current = "";
-        }
-        const next = KeybindStore.splice(current, block);
-        console.log("[kbd] writeFile path=" + root.keybindsPath
-            + " bytes=" + next.length);
-        keybindsFile.setText(next);
-        Quickshell.execDetached(["hyprctl", "reload"]);
+        const text = KeybindStore.renderOverlay(root.overlay);
+        console.log("[kbd] overlay write path=" + root.keybindsPath + " bytes=" + text.length);
+        root.awaitGeneration = true;
+        overlayFile.setText(text);
     }
 
-    // The managed entry a parsed bind came from, or null when the bind is not
-    // one of ours. A bind carries the source path and 1-based line range the
-    // keybind parser stamped on it (get_keybinds.py attach_source); parseBlock
-    // stamps the same numbers on the entries it reads back. Matching both the
-    // path and an overlapping line range keeps a hand-written line elsewhere
-    // in the same file from being mistaken for a managed entry.
+    // The overlay add a synthesized bind came from, or null when the bind is
+    // one of the frozen catalog entries. Adds carry their overlay id directly
+    // (there is no line number in a JSON file), and sourcePath is the overlay
+    // file so a catalog bind written to a Lua path can never match.
     function entryForSource(bind) {
         if (bind === undefined || bind === null) return null;
         const source = FileUtils.trimFileProtocol(String(bind.sourcePath ?? ""));
-        const managedPath = FileUtils.trimFileProtocol(String(root.keybindsPath ?? ""));
-        if (source === "" || managedPath === "" || source !== managedPath) return null;
-
-        const from = Number(bind.line);
-        const to = Number(bind.endLine);
-        if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
-
-        for (const entry of root.entries) {
-            if (typeof entry.raw === "string") continue;
-            const start = Number(entry.line);
-            const finish = Number(entry.endLine);
-            if (!Number.isFinite(start) || !Number.isFinite(finish)) continue;
-            if (start <= to && finish >= from) return entry;
-        }
-        return null;
+        const overlayPath = FileUtils.trimFileProtocol(String(root.keybindsPath ?? ""));
+        if (source === "" || overlayPath === "" || source !== overlayPath) return null;
+        const id = String(bind.id ?? "");
+        if (id === "") return null;
+        return root.entries.find(entry => entry.id === id) ?? null;
     }
 
-    // The validation code of KeybindStore.validate, or "" when the entry
-    // can be saved. The caller translates the code.
+    // The validation code of KeybindStore.validate, or "" when the entry can
+    // be saved. The caller translates the code.
     function validate(entry) {
         return KeybindStore.validate(entry);
     }
 
-    // Adds an entry to the block. Returns {ok, error, id}: error is a
-    // validation code, id the new entry's id when ok.
+    // Adds an entry to the overlay. Returns {ok, error, id}.
     function create(entry) {
         if (!root.loaded) { console.error("[kbd] create rejected: not-loaded"); return { ok: false, error: "not-loaded", id: "" }; }
 
@@ -181,39 +198,74 @@ Singleton {
         const error = KeybindStore.validate(next);
         if (error !== "") { console.error("[kbd] create invalid: " + error); return { ok: false, error: error, id: "" }; }
 
-        root.entries = root.entries.concat([next]);
+        const add = KeybindStore.makeAdd(next, id);
+        const overlay = KeybindStore.withAdds(root.overlay, (root.overlay.adds ?? []).concat([add]));
+        root.overlay = overlay;
+        root.entries = overlay.adds.map(item => KeybindStore.addToEntry(item));
         root.write();
         console.log("[kbd] create ok id=" + id + " combo=" + next.combo);
         return { ok: true, error: "", id: id };
     }
 
-    // Replaces the entry with the given id. Unknown id: nothing is written.
+    // Replaces the add with the given id. Unknown id: nothing is written.
     function update(id, entry) {
         if (!root.loaded) return { ok: false, error: "not-loaded" };
 
-        const index = root.entries.findIndex(item => item.id === id && typeof item.raw !== "string");
+        const adds = root.overlay.adds ?? [];
+        const index = adds.findIndex(item => String(item.id ?? "") === id);
         if (index === -1) return { ok: false, error: "not-found" };
 
-        const next = Object.assign({}, root.entries[index], entry, { id: id });
+        const current = KeybindStore.addToEntry(adds[index]);
+        const next = Object.assign({}, current, entry, { id: id });
         const error = KeybindStore.validate(next);
         if (error !== "") return { ok: false, error: error };
 
-        const entries = root.entries.slice();
-        entries[index] = next;
-        root.entries = entries;
+        const updated = adds.slice();
+        updated[index] = KeybindStore.makeAdd(next, id);
+        const overlay = KeybindStore.withAdds(root.overlay, updated);
+        root.overlay = overlay;
+        root.entries = overlay.adds.map(item => KeybindStore.addToEntry(item));
         root.write();
         return { ok: true, error: "" };
     }
 
-    // Drops an entry from the block. Raw lines are never removed: they are
-    // not managed, only preserved.
+    // Drops an add from the overlay.
     function remove(id) {
         if (!root.loaded) return { ok: false, error: "not-loaded" };
 
-        const next = root.entries.filter(item => item.id !== id || typeof item.raw === "string");
-        if (next.length === root.entries.length) return { ok: false, error: "not-found" };
+        const adds = root.overlay.adds ?? [];
+        const next = adds.filter(item => String(item.id ?? "") !== id);
+        if (next.length === adds.length) return { ok: false, error: "not-found" };
 
-        root.entries = next;
+        const overlay = KeybindStore.withAdds(root.overlay, next);
+        root.overlay = overlay;
+        root.entries = overlay.adds.map(item => KeybindStore.addToEntry(item));
+        root.write();
+        return { ok: true, error: "" };
+    }
+
+    // Narrow combo override for a catalog bind. Used by the conflict fixer for
+    // holders that do not come from an overlay add. Only `combo` is written; a
+    // command bind's dispatch/options stay with the frozen catalog.
+    function setOverride(id, combo) {
+        if (!root.loaded || String(id ?? "") === "") return { ok: false, error: "bad-id" };
+        const overrides = Object.assign({}, root.overlay.overrides ?? {});
+        overrides[id] = Object.assign({}, overrides[id] ?? {}, KeybindStore.comboOverride(combo));
+        const overlay = KeybindStore.withOverrides(root.overlay, overrides);
+        root.overlay = overlay;
+        root.entries = (overlay.adds ?? []).map(item => KeybindStore.addToEntry(item));
+        root.write();
+        return { ok: true, error: "" };
+    }
+
+    function clearOverride(id) {
+        if (!root.loaded) return { ok: false, error: "not-loaded" };
+        const overrides = Object.assign({}, root.overlay.overrides ?? {});
+        if (!(id in overrides)) return { ok: false, error: "not-found" };
+        delete overrides[id];
+        const overlay = KeybindStore.withOverrides(root.overlay, overrides);
+        root.overlay = overlay;
+        root.entries = (overlay.adds ?? []).map(item => KeybindStore.addToEntry(item));
         root.write();
         return { ok: true, error: "" };
     }
