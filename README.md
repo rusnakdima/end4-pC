@@ -196,6 +196,34 @@ hovers an image reference, `<leader>I` opens an image path, and `:ImagePreview
 Companion snippets live in `features/image-preview/`; the QML service is in
 `services/ImagePreview.qml` and the panel in `modules/ii/imagePreview/`.
 
+### 🪟 App window theming
+
+External GTK and Qt/KDE applications follow the shell's light/dark mode and
+Material You palette. Thunar (GTK3) and Dolphin (Qt/KDE) get MD3 styling from
+the same palette the shell uses. The layer is driven by `switchwall.sh` on
+every mode change and refreshed by `applycolor.sh` when the palette changes.
+
+**Qt/KDE apps** follow the mode through three knobs the installer sets up:
+`QT_STYLE_OVERRIDE=kvantum` in `~/.config/hypr/hyprland/env.lua`, Kvantum's
+`theme=MaterialAdw` (light/dark driven by `materialQT.sh`), and qt6ct's
+`color_scheme=matugen` (the palette matugen regenerates on every change).
+Because Hyprland reads `env.lua` at session start, **log out and back in once**
+after installing for Qt apps to pick up the style override. Some apps (GTK3
+in particular) only read their CSS at startup — restart them if a change does
+not show up immediately.
+
+Configure it under **Settings → Appearance → App theming**: a master switch,
+GTK / Qt toggles, a "Manage Qt style" toggle (Kvantum + qt6ct), per-app toggles
+for Thunar and Dolphin, and a live-refresh option. See
+`features/app-theming/README.md` for the config keys and how to add a sink.
+Toggles take effect on the next mode/palette change.
+
+The installer applies the current mode once at install time. To skip parts,
+pass `--no-app-theming` (`APP_THEMING=0`), `--no-app-theming-qt-env`
+(`APP_THEMING_QT_ENV=0`), or `--no-app-theming-hook`
+(`APP_THEMING_MATUGEN_HOOK=0`). The matugen post-hook re-injects the MD3 CSS
+block after every palette regeneration, so it cannot be lost.
+
 ### 🛠️ Desktop utilities
 
 The same keybind snippet also installs three small PowerToys-style shortcuts:

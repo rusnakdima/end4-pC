@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 
-QUICKSHELL_CONFIG_NAME="ii"
 XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
 XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
-CONFIG_DIR="$XDG_CONFIG_HOME/quickshell/$QUICKSHELL_CONFIG_NAME"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Derive the config root from this script's location so the same file works
+# from the repo, from an installed end4-pC config, and under the test harness.
+CONFIG_DIR="${APP_THEMING_SCRIPT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 CACHE_DIR="$XDG_CACHE_HOME/quickshell"
 STATE_DIR="$XDG_STATE_HOME/quickshell"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 get_light_dark() {
 	current_mode=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")

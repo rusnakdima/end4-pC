@@ -178,6 +178,21 @@ Singleton {
                         property bool forceDarkMode: false
                     }
                 }
+                // App window theming: push the Material You palette to external
+                // GTK/Qt apps so their windows follow the shell's light/dark mode.
+                property JsonObject appTheming: JsonObject {
+                    property bool enable: true
+                    property bool gtk: true
+                    property bool qt: true
+                    // Take over Kvantum's active theme + qt6ct palette. Without
+                    // this, Qt apps ignore the palette when QT_STYLE_OVERRIDE=breeze.
+                    property bool manageQtStyle: true
+                    property JsonObject perApp: JsonObject {
+                        property bool thunar: true // GTK3 reference app
+                        property bool dolphin: true // Qt/KDE reference app
+                    }
+                    property bool refreshRunningApps: true
+                }
                 property JsonObject palette: JsonObject {
                     property string type: "auto" // Allowed: auto, scheme-content, scheme-expressive, scheme-fidelity, scheme-fruit-salad, scheme-monochrome, scheme-neutral, scheme-rainbow, scheme-rose-water
                     property string accentColor: ""

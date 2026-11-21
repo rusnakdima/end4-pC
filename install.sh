@@ -396,6 +396,102 @@ configure_window_decorations() {
 }
 
 # ---------------------------------------------------------------------------
+# External application window theming
+# ---------------------------------------------------------------------------
+# Push the current mode to GTK/Qt apps once at install time so they already
+# match the shell before the first dark-mode toggle. The shell keeps them in
+# sync afterwards via switchwall.sh.
+apply_app_theming() {
+    if [[ $APP_THEMING -ne 1 ]]; then
+        echo "[install] App window theming: skipped (APP_THEMING=0)"
+        return 0
+    fi
+
+    local script="$SOURCE_DIR/scripts/theming/app-theming.sh"
+    if [[ ! -f "$script" ]]; then
+        echo "[install] WARN: app-theming.sh not found — skipping app theming." >&2
+        return 0
+    fi
+
+    local -a gs=(gsettings)
+    if [[ $(id -u) -eq 0 ]] && id "$TARGET_USER" &>/dev/null; then
+        gs=(sudo -u "$TARGET_USER" gsettings)
+    fi
+
+    local mode="light" scheme=""
+    if command -v gsettings >/dev/null 2>&1; then
+        scheme=$("${gs[@]}" get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
+        [[ "$scheme" == "prefer-dark" ]] && mode="dark"
+    fi
+
+    echo "[install] Applying app window theming ($mode)..."
+    if [[ $(id -u) -eq 0 ]] && id "$TARGET_USER" &>/dev/null; then
+        sudo -u "$TARGET_USER" env HOME="$TARGET_HOME" \
+            XDG_CONFIG_HOME="$TARGET_HOME/.config" \
+            XDG_STATE_HOME="$TARGET_HOME/.local/state" \
+            bash "$script" "$mode" >/dev/null 2>&1 || true
+    else
+        bash "$script" "$mode" >/dev/null 2>&1 || true
+    fi
+}
+
+# Qt apps default to Breeze when QT_STYLE_OVERRIDE is unset/breeze, which makes
+# Dolphin stay light in dark mode. Switch the Hyprland env to Kvantum; the Qt
+# side of app-theming.sh then drives Kvantum's MaterialAdw + qt6ct matugen palette.
+# This file is owned by the base install, so back it up before touching it.
+apply_qt_style_env() {
+    if [[ $APP_THEMING_QT_ENV -ne 1 ]]; then
+        echo "[install] Qt style env: skipped (APP_THEMING_QT_ENV=0)"
+        return 0
+    fi
+    local env_file="$TARGET_HOME/.config/hypr/hyprland/env.lua"
+    if [[ ! -f "$env_file" ]]; then
+        echo "[install] Qt style env: $env_file not found — skipping."
+        return 0
+    fi
+    cp -p "$env_file" "$env_file.app-theming-backup" 2>/dev/null || true
+    if grep -q 'QT_STYLE_OVERRIDE' "$env_file"; then
+        sed -i -E 's|(QT_STYLE_OVERRIDE"[[:space:]]*,[[:space:]]*")[^"]*(")|\1kvantum\2|' "$env_file"
+    else
+        printf '\nhl.env("QT_STYLE_OVERRIDE", "kvantum")\n' >> "$env_file"
+    fi
+    echo "[install] Qt style set to kvantum (log out and back in for running apps)."
+}
+
+# Matugen overwrites gtk.css on every apply. A post_hook makes matugen itself
+# re-inject the guarded MD3 block, so the layer survives even if applycolor.sh
+# fails. Idempotent, backed up, and opt-out.
+install_matugen_app_hooks() {
+    if [[ $APP_THEMING_MATUGEN_HOOK -ne 1 ]]; then
+        echo "[install] Matugen app hooks: skipped (APP_THEMING_MATUGEN_HOOK=0)"
+        return 0
+    fi
+    local cfg="$TARGET_HOME/.config/matugen/config.toml"
+    if [[ ! -f "$cfg" ]]; then
+        echo "[install] Matugen app hooks: $cfg not found — skipping."
+        return 0
+    fi
+    cp -p "$cfg" "$cfg.app-theming-backup" 2>/dev/null || true
+    local script="$TARGET_HOME/.config/quickshell/end4-pC/scripts/theming/app-theming.sh"
+    local hook="post_hook = 'bash $script --refresh >/dev/null 2>&1 || true'"
+    local section tmp
+    for section in templates.gtk3 templates.gtk4; do
+        tmp="$(mktemp)"
+        awk -v sec="$section" -v hook="$hook" '
+            /^\[/ {
+                if (insec && !has && !printed) { print hook; printed=1 }
+                insec = ($0 == "[" sec "]"); has=0; printed=0; print; next
+            }
+            insec && /^[[:space:]]*post_hook/ { has=1 }
+            { print }
+            END { if (insec && !has && !printed) print hook }
+        ' "$cfg" > "$tmp"
+        mv "$tmp" "$cfg"
+    done
+    echo "[install] Matugen post-hooks installed for gtk3/gtk4."
+}
+
+# ---------------------------------------------------------------------------
 # Fish shell
 # ---------------------------------------------------------------------------
 install_fish_config() {
@@ -806,6 +902,15 @@ VNC_AUTOLOGIN="${VNC_AUTOLOGIN:-1}"
 # configure_window_decorations. On by default; DISABLE_WINDOW_BUTTONS=0 or
 # --keep-window-buttons leaves the apps alone.
 DISABLE_WINDOW_BUTTONS="${DISABLE_WINDOW_BUTTONS:-1}"
+# External app window theming (GTK/Qt follow the shell's light/dark mode).
+# On by default; APP_THEMING=0 or --no-app-theming opts out.
+APP_THEMING="${APP_THEMING:-1}"
+# Qt style env: force QT_STYLE_OVERRIDE=kvantum in hyprland/env.lua so Qt apps
+# stop defaulting to Breeze (which ignores the matugen palette). Needs re-login.
+APP_THEMING_QT_ENV="${APP_THEMING_QT_ENV:-1}"
+# Matugen post-hooks re-inject the guarded MD3 CSS block after matugen rewrites
+# gtk.css, so a failed applycolor.sh cannot erase the app-theming layer.
+APP_THEMING_MATUGEN_HOOK="${APP_THEMING_MATUGEN_HOOK:-1}"
 for arg in "$@"; do
     case "$arg" in
         --skip-checks) SKIP_CHECKS=1 ;;
@@ -815,6 +920,9 @@ for arg in "$@"; do
         --vnc-audio=*) VNC_AUDIO="${arg#*=}" ;;
         --vnc-autologin=*) VNC_AUTOLOGIN="${arg#*=}" ;;
         --keep-window-buttons) DISABLE_WINDOW_BUTTONS=0 ;;
+        --no-app-theming) APP_THEMING=0 ;;
+        --no-app-theming-qt-env) APP_THEMING_QT_ENV=0 ;;
+        --no-app-theming-hook) APP_THEMING_MATUGEN_HOOK=0 ;;
     esac
 done
 
@@ -897,6 +1005,9 @@ main() {
     install_image_preview_configs
     install_python_venv
     install_ii_config
+    apply_app_theming
+    apply_qt_style_env
+    install_matugen_app_hooks
     install_sddm_theme
     install_wallpaper_sync
     install_fonts

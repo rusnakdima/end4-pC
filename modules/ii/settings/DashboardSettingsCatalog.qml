@@ -31,6 +31,22 @@ QtObject {
         return Appearance.colors["col" + name.charAt(0).toUpperCase() + name.slice(1)] ?? Appearance.getColorFromName(name);
     }
 
+    // Re-apply the external-app theming layer after a toggle changes. Config
+    // writes are debounced (~50ms), so wait before letting the script read the
+    // persisted values back from disk.
+    readonly property Timer appThemingReapplyTimer: Timer {
+        interval: 300
+        repeat: false
+        onTriggered: {
+            const mode = Appearance.m3colors.darkmode ? "dark" : "light";
+            Quickshell.execDetached(["bash", `${Directories.scriptPath}/theming/app-theming.sh`, mode]);
+        }
+    }
+
+    function applyAppTheming() {
+        appThemingReapplyTimer.restart();
+    }
+
     readonly property var glassDefaults: ({
         tintStrength: 0.3,
         rimWidth: 16,
@@ -186,6 +202,13 @@ QtObject {
         "interface:Dock/Border color": { type: "select", get: () => Config.options.dock.borderColor, set: v => { Config.options.dock.borderColor = v; }, get options() { return ["layer0Border", "primary", "secondary", "tertiary", "primaryContainer", "secondaryContainer", "tertiaryContainer", "layer1", "black"].map(name => ({ value: name, color: roleColor(name) })); } },
         "interface:UI background": { type: "select", get: () => Config.options.appearance.uiBackground, set: v => { Config.options.appearance.uiBackground = v; }, options: [{ displayName: Translation.tr("Themed"), icon: "palette", value: "themed" }, { displayName: "OLED", icon: "contrast", value: "oled" }] },
         "interface:Palette type": { type: "select", get: () => Config.options.appearance.palette.type, set: v => { Config.options.appearance.palette.type = v; ColorSchemes.regenerateTheme(); }, options: [{ displayName: Translation.tr("Auto"), icon: "auto_awesome", value: "auto" }, { displayName: Translation.tr("Content"), icon: "image", value: "scheme-content" }, { displayName: Translation.tr("Expressive"), icon: "palette", value: "scheme-expressive" }, { displayName: Translation.tr("Fidelity"), icon: "equal", value: "scheme-fidelity" }, { displayName: Translation.tr("Fruit Salad"), icon: "nutrition", value: "scheme-fruit-salad" }, { displayName: Translation.tr("Monochrome"), icon: "invert_colors", value: "scheme-monochrome" }, { displayName: Translation.tr("Neutral"), icon: "tonality", value: "scheme-neutral" }, { displayName: Translation.tr("Rainbow"), icon: "gradient", value: "scheme-rainbow" }, { displayName: Translation.tr("Tonal Spot"), icon: "lens", value: "scheme-tonal-spot" }] },
+        "interface:App theming": { type: "switch", get: () => Config.options.appearance.appTheming.enable, set: v => { Config.options.appearance.appTheming.enable = v; applyAppTheming(); } },
+        "interface:Theme GTK apps": { type: "switch", get: () => Config.options.appearance.appTheming.gtk, set: v => { Config.options.appearance.appTheming.gtk = v; applyAppTheming(); } },
+        "interface:Theme Qt/KDE apps": { type: "switch", get: () => Config.options.appearance.appTheming.qt, set: v => { Config.options.appearance.appTheming.qt = v; applyAppTheming(); } },
+        "interface:Manage Qt style": { type: "switch", get: () => Config.options.appearance.appTheming.manageQtStyle, set: v => { Config.options.appearance.appTheming.manageQtStyle = v; applyAppTheming(); } },
+        "interface:MD3 for Thunar": { type: "switch", get: () => Config.options.appearance.appTheming.perApp.thunar, set: v => { Config.options.appearance.appTheming.perApp.thunar = v; applyAppTheming(); } },
+        "interface:MD3 for Dolphin": { type: "switch", get: () => Config.options.appearance.appTheming.perApp.dolphin, set: v => { Config.options.appearance.appTheming.perApp.dolphin = v; applyAppTheming(); } },
+        "interface:Refresh running apps": { type: "switch", get: () => Config.options.appearance.appTheming.refreshRunningApps, set: v => { Config.options.appearance.appTheming.refreshRunningApps = v; } },
         "desktop:Same wallpaper": { type: "switch", get: () => Config.options.background.lockWall === "", set: v => { if (v) Config.options.background.lockWall = ""; } },
         // The keyboard panel has no config key of its own: brightness and mode
         // live in the helper's state file, because that is what the hardware is
@@ -667,6 +690,17 @@ QtObject {
                 { type: "spin", key: "general:Cursor size", title: Translation.tr("Cursor size"), icon: "ads_click" },
                 { type: "spin", key: "general:System font size", title: Translation.tr("System font size"), icon: "format_size" },
                 { type: "spin", key: "general:Monospace font size", title: Translation.tr("Mono font size"), icon: "format_size" }
+            ]
+        },
+        {
+            page: Translation.tr("Appearance"), title: Translation.tr("App theming"), icon: "web_asset", cards: [
+                { type: "switch", key: "interface:App theming", title: Translation.tr("Theme application windows"), icon: "palette", kw: "gtk qt kde apps light dark window follow theme" },
+                { type: "switch", key: "interface:Theme GTK apps", title: Translation.tr("Theme GTK apps"), icon: "web_asset", kw: "gtk3 gtk4 thunar nautilus" },
+                { type: "switch", key: "interface:Theme Qt/KDE apps", title: Translation.tr("Theme Qt / KDE apps"), icon: "widgets", kw: "qt kde dolphin kvantum" },
+                { type: "switch", key: "interface:Manage Qt style", title: Translation.tr("Manage Qt style (Kvantum + qt6ct)"), icon: "tune", kw: "kvantum qt6ct style override breeze re-login" },
+                { type: "switch", key: "interface:MD3 for Thunar", title: Translation.tr("MD3 styling for Thunar"), icon: "folder", kw: "thunar file manager md3 material" },
+                { type: "switch", key: "interface:MD3 for Dolphin", title: Translation.tr("MD3 styling for Dolphin"), icon: "folder_open", kw: "dolphin file manager md3 material" },
+                { type: "switch", key: "interface:Refresh running apps", title: Translation.tr("Refresh running apps"), icon: "autorenew", kw: "live update signal restart" }
             ]
         },
         {

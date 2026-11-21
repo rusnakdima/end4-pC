@@ -109,6 +109,14 @@ pre_process() {
         fi
     fi
 
+    # Push the same mode to external GTK/Qt application windows. The inline
+    # writes above are deliberately kept as a fallback when this script is
+    # missing, so an incomplete deploy can never leave apps on the wrong side.
+    local app_theming="$SCRIPT_DIR/../theming/app-theming.sh"
+    if [[ -f "$app_theming" ]]; then
+        bash "$app_theming" "$mode_flag" >/dev/null 2>&1 || true
+    fi
+
     if [ ! -d "$CACHE_DIR"/user/generated ]; then
         mkdir -p "$CACHE_DIR"/user/generated
     fi

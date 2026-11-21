@@ -101,3 +101,7 @@ else
 fi
 
 apply_qt &
+
+# Regenerate the guarded MD3 CSS blocks from the freshly written palette.
+# --refresh only touches CSS; mode-level settings were applied by pre_process().
+"$SCRIPT_DIR/../theming/app-theming.sh" --refresh >/dev/null 2>&1

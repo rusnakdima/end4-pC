@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "description": "Declarative sinks for end4-pC app window theming. The manifest is the extension point and review surface; scripts/theming/app-theming.sh is authoritative at runtime.",
+  "guard": {
+    "begin": "/* end4-pC MD3 app theming:begin */",
+    "end": "/* end4-pC MD3 app theming:end */"
+  },
+  "paletteTokens": [
+    "primary",
+    "onPrimary",
+    "surface",
+    "onSurface",
+    "surfaceContainer",
+    "outline",
+    "error"
+  ],
+  "sinks": [
+    {
+      "id": "gtk-appearance",
+      "toolkit": "gtk",
+      "applies-to": ["GTK2", "GTK3", "GTK4", "Thunar", "Nautilus"],
+      "config": ".appearance.appTheming.gtk",
+      "targets": [
+        { "path": "$XDG_CONFIG_HOME/gtk-3.0/settings.ini", "mode": "ini" },
+        { "path": "$XDG_CONFIG_HOME/gtk-4.0/settings.ini", "mode": "ini" },
+        { "path": "$XDG_CONFIG_HOME/gtk-2.0/gtkrc", "mode": "ini" },
+        { "path": "$XDG_CONFIG_HOME/gtk-3.0/gtk.css", "mode": "guarded-css", "template": "gtk3.css.tmpl" },
+        { "path": "$XDG_CONFIG_HOME/gtk-4.0/gtk.css", "mode": "guarded-css", "template": "gtk4.css.tmpl" }
+      ]
+    },
+    {
+      "id": "thunar-md3",
+      "toolkit": "gtk",
+      "applies-to": ["Thunar"],
+      "config": ".appearance.appTheming.perApp.thunar",
+      "note": "MD3 selectors scoped to Thunar inside the GTK3 guarded CSS block.",
+      "targets": [
+        { "path": "$XDG_CONFIG_HOME/gtk-3.0/gtk.css", "mode": "guarded-css", "template": "gtk3.css.tmpl" }
+      ]
+    },
+    {
+      "id": "qt-appearance",
+      "toolkit": "qt",
+      "applies-to": ["Qt", "KDE", "Dolphin"],
+      "config": ".appearance.appTheming.qt",
+      "targets": [
+        { "path": "$XDG_CONFIG_HOME/kdeglobals", "mode": "ini", "key": "ColorScheme", "light": "MaterialYouLight", "dark": "MaterialYouDark" }
+      ]
+    },
+    {
+      "id": "dolphin-md3",
+      "toolkit": "qt",
+      "applies-to": ["Dolphin"],
+      "config": ".appearance.appTheming.perApp.dolphin",
+      "note": "Dolphin is the reference Qt/KDE app for the MaterialYou KDE scheme.",
+      "targets": [
+        { "path": "$XDG_CONFIG_HOME/kdeglobals", "mode": "ini", "key": "ColorScheme", "light": "MaterialYouLight", "dark": "MaterialYouDark" }
+      ]
+    }
+  ]
+}
