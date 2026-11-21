@@ -15,9 +15,10 @@ import Quickshell.Hyprland
 /**
  * Alt+Tab window switcher.
  *
- * The deck defaults to every mapped window on every monitor. Workspace and
- * monitor scopes remain opt-in and still widen to all windows when they offer
- * fewer than two candidates. Cards are ordered by Hyprland's focusHistoryID
+ * The deck defaults to every mapped window on every monitor. The scope toggle
+ * narrows it to windows on the focused monitor, or widens it to all monitors;
+ * either side falls back to all windows when it offers fewer than two
+ * candidates. Cards are ordered by Hyprland's focusHistoryID
  * (most recently used first), and cycling only moves the highlight; the real
  * focus change happens on commit, which keeps the compositor's focus history
  * honest. Committing a window on another monitor focuses that monitor first.
@@ -84,15 +85,17 @@ Scope {
     // is clicked or the overview is cancelled.
     property bool locked: false
 
-    // Two independent scope modes, available in both list and grid views:
-    //   monitor -> only this monitor's workspace range (1-10, 11-20, ...)
-    //   all     -> every workspace on every monitor
+    // Two scope modes, available in both list and grid views. Monitor ids,
+    // not workspace ids, decide membership: both monitors share the 1-10
+    // workspace namespace here.
+    //   monitor -> windows on the monitor that currently has focus
+    //   all     -> windows on every monitor
     property string workspaceScope: Config.options?.windowSwitcher?.workspaceScope ?? "monitor"
     readonly property int workspacesPerMonitor: Config.options?.windowSwitcher?.workspacesPerMonitor ?? 10
     property string openedWorkspaceRangeLabel: ""
     readonly property string workspaceScopeLabel: root.workspaceScope === "all"
-        ? Translation.tr("All WS")
-        : (root.openedWorkspaceRangeLabel !== "" ? root.openedWorkspaceRangeLabel : Translation.tr("This monitor"))
+        ? Translation.tr("All monitors")
+        : Translation.tr("This monitor")
 
     readonly property int configuredGridColumns: Config.options?.windowSwitcher?.gridColumns ?? 0
     readonly property int baseGridColumns: root.configuredGridColumns > 0
@@ -151,7 +154,7 @@ Scope {
     // the deck widens, follow the highlighted card instead, so the header
     // always shows the workspace the selected window actually belongs to.
     readonly property string headerLabel: {
-        if (root.openedScope === "workspace" || root.openedScope === "monitorWorkspaces" || !root.selectedEntry)
+        if (root.openedScope === "workspace" || !root.selectedEntry)
             return root.openedWorkspaceLabel;
         const workspace = root.selectedEntry.windowData?.workspace;
         return `${Translation.tr("Workspace")} ${workspace?.name ?? workspace?.id ?? ""}`;
@@ -169,24 +172,6 @@ Scope {
         // The workspace name is authoritative: numeric workspaces read as "1",
         // named ones keep their name instead of collapsing to an id.
         return workspace.name ?? String(workspace.id);
-    }
-
-    // Derive the block of workspace ids owned by a monitor. The smallest id
-    // reported for that monitor anchors the block (1-10, 11-20, ...); when no
-    // workspace is open there, fall back to the monitor's index.
-    function workspaceRangeFor(monitorName) {
-        const perMonitor = Math.max(1, root.workspacesPerMonitor);
-        const ids = (HyprlandData.workspaces ?? [])
-            .filter(ws => ws.monitor === monitorName)
-            .map(ws => ws.id);
-        if (ids.length > 0) {
-            const start = Math.min(...ids);
-            return [start, start + perMonitor - 1];
-        }
-        const monitors = Hyprland.monitors.values;
-        const index = monitors.findIndex(m => m.name === monitorName);
-        const start = (index < 0 ? 0 : index) * perMonitor + 1;
-        return [start, start + perMonitor - 1];
     }
 
     function buildEntries() {
@@ -228,11 +213,6 @@ Scope {
         const monitorId = root.focusedMonitor?.id ?? -1;
         const inWorkspace = windows.filter(w => w.windowData.workspace?.id === workspaceId);
         const onMonitor = windows.filter(w => w.windowData.monitor === monitorId);
-        const range = root.workspaceRangeFor(root.focusedMonitor?.name ?? "");
-        const inMonitorWorkspaces = windows.filter(w => {
-            const id = w.windowData.workspace?.id;
-            return id >= range[0] && id <= range[1];
-        });
 
         const configuredScope = Config.options?.windowSwitcher?.scope ?? "workspace";
         const allowFallback = Config.options?.windowSwitcher?.fallback ?? true;
@@ -243,15 +223,15 @@ Scope {
         // (the common one-window-per-workspace layout), widen to the monitor
         // and finally to every window, instead of turning Alt+Tab into a no-op.
         if (configuredScope === "all") {
-            // Two scope modes for the same list/grid deck: one monitor's
-            // workspace block, or every workspace on every monitor. Fall back
-            // to all windows when the block has fewer than two candidates.
+            // The toggle is about monitors, not workspace ids: both monitors
+            // share the same 1-10 namespace, so a workspace range would mix
+            // them. Use the focused monitor's real id instead.
             if (root.workspaceScope === "all") {
                 selected = windows;
                 scope = "all";
-            } else if (inMonitorWorkspaces.length >= 2 || !allowFallback) {
-                selected = inMonitorWorkspaces;
-                scope = "monitorWorkspaces";
+            } else if (onMonitor.length >= 2 || !allowFallback) {
+                selected = onMonitor;
+                scope = "monitor";
             } else {
                 selected = windows;
                 scope = "all";
@@ -278,15 +258,13 @@ Scope {
         }
 
         root.openedScope = scope;
-        root.openedWorkspaceRangeLabel = `${range[0]}-${range[1]}`;
+        root.openedWorkspaceRangeLabel = "";
         const workspaceName = root.focusedMonitor?.activeWorkspace?.name ?? String(workspaceId);
         root.openedWorkspaceLabel = scope === "workspace"
             ? `${Translation.tr("Workspace")} ${workspaceName}`
             : (scope === "monitor"
                 ? Translation.tr("This monitor")
-                : (scope === "monitorWorkspaces"
-                    ? `${Translation.tr("Workspaces")} ${range[0]}-${range[1]}`
-                    : Translation.tr("All monitors")));
+                : Translation.tr("All monitors"));
 
         return selected;
     }
@@ -368,9 +346,9 @@ Scope {
             safetyTimer.restart();
     }
 
-    // Switch between one monitor's workspace block and every workspace.
-    // Entries are rebuilt with the same list/grid UI, so the choice works in
-    // both view modes; the fallback to all windows is applied in buildEntries.
+    // Switch between windows on the focused monitor and windows on every
+    // monitor. Entries are rebuilt with the same list/grid UI, so the choice
+    // works in both view modes; the fallback is applied in buildEntries.
     property real lastScopeToggleMs: 0
 
     function toggleWorkspaceScope() {
@@ -718,7 +696,7 @@ Scope {
                                     anchors.verticalCenter: parent.verticalCenter
                                     anchors.left: parent.left
                                     anchors.leftMargin: 7
-                                    text: root.workspaceScope === "all" ? "desktop_windows" : "workspaces"
+                                    text: root.workspaceScope === "all" ? "desktop_windows" : "monitor"
                                     iconSize: 14
                                     color: "#ffffff"
                                 }
@@ -1171,7 +1149,7 @@ Scope {
 
     CompositorGlobalShortcut {
         name: "windowSwitcherToggleScope"
-        description: "Toggles between this monitor's workspaces and all workspaces"
+        description: "Toggles between windows on this monitor and windows on all monitors"
 
         onPressed: root.toggleWorkspaceScope()
     }
