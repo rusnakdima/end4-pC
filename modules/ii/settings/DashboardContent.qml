@@ -7,6 +7,7 @@ import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
+import "../../common/functions/SettingsEscape.js" as SettingsEscape
 
 Item {
     id: root
@@ -105,8 +106,16 @@ Item {
             return;
         }
         if (event.key === Qt.Key_Escape) {
-            if (currentPage === presetsPage && presetsLoader.item?.selected) presetsLoader.item.back();
-            else GlobalStates.settingsOpen = false;
+            // Escape never closes settings: the keybind editor needs it to
+            // cancel a capture. On presets it only backs out of a selection.
+            const decision = SettingsEscape.decide({
+                source: "dashboard",
+                isPresetsPage: currentPage === presetsPage,
+                hasSelection: !!presetsLoader.item?.selected
+            });
+            if (decision.closeSettings) GlobalStates.settingsOpen = false;
+            if (decision.back) presetsLoader.item.back();
+            if (decision.accept) event.accepted = true;
         } else if (currentPage === mediaPage && event.key === Qt.Key_Left) {
             mediaState.player?.previous();
         } else if (currentPage === mediaPage && event.key === Qt.Key_Right) {

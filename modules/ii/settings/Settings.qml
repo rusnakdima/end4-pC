@@ -11,6 +11,7 @@ import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
+import "../../common/functions/SettingsEscape.js" as SettingsEscape
 
 Scope {
     id: root
@@ -86,8 +87,11 @@ Scope {
                     }
 
                     if (event.key === Qt.Key_Escape) {
-                        GlobalStates.settingsOpen = false;
-                        event.accepted = true;
+                        // Escape cancels edits and is never a close-settings
+                        // shortcut: closing here would discard a draft keybind.
+                        const decision = SettingsEscape.decide({ source: "global" });
+                        if (decision.closeSettings) GlobalStates.settingsOpen = false;
+                        if (decision.accept) event.accepted = true;
                         return;
                     }
 

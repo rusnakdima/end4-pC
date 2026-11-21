@@ -8,6 +8,7 @@ Item {
     property int currentIndex: 0
     property bool expanded: false
     property color colToggled: Appearance.colors.colSecondaryContainer
+    readonly property alias selectionHighlight: highlight
     default property alias data: tabBarColumn.data
     implicitHeight: tabBarColumn.implicitHeight
     implicitWidth: tabBarColumn.implicitWidth
@@ -43,6 +44,7 @@ Item {
         }
 
         Rectangle {
+            id: highlight
             property real itemHeight: railScroll.tabButtons[0]?.baseSize ?? 56
             property real baseHighlightHeight: railScroll.tabButtons[0]?.baseHighlightHeight ?? 56
             anchors {
@@ -53,7 +55,13 @@ Item {
             radius: Config.options.settings.style === "minimal" ? Appearance.rounding.small : Appearance.rounding.full
             color: root.colToggled
             implicitHeight: root.expanded ? itemHeight : baseHighlightHeight
-            implicitWidth: railScroll.tabButtons[root.currentIndex]?.visualWidth ?? 100
+            // In collapsed mode the pill belongs to the rail, not to the
+            // tab. Compact tabs are narrower (44px) than the rail (56px,
+            // the FAB width), so the tab's visualWidth would leave the
+            // highlight short and off-centre behind the centred icon.
+            implicitWidth: root.expanded
+                ? (railScroll.tabButtons[root.currentIndex]?.visualWidth ?? tabBarColumn.width)
+                : tabBarColumn.width
 
             Behavior on anchors.topMargin {
                 NumberAnimation {

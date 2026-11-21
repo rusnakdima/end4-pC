@@ -562,15 +562,18 @@ Scope {
                     if (root.viewMode === "grid") root.stepRows(1);
                     else root.step(1);
                     event.accepted = true;
-                } else if (event.nativeScanCode === 33 || event.nativeScanCode === 41 || event.key === Qt.Key_G) {
-                    // scan 41 is the physical G key (evdev 33 / XKB 41). On
-                    // this layout it produces the F keysym, so Qt.Key_G alone
-                    // cannot match. Date-based debounce in toggleView()
-                    // prevents a double toggle when both paths fire.
+                } else if (event.nativeScanCode === 42 || event.key === Qt.Key_G) {
+                    // Qt/Wayland reports XKB keycodes (evdev + 8). Physical G
+                    // is evdev 34 / XKB 42; Qt.Key_G also matches it in the US
+                    // layout. Date-based debounce in toggleView() prevents a
+                    // double toggle if both paths fire.
                     root.toggleView();
                     event.accepted = true;
-                } else if (event.nativeScanCode === 50 || event.nativeScanCode === 58 || event.key === Qt.Key_M) {
-                    // Same fallback for the workspace-scope toggle.
+                } else if (event.nativeScanCode === 58 || event.key === Qt.Key_M) {
+                    // Workspace-scope toggle: physical M is evdev 50 / XKB 58.
+                    // Do NOT treat XKB 50 as M here — that is LEFT SHIFT
+                    // (evdev 42) and would toggle scope on every Shift press.
+                    // Alt+M remains the intended scope key.
                     root.toggleWorkspaceScope();
                     event.accepted = true;
                 } else if (event.key === Qt.Key_Plus || event.key === Qt.Key_Equal) {
