@@ -1,3 +1,9 @@
+[input]
+# "auto" resolves to the microphone on many PipeWire setups (Bluetooth
+# headsets, EasyEffects). Pin cava to the default output's monitor instead.
+method = pulse
+source = @DEFAULT_SINK@.monitor
+
 [general]
 mode = waves
 framerate = 60
