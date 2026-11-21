@@ -99,9 +99,14 @@ hypr_keep=(
     --exclude='/custom/'
     --exclude='/monitors.lua'
     --exclude='/profiles/'
-    --exclude='/hyprland/shellOverrides/'
-    --exclude='/hyprland/colors.lua'
-    --exclude='/hyprlock/colors.conf'
+    # hyprland.lua is the user's live entrypoint. This checkout's vendored
+    # dots/ tree lost it, so a --delete sync would erase the only copy and
+    # leave Hyprland reporting "cannot open ... hyprland.lua". Never let the
+    # sync delete or overwrite it. The colour pipeline and shell regenerate
+    # the contents of hyprland/ and hyprlock/, so keep those whole trees too.
+    --exclude='/hyprland.lua'
+    --exclude='/hyprland/'
+    --exclude='/hyprlock/'
     --exclude='/hypridle.conf'
 )
 
@@ -126,7 +131,8 @@ qs_diff_keep=(--exclude=dots --exclude=.omp --exclude='file:'
               --exclude=.git --exclude=verification_complete.txt --exclude='.backup-*' --exclude=__pycache__)
 hypr_diff_keep=(--exclude=custom --exclude=monitors.lua --exclude=profiles
                 --exclude=shellOverrides --exclude=colors.lua --exclude=colors.conf
-                --exclude=hypridle.conf)
+                --exclude=hypridle.conf --exclude=hyprland.lua --exclude=hyprland
+                --exclude=hyprlock)
 
 # ---------------------------------------------------------------------------
 # install.sh writes into the deployed copy of a few scripts, so the checkout

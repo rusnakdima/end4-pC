@@ -121,7 +121,8 @@ install_qs_config() {
     echo "[install] Deploying Quickshell config..."
     local dest="$TARGET_HOME/.config/quickshell/end4-pC"
     mkdir -p "$(dirname "$dest")"
-    rsync -av --delete --exclude '/dots/' --exclude '/.omp/' --exclude '/file:/' "$SOURCE_DIR/" "$dest/"
+    # Never copy the checkout's .git directory into the deployed config.
+    rsync -av --delete --exclude '/dots/' --exclude '/.omp/' --exclude '/file:/' --exclude '/.git/' "$SOURCE_DIR/" "$dest/"
 
     # The keep-awake idle lock is held by a fixed-name user unit so a shell
     # reload cannot orphan it (and leave idle timeouts permanently disabled).
@@ -154,9 +155,18 @@ install_hyprland_config() {
 
     # Managed files: the theme is the source of truth, stale ones are removed.
     # shellOverrides/ is written by the shell itself and is only seeded below.
-    rsync -a --delete --exclude 'shellOverrides' "$src/hyprland/" "$dest/hyprland/"
-    rsync -a --delete "$src/hyprlock/" "$dest/hyprlock/"
-    rsync -a --delete "$src/scripts/" "$dest/scripts/"
+    # Only sync managed subdirs that actually ship in this checkout. A sparse
+    # or partial dots/ tree must not make rsync --delete fail (set -e) or wipe
+    # live user config from a missing source directory.
+    if [[ -d "$src/hyprland" ]]; then
+        rsync -a --delete --exclude 'shellOverrides' "$src/hyprland/" "$dest/hyprland/"
+    fi
+    if [[ -d "$src/hyprlock" ]]; then
+        rsync -a --delete "$src/hyprlock/" "$dest/hyprlock/"
+    fi
+    if [[ -d "$src/scripts" ]]; then
+        rsync -a --delete "$src/scripts/" "$dest/scripts/"
+    fi
     for file in hyprland.lua hypridle.conf hyprlock.conf; do
         [[ -f "$src/$file" ]] && deploy_atomic "$src/$file" "$dest/$file"
     done
@@ -288,6 +298,40 @@ patch_hyprland_lua() {
         printf '\n-- end4-pC: animation preset overrides\n%s\n' "$need" >> "$luafile"
         echo "[install] Added animation-override require to $luafile"
     fi
+}
+
+# ---------------------------------------------------------------------------
+# Hyprland shell autostart: no sleep, no pgrep
+# ---------------------------------------------------------------------------
+# This checkout does not vendor hyprland.lua, so it cannot be fixed in dots/.
+# Patch the deployed entrypoint in place instead. The old line used a fixed
+# `sleep 5` and `pgrep -x qs`, which matched the process name instead of the
+# config and made the panel appear ~5s late (or duplicate it). `qs -n` is
+# Quickshell's --no-duplicate flag and handles both cases by config path.
+patch_hyprland_autostart() {
+    local luafile="$TARGET_HOME/.config/hypr/hyprland.lua"
+    [[ -f "$luafile" ]] || return 0
+
+    python3 - "$luafile" <<'PY'
+import re
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    original = handle.read()
+
+pattern = re.compile(
+    r'hl\.exec_cmd\("sh -c \'sleep 5; pgrep -x qs >/dev/null \|\| exec qs -p ([^\']+)\'"\)'
+)
+patched, count = pattern.subn(lambda m: f'hl.exec_cmd("qs -n -p {m.group(1)}")', original)
+
+if count:
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(patched)
+    print(f"[install] replaced {count} legacy shell-autostart line(s) in {path}")
+else:
+    print("[install] shell autostart already uses qs -n (no change)")
+PY
 }
 
 # ---------------------------------------------------------------------------
@@ -844,6 +888,7 @@ main() {
     install_keybind_defaults
     patch_hyprland_env
     patch_hyprland_lua
+    patch_hyprland_autostart
     configure_window_decorations
     install_fish_config
     install_kitty_config
