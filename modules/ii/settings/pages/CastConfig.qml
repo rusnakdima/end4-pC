@@ -63,6 +63,7 @@ ContentPage {
             networkMode: "local",
             target: "",
             sink: "",
+            sinkName: "",
             outputRes: "1280x720",
             fps: 20,
             bitrate: "2M",
@@ -111,6 +112,7 @@ ContentPage {
                 networkMode: saved.networkMode ?? "local",
                 target: saved.target ?? "",
                 sink: saved.sink ?? "",
+                sinkName: saved.sinkName ?? "",
                 outputRes: saved.outputRes ?? "1280x720",
                 fps: saved.fps ?? 20,
                 bitrate: saved.bitrate ?? "2M",
@@ -135,12 +137,24 @@ ContentPage {
     }
 
     function castCommand() {
-        const backend = Cast.backends.waycast ? "waycast" : "fluxcast"
-        const codec = page.get("stream.codec", "auto")
-        const audio = page.get("stream.audio", true) ? "--audio" : "--no-audio"
-        if (page.get("networkMode", "local") === "local")
-            return `${backend} --sink ${page.get("sink", "") || "<sink>"} --codec ${codec} ${audio}`
-        return `${backend} --target ${page.get("target", "") || "<host>"} --codec ${codec} ${audio}`
+        // Mirror the helper's real command lines so "Copy command" is useful
+        // for debugging instead of misleading (no `daemon`, wrong backend etc).
+        const local = page.get("networkMode", "local") === "local"
+        const audio = page.get("stream.audio", true) ? "" : " --no-audio"
+        if (local) {
+            const backend = Cast.backends.waycast ? "waycast" : "<waycast>"
+            const sink = page.get("sink", "") || "<MAC>"
+            const iface = page.get("interface", "")
+            const ifaceArg = iface ? `--interface ${iface} ` : ""
+            const codec = page.get("stream.codec", "auto")
+            const codecArg = codec === "auto" ? "" : ` --codec ${codec}`
+            const extend = page.get("stream.mode", "mirror") === "extend" ? " --extend" : ""
+            return `${backend} ${ifaceArg}daemon --sink ${sink}${extend}${codecArg}${audio}`
+        }
+        const backend = Cast.backends.fluxcast ? "fluxcast" : "<fluxcast>"
+        const target = page.get("target", "") || page.get("sink", "") || "<host>"
+        const protocol = page.get("protocol", "cast") === "dlna" ? "dlna" : "cast"
+        return `${backend} --protocol ${protocol} --tv-ip ${target}${audio}`
     }
 
     function connectSink(sink) {
@@ -148,8 +162,12 @@ ContentPage {
         const address = sink?.address ?? ""
         if (name === "" && address === "") return
         const isWfd = sink?.type === "wfd"
+        // waycast's --sink is matched against discovered P2P peers; the MAC is
+        // stable and unambiguous, while a friendly name can change or collide.
+        const id = address || name
         page.set("networkMode", isWfd ? "local" : "remote")
-        page.set("sink", name || address)
+        page.set("sink", id)
+        page.set("sinkName", name)
         page.set("target", address || name)
         page.set("protocol", isWfd ? "wfd" : (sink?.type === "dlna" ? "dlna" : "cast"))
         page.dirty = false
@@ -375,9 +393,18 @@ ContentPage {
                     model: Cast.sinks
 
                     delegate: RowLayout {
+                        id: sinkRow
                         required property var modelData
                         Layout.fillWidth: true
                         spacing: 8
+
+                        // A sink is "active" when a live session targets it.
+                        // The helper stores the resolved MAC/IP in session.sink,
+                        // so match against both address and friendly name.
+                        property bool isActiveSink: Cast.session.active && (
+                            (modelData.address && modelData.address === Cast.session.sink)
+                            || (modelData.name && modelData.name === Cast.session.sink)
+                        )
 
                         MaterialSymbol {
                             text: modelData.type === "wfd" ? "cast" : (modelData.type === "cast" ? "tv" : "desktop_windows")
@@ -389,11 +416,22 @@ ContentPage {
                             Layout.fillWidth: true
                             spacing: 2
 
-                            StyledText {
+                            RowLayout {
                                 Layout.fillWidth: true
-                                text: modelData.name || modelData.address || Translation.tr("Unknown")
-                                font.weight: Font.DemiBold
-                                elide: Text.ElideRight
+                                spacing: 6
+
+                                StyledText {
+                                    Layout.fillWidth: true
+                                    text: modelData.name || modelData.address || Translation.tr("Unknown")
+                                    font.weight: Font.DemiBold
+                                    elide: Text.ElideRight
+                                }
+                                StyledText {
+                                    visible: sinkRow.isActiveSink
+                                    text: Translation.tr("Connected")
+                                    color: Appearance.colors.colPrimary
+                                    font.pixelSize: Appearance.font.pixelSize.smaller
+                                }
                             }
                             StyledText {
                                 Layout.fillWidth: true
@@ -406,10 +444,10 @@ ContentPage {
                         }
 
                         RippleButtonWithIcon {
-                            mainText: Translation.tr("Connect")
-                            materialIcon: "cast"
+                            mainText: sinkRow.isActiveSink ? Translation.tr("Disconnect") : Translation.tr("Connect")
+                            materialIcon: sinkRow.isActiveSink ? "link_off" : "cast"
                             enabled: !Cast.busy
-                            onClicked: page.connectSink(modelData)
+                            onClicked: sinkRow.isActiveSink ? Cast.stop() : page.connectSink(modelData)
                         }
                     }
                 }

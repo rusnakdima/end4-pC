@@ -56,6 +56,7 @@ ContentPage {
             capture: { mode: "all", output: page.detectedOutput() },
             encoding: { maxFps: 30, renderCursor: true, gpu: false, disableResizing: false },
             network: {
+                bindMode: "auto",
                 address: "127.0.0.1",
                 port: Vnc.configPort || 5900,
                 auth: true,
@@ -71,7 +72,7 @@ ContentPage {
                 xkb: { layout: "", variant: "", model: "", options: "", rules: "" }
             },
             behavior: {
-                lockOnDisconnect: false,
+                lockOnDisconnect: true,
                 inhibitIdle: false,
                 exitOnDisconnect: false,
                 logLevel: "warning"
@@ -897,7 +898,7 @@ ContentPage {
                     id: lockOnDisconnectSwitch
                     buttonIcon: "lock_clock"
                     text: Translation.tr("Lock the session when the last client disconnects")
-                    checked: page.get("behavior.lockOnDisconnect", false)
+                    checked: page.get("behavior.lockOnDisconnect", true)
                     onUserToggled: value => page.set("behavior.lockOnDisconnect", value)
 
                     Binding {
@@ -1255,6 +1256,7 @@ ContentPage {
                             Rectangle {
                                 Layout.preferredWidth: 34
                                 Layout.preferredHeight: 34
+                                Layout.alignment: Qt.AlignVCenter
                                 radius: 17
                                 color: Appearance.colors.colSecondaryContainer
                                 MaterialSymbol {
@@ -1267,6 +1269,8 @@ ContentPage {
 
                             ColumnLayout {
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Layout.alignment: Qt.AlignVCenter
                                 spacing: 1
 
                                 StyledText {
@@ -1288,27 +1292,29 @@ ContentPage {
                                 }
                             }
 
+                            // Small icon chip replaces the old "CURRENT" text badge.
+                            // The old badge painted colPrimary text on a colPrimary
+                            // background (unreadable) and had no width, so it collapsed
+                            // in the RowLayout. A fixed-size secondary-container chip
+                            // with a visibility glyph is compact and unambiguous.
                             Rectangle {
                                 visible: modelData.captured === true || modelData.focused === true
-                                radius: Appearance.rounding.small
-                                color: ColorUtils.transparentize(Appearance.colors.colPrimary, 0.85)
-                                implicitHeight: 20
+                                Layout.preferredWidth: 22
+                                Layout.preferredHeight: 22
+                                Layout.alignment: Qt.AlignVCenter
+                                radius: 11
+                                color: Appearance.colors.colSecondaryContainer
 
-                                StyledText {
-                                    anchors {
-                                        left: parent.left
-                                        right: parent.right
-                                        margins: 7
-                                    }
-                                    horizontalAlignment: Text.AlignHCenter
-                                    text: Translation.tr("CURRENT")
-                                    color: Appearance.colors.colPrimary
-                                    font.pixelSize: Appearance.font.pixelSize.smaller
-                                    font.bold: true
+                                MaterialSymbol {
+                                    anchors.centerIn: parent
+                                    text: "visibility"
+                                    iconSize: Appearance.font.pixelSize.small
+                                    color: Appearance.colors.colOnSecondaryContainer
                                 }
                             }
 
                             RippleButtonWithIcon {
+                                Layout.alignment: Qt.AlignVCenter
                                 mainText: Translation.tr("Capture now")
                                 materialIcon: "screenshot_monitor"
                                 visible: Vnc.serviceActive
@@ -1321,9 +1327,10 @@ ContentPage {
 
                 StyledText {
                     Layout.fillWidth: true
+                    Layout.topMargin: 2
                     text: Translation.tr("Capture now switches the live stream only. Apply a new capture mode to make it persistent.")
                     color: Appearance.colors.colSubtext
-                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    font.pixelSize: Appearance.font.pixelSize.small
                     wrapMode: Text.Wrap
                 }
             }

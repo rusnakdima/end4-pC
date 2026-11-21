@@ -29,7 +29,7 @@ Backend selection is derived from `config.networkMode`: `local` → **waycast**
 {
   "ok": true,
   "error": "",
-  "helperVersion": 1,
+  "helperVersion": 2,
   "config": {
     "networkMode": "local",
     "mode": "mirror",
@@ -70,15 +70,20 @@ Field notes:
   available), so a dead backend never reports as active.
 - `sinks[].type` is one of `wfd`, `dlna`, `cast`.
 - `doctor[].id` values: `hyprland`, `portal`, `p2p`, `waycast`, `fluxcast`,
-  `encoder`, `gstreamer`, `audio`. Detail strings are actionable.
+  `encoder`, `gstreamer`, `audio`, `rtsp`. Detail strings are actionable.
 
 ## Backend command lines
 
 Local (`waycast`):
 
 ```
-waycast daemon --sink <sink> [--extend] [--codec h264|h264-sw] [--no-audio] [--interface <iface>]
+waycast [--interface <iface>] daemon --sink <MAC> [--extend] [--codec h264|h264-sw] [--no-audio]
 ```
+
+`--interface` is a top-level waycast flag and must come **before** `daemon`.
+`--sink` is the P2P/MAC address from discovery (older configs stored a name;
+the helper resolves it back to the address from the sink cache). Inbound TCP
+7236 must be allowed for the TV to connect.
 
 Remote (`fluxcast`):
 

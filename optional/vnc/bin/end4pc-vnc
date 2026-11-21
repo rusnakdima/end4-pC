@@ -44,6 +44,11 @@ LOCK_FILE = XDG_RUNTIME_DIR / "end4pc-vnc.lock"
 # Small, write-only-on-change file watched by the shell. The full status is
 # too expensive to poll continuously just to know whether someone is connected.
 CLIENT_STATE_FILE = XDG_RUNTIME_DIR / "end4pc-vnc-clients.json"
+# Private control socket. The default `wayvncctl` socket is shared with any
+# other wayvnc instance (legacy wrapper/mirror), which makes wayvnc abort with
+# "Another wayvnc process is already running". This controller always uses its
+# own socket so it can never collide with a legacy or remote instance.
+CONTROL_SOCKET_NAME = "end4pc-vnc-ctl"
 # The headless VNC compositor uses a private runtime dir. wayvnc can attach
 # to either; client state is published to both so the shell always sees it.
 HEADLESS_RUNTIME = XDG_RUNTIME_DIR / "vnc-rt"
@@ -270,10 +275,15 @@ def physical_outputs() -> list[dict]:
     return [m for m in monitors() if not m.get("disabled") and not str(m.get("name", "")).startswith("HEADLESS")]
 
 
+def control_socket(runtime: Path | None = None) -> Path:
+    """Absolute path of this controller's dedicated wayvnc control socket."""
+    return (runtime or ACTIVE_RUNTIME) / CONTROL_SOCKET_NAME
+
+
 def wayvnc_runtime() -> Path:
-    """Where wayvnc's control socket lives (physical or headless runtime)."""
+    """Where this controller's control socket lives (physical or headless runtime)."""
     for rt in (ACTIVE_RUNTIME, HEADLESS_RUNTIME, XDG_RUNTIME_DIR):
-        if (rt / "wayvncctl").exists():
+        if control_socket(rt).exists():
             return rt
     return ACTIVE_RUNTIME
 
@@ -282,8 +292,13 @@ def wayvncctl(args: list[str], timeout: float = 5.0) -> tuple[int, str, str]:
     if not shutil.which("wayvncctl"):
         return 127, "", "wayvncctl: not found"
     env = os.environ.copy()
-    env["XDG_RUNTIME_DIR"] = str(wayvnc_runtime())
-    return run(["wayvncctl", "--json", *args], timeout=timeout, env=env)
+    runtime = wayvnc_runtime()
+    env["XDG_RUNTIME_DIR"] = str(runtime)
+    return run(
+        ["wayvncctl", "-S", str(control_socket(runtime)), "--json", *args],
+        timeout=timeout,
+        env=env,
+    )
 
 
 def service_state() -> tuple[bool, bool, str]:
@@ -494,7 +509,7 @@ def wayvnc_args(cfg: dict) -> list[str]:
     enc = cfg.get("encoding") or {}
     inp = cfg.get("input") or {}
     beh = cfg.get("behavior") or {}
-    args = ["-C", str(WAYVNC_CONF)]
+    args = ["-C", str(WAYVNC_CONF), "-S", str(control_socket())]
     mode = cap.get("mode")
     if mode == "all":
         args.append("-a")
@@ -717,7 +732,7 @@ def enrich_clients(raw: list[dict]) -> list[dict]:
 def clients() -> list[dict]:
     # wayvnc creates its control socket at startup. The watcher starts just
     # before it, so avoid a noisy "connection refused" on every boot.
-    if not (wayvnc_runtime() / "wayvncctl").exists():
+    if not control_socket(wayvnc_runtime()).exists():
         return []
     rc, out, _ = wayvncctl(["client-list"])
     if rc != 0:
@@ -1318,7 +1333,15 @@ def watch_clients(cfg: dict, stop_event: threading.Event) -> None:
             # lock the session.
             on_count(len(clients()))
             proc = subprocess.Popen(
-                ["wayvncctl", "--json", "--wait", "--reconnect", "event-receive"],
+                [
+                    "wayvncctl",
+                    "-S",
+                    str(control_socket()),
+                    "--json",
+                    "--wait",
+                    "--reconnect",
+                    "event-receive",
+                ],
                 stdout=subprocess.PIPE,
                 text=True,
             )

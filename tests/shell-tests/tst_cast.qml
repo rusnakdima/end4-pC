@@ -46,4 +46,67 @@ TestCase {
         for (const action of ["refresh", "apply", "discover", "start", "stop", "restart", "setLogLines"])
             verify(typeof Cast[action] === "function", action);
     }
+
+    function snapshotState() {
+        return {
+            config: Cast.config, backends: Cast.backends, session: Cast.session,
+            sinks: Cast.sinks, doctor: Cast.doctor, logTail: Cast.logTail,
+            versionText: Cast.versionText, helperAvailable: Cast.helperAvailable,
+            lastError: Cast.lastError
+        };
+    }
+
+    function restoreState(s) {
+        Cast.config = s.config;
+        Cast.backends = s.backends;
+        Cast.session = s.session;
+        Cast.sinks = s.sinks;
+        Cast.doctor = s.doctor;
+        Cast.logTail = s.logTail;
+        Cast.versionText = s.versionText;
+        Cast.helperAvailable = s.helperAvailable;
+        Cast.lastError = s.lastError;
+    }
+
+    function test_status_error_is_surfaced() {
+        const saved = snapshotState();
+        Cast.setStatus({ error: "no Wi-Fi Direct sinks found", config: {}, session: {}, sinks: [], doctor: [] });
+        compare(Cast.lastError, "no Wi-Fi Direct sinks found");
+        restoreState(saved);
+    }
+
+    function test_failed_action_error_is_surfaced_even_with_exit_code_zero() {
+        const saved = snapshotState();
+        // The helper always exits 0 so it can emit JSON on every path; the
+        // error arrives as ok:false and must still reach the UI.
+        Cast.handleActionResult(JSON.stringify({ ok: false, error: "waycast is not installed" }), 0, "");
+        compare(Cast.lastError, "waycast is not installed");
+        restoreState(saved);
+    }
+
+    function test_successful_action_note_is_surfaced() {
+        const saved = snapshotState();
+        Cast.handleActionResult(JSON.stringify({ ok: true, error: "fluxcast target not passed" }), 0, "");
+        compare(Cast.lastError, "fluxcast target not passed");
+        restoreState(saved);
+    }
+
+    function test_successful_action_clears_stale_error() {
+        const saved = snapshotState();
+        Cast.lastError = "stale error";
+        Cast.handleActionResult(JSON.stringify({ ok: true, error: "", sinks: [] }), 0, "");
+        compare(Cast.lastError, "");
+        restoreState(saved);
+    }
+
+    function test_wrapped_status_payload_is_applied() {
+        const saved = snapshotState();
+        const payload = JSON.stringify({
+            ok: true, error: "",
+            status: { config: { networkMode: "local" }, session: { active: false }, sinks: [], doctor: [] }
+        });
+        Cast.handleActionResult(payload, 0, "");
+        compare(Cast.config.networkMode, "local");
+        restoreState(saved);
+    }
 }

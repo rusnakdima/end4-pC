@@ -74,13 +74,20 @@ Singleton {
         root.logTail = s.logTail ?? ""
         root.versionText = String(s.helperVersion ?? s.version ?? "")
         root.helperAvailable = true
+        // The helper uses `error` for hard failures AND for informational
+        // notes (e.g. "no Wi-Fi Direct sinks found"). Show them instead of
+        // dropping them on the floor. Never clear a previous error here:
+        // actions clear lastError when they start, and the 5 s status poll
+        // must not wipe a message the user still needs to read.
+        const note = String(s.error ?? "").trim()
+        if (note !== "")
+            root.lastError = note
         root.updated()
     }
 
     function handleStatus(text): void {
         try {
             root.setStatus(JSON.parse(text))
-            root.lastError = ""
         } catch (e) {
             // A failed parse must never clobber the last known good state.
             root.lastError = "Cannot parse Cast status: " + e
@@ -91,15 +98,24 @@ Singleton {
         let parsed = null
         let parseFailed = false
         try { parsed = JSON.parse(text) } catch (e) { parseFailed = !!text?.trim() }
+        // Helpers either wrap the new state in `status` or return it flat.
+        const payload = parsed?.status && typeof parsed.status === "object" ? parsed.status : parsed
+        if (payload && (payload.config || payload.session || payload.sinks || payload.backends))
+            root.setStatus(payload)
+        const note = String(parsed?.error ?? "").trim()
         if (parsed && parsed.ok) {
-            // Helpers either wrap the new state in `status` or return it flat.
-            if (parsed.status) root.setStatus(parsed.status)
-            else if (parsed.config || parsed.session || parsed.sinks) root.setStatus(parsed)
-            root.lastError = ""
+            // Success may still carry a note; an empty note clears stale errors.
+            root.lastError = note
         } else if (parseFailed) {
             root.lastError = "Cannot parse Cast action response: " + text
         } else if (code !== 0) {
-            root.lastError = (parsed && parsed.error) || stderrText || `Cast action failed (${code})`
+            root.lastError = note || stderrText || `Cast action failed (${code})`
+        } else if (parsed) {
+            // IMPORTANT: the helper always exits 0 (it must emit JSON on every
+            // path), so ok:false failures arrive with code === 0. Reading the
+            // error only in the `code !== 0` branch hid every start/discover
+            // failure from the user.
+            root.lastError = note || stderrText || "Cast action failed"
         }
         settleTimer.restart()
     }

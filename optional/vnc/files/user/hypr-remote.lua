@@ -14,7 +14,10 @@ hl.monitor({
 
 hl.on("hyprland.start", function()
     -- Start the end4-pC shell if the host config did not already do so.
-    hl.exec_cmd("sh -c 'sleep 5; pgrep -x qs >/dev/null || exec qs -p @HOME@/.config/quickshell/end4-pC'")
+    -- -n/--no-duplicate handles the "already running" case by config path,
+    -- replacing the old sleep 5 + pgrep -x qs race (pgrep matched the process
+    -- name, not the config, and delayed the panel by 5s on every login).
+    hl.exec_cmd("qs -n -p @HOME@/.config/quickshell/end4-pC")
     -- Ensure a terminal is available in the hidden session.
     hl.exec_cmd("sh -c 'sleep 2; exec kitty'")
 end)

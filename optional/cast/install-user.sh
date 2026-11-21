@@ -257,12 +257,18 @@ MANUAL ROOT STEPS (printed only — NOT executed by this installer)
 Local Miracast/Wi-Fi Direct needs a P2P-capable Wi-Fi interface. After editing
 the template at:
     $CONFIG_DIR/p2p-supplicant.conf
+(set your country code; keep device_type=1-0050F204-1 for LG/TV full-screen)
 apply it with (replace <wifi-iface> with your device from 'iw dev'):
 
     sudo install -Dm600 "$CONFIG_DIR/p2p-supplicant.conf" /etc/wpa_supplicant/p2p.conf
     sudo wpa_supplicant -B -i <wifi-iface> -c /etc/wpa_supplicant/p2p.conf
 
-Allow the Cast control/RTSP port through the firewall (remote mode):
+Alternatively, waycast ships a privileged helper that manages P2P activation
+and temporary firewall rules automatically
+(https://github.com/alchemy/waycast -> contrib/networkd/install.py).
+
+Allow the inbound Miracast RTSP port through the firewall (LOCAL mode: the TV
+connects to this machine on TCP 7236, so this is required for Miracast):
 
     sudo ufw allow 7236/tcp comment 'end4pc cast'
 

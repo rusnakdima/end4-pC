@@ -34,7 +34,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 APP = "end4pc-cast"
-HELPER_VERSION = 1
+HELPER_VERSION = 2
 
 # ---------------------------------------------------------------------------
 # paths (XDG aware, with sane fallbacks)
@@ -50,6 +50,11 @@ SINKS_FILE = CAST_DIR / "sinks.json"
 LOG_FILE = CAST_DIR / "cast.log"
 WAYCAST_BUILD_DIR = XDG_DATA_HOME / "end4pc-cast" / "waycast"
 FLUXCAST_BUILD_DIR = XDG_DATA_HOME / "end4pc-cast" / "fluxcast"
+# Distros (notably Arch) install portal binaries in /usr/lib, not on PATH.
+PORTAL_PATHS = (
+    "/usr/lib/xdg-desktop-portal",
+    "/usr/lib/xdg-desktop-portal-hyprland",
+)
 
 # The exact six public config fields of the JSON contract.  Extra keys may be
 # passed in an apply patch (e.g. "sink", "protocol") and are persisted, but
@@ -201,6 +206,18 @@ def first_line(text: str, limit: int = 160) -> str:
 # ---------------------------------------------------------------------------
 # backend discovery / versions
 # ---------------------------------------------------------------------------
+
+def find_portal_binary() -> str:
+    """Return an xdg-desktop-portal binary, including distros using /usr/lib."""
+    for name in ("xdg-desktop-portal", "xdg-desktop-portal-hyprland"):
+        path = shutil.which(name)
+        if path:
+            return path
+    for path in PORTAL_PATHS:
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    return ""
+
 
 def find_backend(name: str) -> str:
     """Return an executable path for a backend, or "" when not installed."""
@@ -446,7 +463,7 @@ def doctor_checks() -> list[dict]:
             "the Hyprland session (WAYLAND_DISPLAY and HYPRLAND_INSTANCE_SIGNATURE).")
 
     # 2. xdg-desktop-portal --------------------------------------------------
-    portal = shutil.which("xdg-desktop-portal") or shutil.which("xdg-desktop-portal-hyprland")
+    portal = find_portal_binary()
     add("portal", "xdg-desktop-portal", bool(portal),
         f"Using '{portal}'." if portal else
         "xdg-desktop-portal not found. Install xdg-desktop-portal and "
@@ -466,8 +483,8 @@ def doctor_checks() -> list[dict]:
             "A Wi-Fi P2P device is available (check `iw dev` / `iw list`)."
             if p2p_ok else
             "No P2P-capable Wi-Fi device found in `iw dev`/`iw list`. "
-            "Use an external Wi-Fi adapter that supports Wi-Fi Direct, or "
-            "switch to remote (DLNA/Cast) mode."
+            "Start wpa_supplicant with a P2P config (see the installer) or "
+            "waycast-networkd, or switch to remote (DLNA/Cast) mode."
         )
     add("p2p", "Wi-Fi Direct", p2p_ok, p2p_detail)
 
@@ -514,6 +531,34 @@ def doctor_checks() -> list[dict]:
         f"Using '{pactl}' for audio routing." if pactl else
         "pactl not found. Install pipewire-pulse (or pulseaudio) so cast audio "
         "can be routed; otherwise disable audio in Settings.")
+
+    # 9. inbound RTSP port (local Miracast) ---------------------------------
+    # waycast's default role has the TV connect to us on TCP 7236. A blocked
+    # port produces exactly "TV says no connection" with a perfectly healthy
+    # P2P link, so make it a first-class check instead of a buried README note.
+    ufw = shutil.which("ufw")
+    if not ufw:
+        add("rtsp", "Miracast RTSP port", True,
+            "No ufw found; make sure inbound TCP 7236 is allowed for local Miracast.")
+    else:
+        rc, out, err = run([ufw, "status"], timeout=3)
+        # On non-root runs ufw writes the permission error to stderr (rc=1),
+        # so inspect both streams instead of treating it as a blocked port.
+        text = (out + " " + err).lower()
+        if "need to be root" in text or "permission" in text:
+            add("rtsp", "Miracast RTSP port", True,
+                "Cannot verify ufw status as non-root; run as root or ensure "
+                "inbound TCP 7236 is allowed for local Miracast.")
+        elif rc == 0 and "inactive" in text:
+            add("rtsp", "Miracast RTSP port", True,
+                "ufw is inactive; inbound TCP 7236 is not firewalled.")
+        elif rc == 0 and "7236" in out:
+            add("rtsp", "Miracast RTSP port", True,
+                "Inbound TCP 7236 appears allowed by ufw.")
+        else:
+            add("rtsp", "Miracast RTSP port", False,
+                "Inbound TCP 7236 is not allowed. Run: "
+                "sudo ufw allow 7236/tcp comment 'end4pc cast'")
 
     return checks
 
@@ -567,11 +612,20 @@ def emit(payload: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def selected_sink(cfg: dict) -> str:
-    """Pick the sink to cast to: explicit config, then cached, then target."""
+    """Pick the sink to cast to: explicit config, then cached, then target.
+
+    Older configs stored the friendly display name in ``sink``. Resolve it back
+    to the P2P/MAC address from the discovery cache when possible -- waycast
+    accepts a name too, but the address is unambiguous and still works if the
+    TV renames itself between scans.
+    """
     explicit = str(cfg.get("sink") or "").strip()
-    if explicit:
-        return explicit
     sinks = load_sinks()
+    if explicit:
+        for item in sinks:
+            if item.get("name") == explicit and item.get("address"):
+                return item["address"]
+        return explicit
     if sinks:
         return sinks[0].get("address") or sinks[0].get("name") or ""
     return str(cfg.get("target") or "").strip()
@@ -585,17 +639,27 @@ def sink_type(sink: str) -> str:
 
 
 def build_waycast_args(cfg: dict, sink: str) -> list[str]:
-    """waycast daemon --sink <sink> [optional flags from config]."""
-    args = ["daemon", "--sink", sink]
+    """Build the full waycast argv tail (global flags first, then `daemon`).
+
+    waycast declares ``--interface`` at the top level, before the subcommand::
+
+        waycast --interface wlp0s20f3 daemon --sink <MAC> [--extend]
+
+    Putting it after ``daemon`` makes clap reject the command, which looked
+    exactly like "the Cast pane does nothing" in the field. The returned list
+    is appended directly to the resolved binary path.
+    """
+    args: list[str] = []
+    iface = str(cfg.get("interface") or "").strip()
+    if iface:
+        args += ["--interface", iface]
+    args += ["daemon", "--sink", sink]
     if cfg.get("mode") == "extend":
         args.append("--extend")
     if cfg.get("codec") in {"h264", "h264-sw"}:
         args += ["--codec", cfg["codec"]]
     if not cfg.get("audio"):
         args.append("--no-audio")
-    iface = str(cfg.get("interface") or "").strip()
-    if iface:
-        args += ["--interface", iface]
     return args
 
 
@@ -671,6 +735,19 @@ def build_fluxcast_args(cfg: dict, sink: str) -> tuple[list[str], str]:
 def start_session() -> tuple[bool, str]:
     """Launch the selected backend, track its PID and redirect output to log."""
     cfg = load_config()
+
+    # Refuse a second start: a duplicate backend fails to bind the same HTTP /
+    # RTSP ports and produces no playable stream (verified against a live TV).
+    session = load_session()
+    if session.get("active"):
+        old_pid = int(session.get("pid") or 0)
+        old_backend = str(session.get("backend") or "")
+        if process_alive(old_pid, old_backend):
+            return False, f"A cast session is already running (pid {old_pid}). Stop it first."
+        # Stale session: clear it before spawning so the UI and backend agree
+        # about which process owns the ports.
+        atomic_write_json(SESSION_FILE, inactive_session(cfg.get("mode", "mirror")))
+
     backend = select_backend(cfg)
     binary = find_backend(backend)
     if not binary:

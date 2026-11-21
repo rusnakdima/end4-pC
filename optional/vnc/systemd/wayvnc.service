@@ -1,8 +1,12 @@
 [Unit]
 Description=WayVNC remote desktop for the active Hyprland session
 Documentation=man:wayvnc(1)
-After=network-online.target
-Wants=network-online.target
+# Start only once the graphical session (and thus WAYLAND_DISPLAY) exists.
+# Waiting on network-online.target instead caused the service to start before
+# the compositor was ready, and default.target made it outlive the session.
+After=graphical-session.target
+PartOf=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
 StartLimitIntervalSec=30
 StartLimitBurst=5
 
@@ -15,4 +19,4 @@ KillMode=mixed
 TimeoutStopSec=10
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target
