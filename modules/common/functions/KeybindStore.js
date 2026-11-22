@@ -391,13 +391,22 @@ function withSeriesOverride(overlay, seriesId, patch) {
     return next;
 }
 
-// Mirror the generator's raw-combo rewrite: everything before the first
-// `code:` is replaced by the series modifier prefix.
+// Mirror the generator's series-combo rewrite. For `code:N` binds everything
+// before the first `code:` is replaced by the series modifier prefix. Plain
+// numbered binds (e.g. `SUPER + 1`) keep their last token and only swap the
+// modifier prefix (`CTRL + 1`).
 function applySeriesMods(combo, mods) {
     const prefix = String(mods ?? "");
-    if (prefix === "") return String(combo ?? "");
-    return String(combo ?? "").replace(/^(.*?)(code:)/,
-        (match, before, code) => prefix + " + " + code);
+    const value = String(combo ?? "");
+    if (prefix === "") return value;
+    if (value.indexOf("code:") !== -1) {
+        return value.replace(/^(.*?)(code:)/,
+            (match, before, code) => prefix + " + " + code);
+    }
+    const parts = value.split(" + ")
+        .map(part => part.trim()).filter(part => part !== "");
+    if (parts.length < 2) return prefix + " + " + value;
+    return prefix + " + " + parts[parts.length - 1];
 }
 
 function comboMods(combo) {

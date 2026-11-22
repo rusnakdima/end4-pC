@@ -561,6 +561,32 @@ TestCase {
             "numpad labels are readable too");
     }
 
+    function test_series_mods_rewrite_plain_digit_combos() {
+        // Numbered families (workspace focus, plain send-to-workspace) use
+        // combos like "SUPER + 1" rather than "SUPER + code:10".
+        const catalog = { binds: [
+            seriesCatalogBind("wf-1", "SUPER + 1", "1",
+                "workspace-focus", "Focus workspace 1–10"),
+            seriesCatalogBind("wf-0", "SUPER + 0", "0",
+                "workspace-focus", "Focus workspace 1–10")
+        ] };
+        let overlay = KeybindStore.newOverlay();
+        overlay = KeybindStore.withSeriesOverride(overlay, "workspace-focus", { mods: "CTRL + ALT" });
+        const binds = KeybindStore.effectiveBinds(catalog, overlay);
+        const group = KeybindStore.groupBySeries(binds, overlay)[0];
+
+        compare(binds[0].combo, "CTRL + ALT + 1",
+            "a plain digit combo follows the series mods");
+        compare(binds[1].combo, "CTRL + ALT + 0");
+        compare(binds[0].originalCombo, "SUPER + 1",
+            "the frozen combo stays the reset target");
+        compare(group.mods, "CTRL + ALT");
+        compare(group.defaultMods, "SUPER");
+        sameJson(group.members.map(member => member.displayCombo),
+            ["CTRL + ALT + 1", "CTRL + ALT + 0"],
+            "plain digit combos stay readable in the member list");
+    }
+
     function test_series_disabled_flag_and_raw_bind_refuses_a_per_bind_override() {
         let overlay = KeybindStore.newOverlay();
         overlay = KeybindStore.withSeriesOverride(overlay, "workspace-switch", { enabled: false });

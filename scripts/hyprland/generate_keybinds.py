@@ -175,21 +175,33 @@ def render_bind(b, commands, exec_mode='bridge'):
 
 
 # --- series (multi-bind) overrides -------------------------------------------
-RAW_PREFIX_RE = re.compile(r'"[^"\\]*code:')
+FIRST_STRING_RE = re.compile(r'"([^"\\]*)"')
 
 
 def rewrite_raw_combo(code, mods):
-    """Replace the modifier prefix before `code:` in a raw bind's first string.
+    """Replace the modifier prefix in a raw bind's first string literal.
 
     Raw binds emit `code` verbatim, so a series edit must rewrite the literal
-    combo inside that string, e.g. `"SUPER + SHIFT + code:"` -> `"CTRL + code:"`.
-    Only the first string literal containing `code:` is touched; the rest of
-    the Lua statement (function body, options) is preserved byte-for-byte.
+    combo prefix inside that string. Two shapes are supported:
+
+    * ``"SUPER + SHIFT + code:"`` -> ``"CTRL + code:"`` (code-based series)
+    * ``"SUPER + "``              -> ``"CTRL + "`` (plain numbered series such
+      as ``hl.bind("SUPER + " .. (i % 10), ...)``)
+
+    Only the first string literal is touched; the rest of the Lua statement
+    (function body, options) is preserved byte-for-byte.
     """
-    new, n = RAW_PREFIX_RE.subn('"' + mods + ' + code:', code, count=1)
-    if n == 0:
-        raise ValueError(f'raw code has no string literal ending in code:: {code!r}')
-    return new
+    m = FIRST_STRING_RE.search(code)
+    if not m:
+        raise ValueError(f'raw code has no string literal: {code!r}')
+    inner = m.group(1)
+    if 'code:' in inner:
+        new_inner = mods + ' + code:'
+    elif inner.rstrip().endswith('+'):
+        new_inner = mods + ' + '
+    else:
+        raise ValueError(f'raw code first string is not a combo prefix: {inner!r}')
+    return code[:m.start()] + '"' + new_inner + '"' + code[m.end():]
 
 
 def apply_series_overrides(nb, series_overrides):
@@ -207,8 +219,15 @@ def apply_series_overrides(nb, series_overrides):
         if d.get('kind') in ('raw', 'unknown') and nb.get('code'):
             nb['code'] = rewrite_raw_combo(nb['code'], mods)
         # Keep combo in sync for display/collision checks even on raw binds.
-        nb['combo'] = re.sub(r'^(.*?)(code:)', lambda m: mods + ' + ' + m.group(2),
-                             nb.get('combo', ''), count=1)
+        combo = nb.get('combo', '')
+        if 'code:' in combo:
+            combo = re.sub(r'^(.*?)(code:)', lambda m: mods + ' + ' + m.group(2),
+                           combo, count=1)
+        elif ' + ' in combo:
+            combo = mods + ' + ' + combo.split(' + ')[-1]
+        else:
+            combo = mods + ' + ' + combo
+        nb['combo'] = combo
     return nb
 
 

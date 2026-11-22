@@ -1638,6 +1638,7 @@ ContentPage {
                     implicitHeight: 24
                     property string tip: seriesRow.expanded
                         ? Translation.tr("Hide keybinds") : Translation.tr("Show keybinds")
+                    property bool hovered: seriesExpandMouseArea.containsMouse
                     Accessible.name: seriesExpandButton.tip
                     Accessible.role: Accessible.Button
 
@@ -1648,8 +1649,10 @@ ContentPage {
                         color: Appearance.colors.colSubtext
                     }
                     MouseArea {
+                        id: seriesExpandMouseArea
                         anchors.fill: parent
                         anchors.margins: -6
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: seriesRow.expanded = !seriesRow.expanded
                     }
@@ -1691,6 +1694,7 @@ ContentPage {
                     implicitHeight: 24
                     property string tip: seriesRow.group?.enabled === false
                         ? Translation.tr("Enable series") : Translation.tr("Disable series")
+                    property bool hovered: seriesEnableMouseArea.containsMouse
                     Accessible.name: seriesEnableButton.tip
                     Accessible.role: Accessible.Button
 
@@ -1702,8 +1706,10 @@ ContentPage {
                             ? page.conflictColor : Appearance.colors.colSubtext
                     }
                     MouseArea {
+                        id: seriesEnableMouseArea
                         anchors.fill: parent
                         anchors.margins: -6
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             const enabled = seriesRow.group?.enabled !== false;
@@ -1722,6 +1728,7 @@ ContentPage {
                     visible: seriesRow.group?.overridden === true
                     implicitWidth: 24
                     implicitHeight: 24
+                    property bool hovered: seriesResetMouseArea.containsMouse
                     Accessible.name: Translation.tr("Reset modifiers")
                     Accessible.role: Accessible.Button
 
@@ -1732,8 +1739,10 @@ ContentPage {
                         color: Appearance.colors.colSubtext
                     }
                     MouseArea {
+                        id: seriesResetMouseArea
                         anchors.fill: parent
                         anchors.margins: -6
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: ManagedKeybinds.setSeriesOverride(
                             seriesRow.group?.seriesId ?? "", { mods: null })
