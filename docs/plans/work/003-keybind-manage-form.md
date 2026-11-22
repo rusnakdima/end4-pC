@@ -1,8 +1,21 @@
 # Keybind Manager: create and edit keybinds from Settings
 
+> **SUPERSEDED — 2026-11-22.** The Lua managed-block approach described below
+> (the `-- >>> end4-pC managed keybinds >>>` … `-- <<< end4-pC managed keybinds <<<`
+> region of `~/.config/hypr/custom/keybinds.lua`, written by `ManagedKeybinds.qml`
+> through `KeybindStore.js`) has been **removed**. Keybinds now come from a frozen
+> JSON catalog (`defaults/hyprland/keybinds.json`) plus a user overlay
+> (`~/.config/hypr/custom/keybind-overlay.json`), merged by
+> `scripts/hyprland/generate_keybinds.py` into the live Lua files and the command
+> bridge. Settings now writes only the overlay, then regenerates and reloads.
+>
+> This file is kept as a historical record of the original feature; the design,
+> tasks, gates and smoke results below no longer describe the current system.
+> See **[docs/keybinds.md](../../keybinds.md)** for how keybinds work today.
+
 > A form on Settings → Keyboard that creates new keybinds into a panel-managed block of `~/.config/hypr/custom/keybinds.lua` and edits them afterwards — with readable word key caps (Super, Ctrl, Shift…), a live "is this key already used?" status, and a tip under every field.
 
-**Status**: Completed
+**Status**: Superseded (originally Completed 2026-11-17; replaced by the catalog + overlay design in commit `f6ebbd8` — see [docs/keybinds.md](../../keybinds.md))
 **Created**: 2026-11-17
 **Owner**: general
 

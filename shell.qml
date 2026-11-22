@@ -41,33 +41,55 @@ ShellRoot {
         }
     }
 
+    // Delay before forcing the non-visual services. Keep it short: it only
+    // needs to cover one rendered frame, not a human-perceptible wait.
+    property int deferredInitDelay: 100
+
+    // Only work that decides what the first frame looks like belongs here.
+    // Every call below instantiates a service singleton, so doing all of them
+    // synchronously used to delay the bar and wallpaper by seconds. The rest
+    // is moved to deferredInitTimer, which fires after the first paint.
     Component.onCompleted: {
         MaterialThemeLoader.reapplyTheme()
         Hyprsunset.load()
-        FirstRunExperience.load()
-        ConflictKiller.load()
-        Cliphist.refresh()
         Wallpapers.load()
         // The wallpaper image is re-applied from config on every shell start;
         // restart the clip's clock the same way so a video wallpaper is part
         // of the theme and starts playing instead of sitting on its poster.
         WallpaperVideo.restart()
-        Football.load()
-        Updates.load()
         // The window mode has to be back in place before the first window
         // is looked at: the rules file covers the windows that open from
         // now on, and this brings the ones that are already open in line.
         WindowMode.apply()
 
-        // Force the lazy singletons that own global shortcuts/IPC handlers to
-        // instantiate at startup. Otherwise their targets only appear after
-        // the first time the corresponding window happens to be opened.
-        AdvancedPaste.close();
-        ImagePreview.close();
-        DesktopUtilities.stopFindMouse();
-        // Owns the generated "quickshell:runCommand:<id>" shortcuts; reading
-        // it here registers them before any Hyprland bind can dispatch one.
-        GeneratedCommandShortcuts.reload();
+        deferredInitTimer.start()
+    }
+
+    // Services whose state is not visible in the first frame (clipboard,
+    // football scores, update count, first-run dialog, conflict check) and
+    // the lazy singletons that own global shortcuts/IPC handlers. They are
+    // still instantiated at startup, just after the shell has painted.
+    Timer {
+        id: deferredInitTimer
+        interval: root.deferredInitDelay
+        repeat: false
+        onTriggered: {
+            FirstRunExperience.load()
+            ConflictKiller.load()
+            Cliphist.refresh()
+            Football.load()
+            Updates.load()
+
+            // Force the lazy singletons that own global shortcuts/IPC handlers.
+            // Otherwise their targets only appear after the first time the
+            // corresponding window happens to be opened.
+            AdvancedPaste.close();
+            ImagePreview.close();
+            DesktopUtilities.stopFindMouse();
+            // Owns the generated "quickshell:runCommand:<id>" shortcuts; reading
+            // it here registers them before any Hyprland bind can dispatch one.
+            GeneratedCommandShortcuts.reload();
+        }
     }
     
     // Panel families

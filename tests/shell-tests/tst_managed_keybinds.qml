@@ -6,59 +6,103 @@ import qs.services
 import "modules/common/functions/KeybindStore.js" as KeybindStore
 
 /**
- * The write path of the keybind manager: a keybind created in the settings
- * form has to reach the file inside the managed markers, or the reload
- * finds nothing and the bind never takes effect.
+ * HOSTED (Quickshell) test for the overlay-backed keybind manager.
  *
- * The test points the singleton at a temp file, so the user's real
- * keybinds.lua is never touched. The file is seeded with user content on
- * every run — including a line after the markers — because preserving
- * exactly that content is the contract of the managed block.
+ * ManagedKeybinds no longer round-trips the removed Lua managed-block
+ * markers. It now owns a single JSON file,
+ * ~/.config/hypr/custom/keybind-overlay.json, exposes its adds through
+ * editableEntries, and runs the catalog generator after every save.
  *
- * Every step waits for the chain instead of assuming it is synchronous:
- * the seed through the write process, the saves through the service's load
- * counter (the FileView bumps it when a save has been read back), and the
- * file content through a reader that is created fresh for every read, so
- * no assertion can pass or fail on a stale watch.
+ * This test drives the real singleton against an OVERRIDDEN TEMP PATH. The
+ * injectable keybindsPath property is repointed at a file under /tmp before
+ * any edit, so the user's real overlay is never read for editing or written.
+ * Each write still goes through the component's normal save chain
+ * (FileView.setText -> generator hook), so this belongs in the headless
+ * shell harness (tests/run-shell-tests.sh), never in a live Hyprland session.
+ *
+ * LIMITATION: qmltestrunner cannot resolve "import Quickshell"/"qs.services",
+ * so this file cannot be executed by qmltestrunner directly; it is compiled
+ * by tests/qml-compile-check.sh and executed inside tests/shell-tests/shell.qml.
+ * The pure-JS half of the overlay (renderOverlay/parseOverlay/effectiveBinds)
+ * is covered by modules/common/functions/tst_managed_keybinds.qml and is not
+ * duplicated here.
  */
 TestCase {
     id: testCase
-    name: "ManagedKeybinds"
+    name: "ManagedKeybindsOverlay"
     when: true
 
-    readonly property string tempDir: "/tmp/opencode/tst_managed_keybinds"
-    readonly property string tempPath: tempDir + "/keybinds.lua"
-    readonly property string startMarker: "-- >>> end4-pC managed keybinds >>>"
-    readonly property string endMarker: "-- <<< end4-pC managed keybinds <<<"
+    readonly property string tempDir: "/tmp/opencode/tst_managed_keybinds_overlay"
+    readonly property string tempPath: tempDir + "/keybind-overlay.json"
 
     property string originalPath: ""
     property bool seedDone: false
     property bool readerLoaded: false
     property var reader: null
 
-    // The user's own file content: a bind before the block, an empty block
-    // the panel may take over, and a line after it. Every test must find
-    // the two user lines untouched after its write.
-    function userText() {
-        return "-- user line before\n"
-            + "hl.bind(\"SUPER + U\", hl.dsp.exec_cmd(\"user-command\"), {description = \"User bind\"})\n"
-            + testCase.startMarker + "\n"
-            + testCase.endMarker + "\n"
-            + "-- user line after\n";
+    // A form entry in the shape ManagedKeybinds.create() accepts.
+    function formEntry(name, category, command, combo) {
+        return { name: name, category: category, command: command, combo: combo };
     }
 
-    function seed() {
+    // The overlay on disk is plain JSON: seed it with an explicit skeleton so
+    // every test starts from a known state. No Lua markers are involved.
+    function seedOverlay(entries) {
+        const overlay = KeybindStore.newOverlay();
+        overlay.adds = entries ?? [];
+        seedOverlayText(KeybindStore.renderOverlay(overlay));
+    }
+
+    function seedOverlayText(text) {
         testCase.seedDone = false;
         seedProc.command = ["sh", "-c",
             "mkdir -p \"$1\" && printf '%s' \"$2\" > \"$3\"",
-            "seed", testCase.tempDir, testCase.userText(), testCase.tempPath];
+            "seed", testCase.tempDir, text, testCase.tempPath];
         seedProc.running = true;
-        tryCompare(testCase, "seedDone", true, 5000, "the seed file was never written");
+        tryCompare(testCase, "seedDone", true, 5000, "the temp overlay was never seeded");
     }
 
     Process {
         id: seedProc
         onExited: testCase.seedDone = true
+    }
+
+    // Repoint the singleton at the temp overlay and force a real re-read.
+    // Hopping away and back is deliberate: FileView's change watch is not
+    // reliable for a file rewritten in the same tick as the seed.
+    function bindTempOverlay() {
+        tryCompare(ManagedKeybinds, "pendingWrite", false, 5000);
+        let generation = ManagedKeybinds.loadGeneration;
+        if (ManagedKeybinds.keybindsPath !== testCase.tempPath) {
+            ManagedKeybinds.keybindsPath = testCase.tempPath;
+        } else {
+            ManagedKeybinds.keybindsPath = testCase.originalPath;
+            tryVerify(() => ManagedKeybinds.loadGeneration > generation, 5000,
+                "the hop back to the default path never loaded");
+            generation = ManagedKeybinds.loadGeneration;
+            ManagedKeybinds.keybindsPath = testCase.tempPath;
+        }
+        tryVerify(() => ManagedKeybinds.loadGeneration > generation, 5000,
+            "the switch to the temp overlay never loaded");
+        verify(ManagedKeybinds.loaded, "the temp overlay was never reported as loaded");
+    }
+
+    function reseed(entries) {
+        seedOverlay(entries);
+        bindTempOverlay();
+    }
+
+    // A fresh reader for every read, created with its path at construction
+    // time, so no assertion can pass or fail on a stale watch.
+    function readTempOverlay() {
+        if (testCase.reader !== null) {
+            testCase.reader.destroy();
+            testCase.reader = null;
+        }
+        testCase.readerLoaded = false;
+        testCase.reader = readerComponent.createObject(testCase, { "path": testCase.tempPath });
+        tryCompare(testCase, "readerLoaded", true, 5000, "the temp overlay reader never loaded");
+        return testCase.reader.text();
     }
 
     Component {
@@ -69,67 +113,35 @@ TestCase {
         }
     }
 
-    // Waits until the write chain has finished AND the service has read
-    // the save back (its FileView bumps loadGeneration on every load,
-    // which includes the reload after a save), so the file on disk is
-    // final when the caller reads it.
-    function waitForSave(generationBefore) {
-        tryCompare(ManagedKeybinds, "pendingWrite", false, 5000,
-            "the write chain never finished");
-        tryVerify(() => ManagedKeybinds.loadGeneration > generationBefore, 5000,
-            "the save never landed (loadGeneration stayed at " + generationBefore + ")");
+    // A save is only done once the temp file on disk shows the new bytes;
+    // polling the file avoids assuming the generator hook is synchronous.
+    function waitForFileToContain(fragment, message) {
+        tryVerify(() => readTempOverlay().indexOf(fragment) !== -1, 5000, message);
     }
 
-    // A fresh reader for every read: created with its path in the creation
-    // properties so the load starts with a real path, and waited for until
-    // it has actually read the file.
-    function fileText() {
-        if (testCase.reader !== null) {
-            testCase.reader.destroy();
-            testCase.reader = null;
-        }
-        testCase.readerLoaded = false;
-        testCase.reader = readerComponent.createObject(testCase, { "path": testCase.tempPath });
-        tryCompare(testCase, "readerLoaded", true, 5000, "the reader never loaded the file");
-        return testCase.reader.text();
+    function waitForFileToLose(fragment, message) {
+        tryVerify(() => readTempOverlay().indexOf(fragment) === -1, 5000, message);
     }
 
-    function verifyUserContentPreserved(text) {
-        verify(text.includes("-- user line before"), "the user line before the block is gone");
-        verify(text.includes("user-command"), "the user bind outside the markers is gone");
-        verify(text.includes("-- user line after"), "the user line after the block is gone");
+    function addInFile(id) {
+        const adds = KeybindStore.parseOverlay(readTempOverlay()).adds;
+        return adds.find(add => add.id === id);
+    }
+
+    function createAndWait(name, command, combo) {
+        const created = ManagedKeybinds.create(formEntry(name, "Utilities", command, combo));
+        verify(created.ok, "create failed: " + created.error);
+        waitForFileToContain('"id": "' + created.id + '"',
+            "the new add never reached the temp overlay: " + readTempOverlay());
+        return created;
     }
 
     function init() {
         if (testCase.originalPath === "")
             testCase.originalPath = ManagedKeybinds.keybindsPath;
-
-        seed();
-        tryCompare(ManagedKeybinds, "pendingWrite", false, 5000);
-
-        // Force a re-read of the seeded file from disk: on the first run
-        // the singleton still points at the real path, so a single switch
-        // loads the seed; afterwards it already points at the temp file, so
-        // hop away and back to make the load happen for real instead of
-        // trusting the change watch.
-        if (ManagedKeybinds.keybindsPath === testCase.originalPath) {
-            const generation = ManagedKeybinds.loadGeneration;
-            ManagedKeybinds.keybindsPath = testCase.tempPath;
-            tryVerify(() => ManagedKeybinds.loadGeneration > generation, 5000,
-                "the switch to the temp file never loaded");
-        } else {
-            let generation = ManagedKeybinds.loadGeneration;
-            ManagedKeybinds.keybindsPath = testCase.originalPath;
-            tryVerify(() => ManagedKeybinds.loadGeneration > generation, 5000,
-                "the hop back to the original path never loaded");
-            generation = ManagedKeybinds.loadGeneration;
-            ManagedKeybinds.keybindsPath = testCase.tempPath;
-            tryVerify(() => ManagedKeybinds.loadGeneration > generation, 5000,
-                "the switch to the temp file never loaded");
-        }
-
-        compare(ManagedKeybinds.entries.length, 0,
-            "the seeded file must parse to no managed entries");
+        seedOverlay([]);
+        bindTempOverlay();
+        compare(ManagedKeybinds.entries.length, 0, "a fresh temp overlay must have no adds");
     }
 
     function cleanupTestCase() {
@@ -137,124 +149,130 @@ TestCase {
             testCase.reader.destroy();
             testCase.reader = null;
         }
-        // Point the singleton back at the real file first, so it is not
-        // left watching a path the next line deletes.
+        // Point the singleton back at its default path before deleting /tmp.
         if (testCase.originalPath !== "")
             ManagedKeybinds.keybindsPath = testCase.originalPath;
         Quickshell.execDetached(["rm", "-rf", testCase.tempDir]);
     }
 
-    function test_create_writes_inside_the_markers_and_keeps_user_content() {
-        const generation = ManagedKeybinds.loadGeneration;
-        const created = ManagedKeybinds.create({
-            name: "Test bind",
-            category: "Utilities",
-            command: "true",
-            combo: "SUPER + F12"
-        });
-        verify(created.ok, "create failed: " + created.error);
-        waitForSave(generation);
-        verify(ManagedKeybinds.wrote, "the write chain never ran");
+    // --- public API shape and overlay path -----------------------------------
 
-        const text = fileText();
-        verify(text.includes("hl.bind(\"SUPER + F12\", hl.dsp.exec_cmd(\"true\"), {description = \"Test bind\"})"),
-            "the keybind line was not written verbatim:\n" + text);
-        verifyUserContentPreserved(text);
-        verify(text.includes(testCase.startMarker), "no start marker");
-        verify(text.includes(testCase.endMarker), "no end marker");
-        verify(text.includes("--##! Utilities"), "the category heading was not written");
-        verify(text.includes("-- panel-id: " + created.id), "the entry id was not written");
-
-        // The bind must be offered back to the form with its fields.
-        const found = ManagedKeybinds.editableEntries.find(entry => entry.id === created.id);
-        verify(found !== undefined, "the new entry is not in editableEntries");
-        compare(found.name, "Test bind");
-        compare(found.category, "Utilities");
-        compare(found.combo, "SUPER + F12");
+    function test_overlay_path_points_at_the_overlay_json() {
+        const basename = testCase.originalPath.split("/").pop();
+        compare(basename, "keybind-overlay.json",
+            "the default path must name the JSON overlay, not a Lua file");
+        verify(testCase.originalPath.indexOf("/hypr/custom/") !== -1,
+            "the overlay must live under hypr/custom: " + testCase.originalPath);
+        compare(ManagedKeybinds.keybindsPath, testCase.tempPath,
+            "the test must have overridden the overlay path");
+        verify(ManagedKeybinds.keybindsPath !== testCase.originalPath,
+            "the real overlay must never be the write target");
     }
 
-    function test_create_rejects_an_invalid_entry_without_writing() {
-        const wroteBefore = ManagedKeybinds.wrote;
-        const entriesBefore = ManagedKeybinds.entries.length;
+    function test_editable_entries_is_exposed_and_maps_overlay_adds() {
+        verify(ManagedKeybinds.editableEntries !== undefined, "editableEntries is not exposed");
+        verify(Array.isArray(ManagedKeybinds.editableEntries), "editableEntries is not an array");
+        compare(JSON.stringify(ManagedKeybinds.editableEntries),
+            JSON.stringify(ManagedKeybinds.entries),
+            "editableEntries must be the form's view of every overlay add");
 
-        const created = ManagedKeybinds.create({
-            name: "Say \"hi\"",
-            category: "",
-            command: "true",
-            combo: "SUPER + F12"
-        });
-        verify(!created.ok, "a name with a double quote must not save");
-        compare(created.error, "quote-name");
+        const add = KeybindStore.makeAdd(
+            formEntry("Seed bind", "Utilities", "true", "SUPER + F12"), "seed-1");
+        reseed([add]);
 
-        // create() sets pendingWrite synchronously when it writes, so a
-        // still-false flag proves the write chain was never entered.
-        compare(ManagedKeybinds.pendingWrite, false, "a rejected entry must not write");
-        compare(ManagedKeybinds.wrote, wroteBefore, "the write chain must not run");
-        compare(ManagedKeybinds.entries.length, entriesBefore, "a rejected entry must not enter the block");
+        compare(ManagedKeybinds.editableEntries.length, 1);
+        const entry = ManagedKeybinds.editableEntries[0];
+        compare(entry.id, "seed-1");
+        compare(entry.name, "Seed bind");
+        compare(entry.command, "true");
+        compare(entry.combo, "SUPER + F12");
+        compare(entry.raw, false, "JSON overlay adds are always editable; there is no raw residue");
     }
 
-    function test_validate_reports_the_store_code() {
-        compare(ManagedKeybinds.validate({ name: "Ok", category: "", command: "true", combo: "SUPER + K" }), "");
-        compare(ManagedKeybinds.validate({ name: "", category: "", command: "true", combo: "SUPER + K" }), "empty-name");
-        compare(ManagedKeybinds.validate({ name: "A", category: "", command: "", combo: "SUPER + K" }), "empty-command");
-        compare(ManagedKeybinds.validate({ name: "A", category: "", command: "true", combo: "" }), "empty-combo");
+    // --- create / update / remove, verified on the OVERRIDDEN temp path ------
+
+    function test_create_writes_the_add_to_the_temp_overlay() {
+        const created = createAndWait("Test bind", "true", "SUPER + F12");
+
+        const add = addInFile(created.id);
+        verify(add !== undefined, "the created add is missing from the temp overlay");
+        compare(add.description, "Test bind");
+        compare(add.category, "Utilities");
+        compare(add.combo, "SUPER + F12");
+        compare(add.dispatch.command, "true");
+        compare(add.source, "custom");
+
+        const entry = ManagedKeybinds.editableEntries.find(e => e.id === created.id);
+        verify(entry !== undefined, "the new add is not offered back as an editable entry");
+        compare(entry.name, "Test bind");
+        compare(entry.combo, "SUPER + F12");
     }
 
-    function test_update_changes_only_the_target_line() {
-        let generation = ManagedKeybinds.loadGeneration;
-        const first = ManagedKeybinds.create({
-            name: "First", category: "", command: "true", combo: "SUPER + F12"
-        });
-        verify(first.ok, "create failed: " + first.error);
-        waitForSave(generation);
-        verify(fileText().includes("First"), "the first keybind never reached the file");
+    function test_update_rewrites_only_the_target_add_in_the_temp_overlay() {
+        const first = createAndWait("First", "true", "SUPER + F12");
+        const second = createAndWait("Second", "false", "SUPER + F11");
 
-        generation = ManagedKeybinds.loadGeneration;
-        const second = ManagedKeybinds.create({
-            name: "Second", category: "", command: "false", combo: "SUPER + F11"
-        });
-        verify(second.ok, "create failed: " + second.error);
-        waitForSave(generation);
-        verify(fileText().includes("Second"), "the second keybind never reached the file");
-
-        generation = ManagedKeybinds.loadGeneration;
         const updated = ManagedKeybinds.update(first.id, { name: "Renamed", combo: "SUPER + F10" });
         verify(updated.ok, "update failed: " + updated.error);
-        waitForSave(generation);
+        waitForFileToContain('"description": "Renamed"', "the rename never reached the temp overlay");
 
-        const text = fileText();
-        verify(text.includes("description = \"Renamed\""), "the rename never reached the file:\n" + text);
-        verify(text.includes("hl.bind(\"SUPER + F10\""), "the new combo did not reach the file");
-        verify(!text.includes("description = \"First\""), "the old name is still there");
-        verify(text.includes("description = \"Second\""), "the untouched neighbour was lost");
-        verifyUserContentPreserved(text);
+        const overlay = KeybindStore.parseOverlay(readTempOverlay());
+        compare(overlay.adds.length, 2, "an update must not add or drop adds");
+        const changed = overlay.adds.find(add => add.id === first.id);
+        const neighbour = overlay.adds.find(add => add.id === second.id);
+        verify(changed !== undefined && neighbour !== undefined, "an add was lost on update");
+        compare(changed.description, "Renamed");
+        compare(changed.combo, "SUPER + F10");
+        compare(changed.dispatch.command, "true", "an untouched field must survive an update");
+        compare(neighbour.description, "Second", "the neighbouring add must not change");
+        compare(neighbour.combo, "SUPER + F11");
     }
 
-    function test_remove_drops_the_entry_but_not_the_user_content() {
-        let generation = ManagedKeybinds.loadGeneration;
-        const created = ManagedKeybinds.create({
-            name: "Doomed", category: "", command: "true", combo: "SUPER + F12"
-        });
-        verify(created.ok, "create failed: " + created.error);
-        waitForSave(generation);
-        verify(fileText().includes("Doomed"), "the keybind never reached the file");
+    function test_remove_drops_only_the_target_add_from_the_temp_overlay() {
+        const first = createAndWait("Doomed", "true", "SUPER + F12");
+        const second = createAndWait("Keeper", "false", "SUPER + F11");
 
-        generation = ManagedKeybinds.loadGeneration;
-        const removed = ManagedKeybinds.remove(created.id);
+        const removed = ManagedKeybinds.remove(first.id);
         verify(removed.ok, "remove failed: " + removed.error);
-        waitForSave(generation);
+        waitForFileToLose('"id": "' + first.id + '"', "the removed id is still in the temp overlay");
 
-        const text = fileText();
-        verify(!text.includes("Doomed"), "the entry is still in the file:\n" + text);
-        verify(!text.includes("-- panel-id: " + created.id), "the id comment is still in the file");
-        verifyUserContentPreserved(text);
-        verify(text.includes(testCase.startMarker), "the managed block itself must stay");
+        const overlay = KeybindStore.parseOverlay(readTempOverlay());
+        compare(overlay.adds.length, 1);
+        compare(overlay.adds[0].id, second.id);
+        compare(overlay.adds[0].description, "Keeper");
+        verify(ManagedKeybinds.editableEntries.find(e => e.id === first.id) === undefined,
+            "the removed add is still offered to the form");
+    }
+
+    function test_set_and_clear_override_write_to_the_temp_overlay() {
+        const set = ManagedKeybinds.setOverride("frozen-bind", "SUPER + Z");
+        verify(set.ok, "setOverride failed: " + set.error);
+        waitForFileToContain('"frozen-bind"', "the override never reached the temp overlay");
+        let overlay = KeybindStore.parseOverlay(readTempOverlay());
+        compare(overlay.overrides["frozen-bind"].combo, "SUPER + Z");
+        compare(overlay.adds.length, 0, "an override must not create an add");
+
+        const cleared = ManagedKeybinds.clearOverride("frozen-bind");
+        verify(cleared.ok, "clearOverride failed: " + cleared.error);
+        waitForFileToLose('"frozen-bind"', "the override is still in the temp overlay");
+        overlay = KeybindStore.parseOverlay(readTempOverlay());
+        compare(Object.keys(overlay.overrides).length, 0);
+    }
+
+    // --- validation and lookup, no file writes -------------------------------
+
+    function test_validate_reports_the_store_codes() {
+        compare(ManagedKeybinds.validate(formEntry("Ok", "", "true", "SUPER + K")), "");
+        compare(ManagedKeybinds.validate(formEntry("", "", "true", "SUPER + K")), "empty-name");
+        compare(ManagedKeybinds.validate(formEntry("A", "", "", "SUPER + K")), "empty-command");
+        compare(ManagedKeybinds.validate(formEntry("A", "", "true", "")), "empty-combo");
+        compare(ManagedKeybinds.validate(formEntry('Say "hi"', "", "true", "SUPER + K")), "quote-name");
     }
 
     function test_update_and_remove_report_unknown_ids() {
         const entriesBefore = ManagedKeybinds.entries.length;
 
-        const updated = ManagedKeybinds.update("does-not-exist", { name: "x", command: "y", combo: "z" });
+        const updated = ManagedKeybinds.update("does-not-exist", formEntry("x", "", "y", "z"));
         verify(!updated.ok);
         compare(updated.error, "not-found");
 
@@ -262,57 +280,28 @@ TestCase {
         verify(!removed.ok);
         compare(removed.error, "not-found");
 
-        compare(ManagedKeybinds.pendingWrite, false, "an unknown id must not write");
-        compare(ManagedKeybinds.entries.length, entriesBefore, "an unknown id must not change the block");
+        compare(ManagedKeybinds.entries.length, entriesBefore,
+            "an unknown id must not change the editable entries");
+        verify(!readTempOverlay().includes('does-not-exist'),
+            "an unknown id must not write to the temp overlay");
     }
 
-    // parseBlock stamps each parsed line with its 1-based location in the
-    // file. The conflict resolver matches a bind's sourcePath + line range
-    // against these to decide whether a holder belongs to the managed block.
-    function test_parse_block_records_line_metadata() {
-        const text = "-- before\n"
-            + testCase.startMarker + "\n"
-            + "--##! Utilities\n"
-            + "-- panel-id: abc123\n"
-            + "hl.bind(\"SUPER + F12\", hl.dsp.exec_cmd(\"true\"), {description = \"One\"})\n"
-            + "hl.bind(\"SUPER + F11\", hl.dsp.exec_cmd(\"false\"), {description = \"Two\"})\n"
-            + testCase.endMarker + "\n"
-            + "-- after\n";
-        const entries = KeybindStore.parseBlock(text);
-        compare(entries.length, 2);
-        // The marker is on line 2; the two binds are on lines 5 and 6.
-        compare(entries[0].line, 5);
-        compare(entries[0].endLine, 5);
-        compare(entries[1].line, 6);
-        compare(entries[1].endLine, 6);
-    }
+    // Overlay-backed counterpart of the old line-metadata lookup: an add is
+    // identified by the overlay path plus its id, never by a Lua line number.
+    function test_entry_for_source_matches_the_overlay_path() {
+        const created = createAndWait("Source bind", "true", "SUPER + F7");
 
-    // entryForSource is the lookup the conflict fix uses: a bind from the
-    // managed block resolves to its entry, a bind from elsewhere resolves to
-    // null (so the caller falls back to an override).
-    function test_entry_for_source_matches_managed_bind_and_rejects_outside() {
-        let generation = ManagedKeybinds.loadGeneration;
-        const created = ManagedKeybinds.create({
-            name: "Source bind", category: "", command: "true", combo: "SUPER + F7"
-        });
-        verify(created.ok, "create failed: " + created.error);
-        waitForSave(generation);
-
-        const entry = ManagedKeybinds.entries.find(e => e.id === created.id);
-        verify(entry !== undefined, "the managed entry is missing after save");
-        verify(typeof entry.line === "number", "the managed entry has no line metadata");
-
-        const inside = { sourcePath: testCase.tempPath, line: entry.line, endLine: entry.endLine };
+        const inside = { sourcePath: testCase.tempPath, id: created.id };
         const found = ManagedKeybinds.entryForSource(inside);
-        verify(found !== null, "entryForSource returned null for a bind inside the managed block");
+        verify(found !== null, "entryForSource rejected an add from the overlay");
         compare(found.id, created.id);
 
-        const outsideLine = { sourcePath: testCase.tempPath, line: 1, endLine: 1 };
-        verify(ManagedKeybinds.entryForSource(outsideLine) === null,
-            "entryForSource must reject a bind outside the managed block");
-
-        const outsideFile = { sourcePath: "/some/other/keybinds.lua", line: entry.line, endLine: entry.endLine };
-        verify(ManagedKeybinds.entryForSource(outsideFile) === null,
+        const wrongFile = { sourcePath: "/some/other/keybind-overlay.json", id: created.id };
+        verify(ManagedKeybinds.entryForSource(wrongFile) === null,
             "entryForSource must reject a bind from a different file");
+
+        const missingId = { sourcePath: testCase.tempPath, id: "does-not-exist" };
+        verify(ManagedKeybinds.entryForSource(missingId) === null,
+            "entryForSource must reject an id that is not an overlay add");
     }
 }

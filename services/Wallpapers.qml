@@ -745,6 +745,29 @@ Singleton {
         }
     }
 
+    /**
+     * Toggle the shell's light/dark mode without changing the wallpaper image.
+     * This is the same mechanism the dark-mode quick toggle and the bar button
+     * use: switchwall.sh --mode <light|dark> --noswitch. The target mode is the
+     * inverse of the current Material state, so repeated presses alternate.
+     */
+    function toggleDarkMode(): void {
+        Quickshell.execDetached([
+            Directories.wallpaperSwitchScriptPath,
+            "--mode", Appearance.m3colors.darkmode ? "light" : "dark",
+            "--noswitch"
+        ]);
+    }
+
+    // Hyprland bind CTRL+SUPER+SHIFT+D dispatches quickshell:toggleLightDark.
+    // The global-shortcut protocol adds the quickshell: prefix, so this name
+    // is what the binding actually targets.
+    CompositorGlobalShortcut {
+        name: "toggleLightDark"
+        description: "Toggle light/dark mode"
+        onPressed: root.toggleDarkMode()
+    }
+
     IpcHandler {
         target: "wallpapers"
 

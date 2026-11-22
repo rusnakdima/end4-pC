@@ -318,6 +318,7 @@
    "group": "",
    "combo": "SUPER + SUPER_L",
    "description": "Shell: Toggle search",
+   "label": "Shell: Toggle search",
    "options": {
     "release": true
    },
@@ -325,7 +326,7 @@
     "kind": "command",
     "command": "qs -c $qsConfig ipc call search toggle || pkill fuzzel || fuzzel"
    },
-   "code": "hl.bind(\"SUPER + SUPER_L\", searchToggle, { release = true, description = \"Shell: Toggle search\" })"
+   "code": "hl.bind(\"SUPER + SUPER_L\", hl.dsp.global(\"quickshell:runCommand:bind\"), { release = true, description = \"Shell: Toggle search\" })"
   },
   {
    "id": "bind-2",
@@ -335,6 +336,7 @@
    "group": "",
    "combo": "SUPER + SUPER_R",
    "description": "",
+   "label": "SUPER + SUPER_R",
    "options": {
     "release": true
    },
@@ -342,7 +344,7 @@
     "kind": "command",
     "command": "qs -c $qsConfig ipc call search toggle || pkill fuzzel || fuzzel"
    },
-   "code": "hl.bind(\"SUPER + SUPER_R\", searchToggle, { release = true })"
+   "code": "hl.bind(\"SUPER + SUPER_R\", hl.dsp.global(\"quickshell:runCommand:bind-2\"), { release = true })"
   },
   {
    "id": "bind-3",
@@ -352,6 +354,7 @@
    "group": "",
    "combo": "SUPER + Tab",
    "description": "Shell: Toggle overview",
+   "label": "Shell: Toggle overview",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -370,6 +373,7 @@
    "group": "",
    "combo": "SUPER + V",
    "description": "",
+   "label": "SUPER + V",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -378,7 +382,7 @@
      "value": "quickshell:overviewClipboardToggle"
     }
    },
-   "code": "hl.bind(\"SUPER + V\", hl.dsp.global(\"quickshell:overviewClipboardToggle\"))"
+   "code": "hl.bind(\"SUPER + V\", hl.dsp.global(\"quickshell:overviewClipboardToggle\"), nil)"
   },
   {
    "id": "bind-5",
@@ -388,6 +392,7 @@
    "group": "",
    "combo": "SUPER + Period",
    "description": "",
+   "label": "SUPER + Period",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -396,7 +401,7 @@
      "value": "quickshell:overviewEmojiToggle"
     }
    },
-   "code": "hl.bind(\"SUPER + Period\", hl.dsp.global(\"quickshell:overviewEmojiToggle\"))"
+   "code": "hl.bind(\"SUPER + Period\", hl.dsp.global(\"quickshell:overviewEmojiToggle\"), nil)"
   },
   {
    "id": "bind-6",
@@ -406,6 +411,7 @@
    "group": "",
    "combo": "SUPER + A",
    "description": "Shell: Toggle left sidebar",
+   "label": "Shell: Toggle left sidebar",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -424,6 +430,7 @@
    "group": "",
    "combo": "SUPER + ALT + A",
    "description": "",
+   "label": "SUPER + ALT + A",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -432,7 +439,7 @@
      "value": "quickshell:sidebarLeftToggleDetach"
     }
    },
-   "code": "hl.bind(\"SUPER + ALT + A\", hl.dsp.global(\"quickshell:sidebarLeftToggleDetach\"))"
+   "code": "hl.bind(\"SUPER + ALT + A\", hl.dsp.global(\"quickshell:sidebarLeftToggleDetach\"), nil)"
   },
   {
    "id": "bind-8",
@@ -442,6 +449,7 @@
    "group": "",
    "combo": "SUPER + B",
    "description": "",
+   "label": "SUPER + B",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -450,7 +458,7 @@
      "value": "quickshell:sidebarLeftToggle"
     }
    },
-   "code": "hl.bind(\"SUPER + B\", hl.dsp.global(\"quickshell:sidebarLeftToggle\"))"
+   "code": "hl.bind(\"SUPER + B\", hl.dsp.global(\"quickshell:sidebarLeftToggle\"), nil)"
   },
   {
    "id": "bind-9",
@@ -460,6 +468,7 @@
    "group": "",
    "combo": "SUPER + O",
    "description": "",
+   "label": "SUPER + O",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -468,7 +477,7 @@
      "value": "quickshell:sidebarLeftToggle"
     }
    },
-   "code": "hl.bind(\"SUPER + O\", hl.dsp.global(\"quickshell:sidebarLeftToggle\"))"
+   "code": "hl.bind(\"SUPER + O\", hl.dsp.global(\"quickshell:sidebarLeftToggle\"), nil)"
   },
   {
    "id": "bind-10",
@@ -478,6 +487,7 @@
    "group": "",
    "combo": "SUPER + N",
    "description": "Shell: Toggle right sidebar",
+   "label": "Shell: Toggle right sidebar",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -496,6 +506,7 @@
    "group": "",
    "combo": "SUPER + Slash",
    "description": "Shell: Toggle cheatsheet",
+   "label": "Shell: Toggle cheatsheet",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -514,6 +525,7 @@
    "group": "",
    "combo": "SUPER + K",
    "description": "Shell: Toggle on-screen keyboard",
+   "label": "Shell: Toggle on-screen keyboard",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -532,6 +544,7 @@
    "group": "",
    "combo": "ALT + TAB",
    "description": "Window: Switch next",
+   "label": "Window: Switch next",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -550,6 +563,7 @@
    "group": "",
    "combo": "ALT + SHIFT + TAB",
    "description": "Window: Switch previous",
+   "label": "Window: Switch previous",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -568,6 +582,7 @@
    "group": "",
    "combo": "CTRL + ALT + TAB",
    "description": "Window: Pin window switcher (lock scope)",
+   "label": "Window: Pin window switcher (lock scope)",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -586,6 +601,7 @@
    "group": "",
    "combo": "SUPER + G",
    "description": "Shell: Toggle widget overlay",
+   "label": "Shell: Toggle widget overlay",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -604,6 +620,7 @@
    "group": "",
    "combo": "CTRL + ALT + Delete",
    "description": "Shell: Toggle session menu",
+   "label": "Shell: Toggle session menu",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -622,6 +639,7 @@
    "group": "",
    "combo": "SUPER + J",
    "description": "Shell: Toggle bar",
+   "label": "Shell: Toggle bar",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -640,6 +658,7 @@
    "group": "",
    "combo": "XF86MonBrightnessUp",
    "description": "",
+   "label": "XF86MonBrightnessUp",
    "options": {
     "locked": true
    },
@@ -647,7 +666,7 @@
     "kind": "command",
     "command": "qs -c $qsConfig ipc call brightness increment || brightnessctl s 5%+"
    },
-   "code": "hl.bind(\"XF86MonBrightnessUp\", hl.dsp.exec_cmd(qsIpcCall .. \" brightness increment || brightnessctl s 5%+\"),\n    { locked = true, repeating = true })"
+   "code": "hl.bind(\"XF86MonBrightnessUp\", hl.dsp.global(\"quickshell:runCommand:bind-19\"), { locked = true })"
   },
   {
    "id": "bind-20",
@@ -657,6 +676,7 @@
    "group": "",
    "combo": "XF86MonBrightnessDown",
    "description": "",
+   "label": "XF86MonBrightnessDown",
    "options": {
     "locked": true
    },
@@ -664,7 +684,7 @@
     "kind": "command",
     "command": "qs -c $qsConfig ipc call brightness decrement || brightnessctl s 5%-"
    },
-   "code": "hl.bind(\"XF86MonBrightnessDown\", hl.dsp.exec_cmd(qsIpcCall .. \" brightness decrement || brightnessctl s 5%-\"),\n    { locked = true, repeating = true })"
+   "code": "hl.bind(\"XF86MonBrightnessDown\", hl.dsp.global(\"quickshell:runCommand:bind-20\"), { locked = true })"
   },
   {
    "id": "bind-21",
@@ -674,6 +694,7 @@
    "group": "",
    "combo": "XF86AudioRaiseVolume",
    "description": "",
+   "label": "XF86AudioRaiseVolume",
    "options": {
     "locked": true
    },
@@ -681,7 +702,7 @@
     "kind": "command",
     "command": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%+ -l 1.5"
    },
-   "code": "hl.bind(\"XF86AudioRaiseVolume\", hl.dsp.exec_cmd(\"wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%+ -l 1.5\"),\n    { locked = true, repeating = true })"
+   "code": "hl.bind(\"XF86AudioRaiseVolume\", hl.dsp.global(\"quickshell:runCommand:bind-21\"), { locked = true })"
   },
   {
    "id": "bind-22",
@@ -691,6 +712,7 @@
    "group": "",
    "combo": "XF86AudioLowerVolume",
    "description": "",
+   "label": "XF86AudioLowerVolume",
    "options": {
     "locked": true
    },
@@ -698,7 +720,7 @@
     "kind": "command",
     "command": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%-"
    },
-   "code": "hl.bind(\"XF86AudioLowerVolume\", hl.dsp.exec_cmd(\"wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%-\"),\n    { locked = true, repeating = true })"
+   "code": "hl.bind(\"XF86AudioLowerVolume\", hl.dsp.global(\"quickshell:runCommand:bind-22\"), { locked = true })"
   },
   {
    "id": "bind-23",
@@ -708,6 +730,7 @@
    "group": "",
    "combo": "CTRL + SUPER + T",
    "description": "Shell: Change wallpaper",
+   "label": "Shell: Change wallpaper",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -716,7 +739,7 @@
      "value": "quickshell:wallpaperSelectorToggle"
     }
    },
-   "code": "hl.bind(\"CTRL + SUPER + T\", hl.dsp.global(\"quickshell:wallpaperSelectorToggle\"),\n    { description = \"Shell: Change wallpaper\" })"
+   "code": "hl.bind(\"CTRL + SUPER + T\", hl.dsp.global(\"quickshell:wallpaperSelectorToggle\"), { description = \"Shell: Change wallpaper\" })"
   },
   {
    "id": "bind-24",
@@ -726,6 +749,7 @@
    "group": "",
    "combo": "CTRL + SUPER + ALT + T",
    "description": "Shell: Random wallpaper",
+   "label": "Shell: Random wallpaper",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -734,7 +758,7 @@
      "value": "quickshell:wallpaperSelectorRandom"
     }
    },
-   "code": "hl.bind(\"CTRL + SUPER + ALT + T\", hl.dsp.global(\"quickshell:wallpaperSelectorRandom\"),\n        { description = \"Shell: Random wallpaper\" })"
+   "code": "hl.bind(\"CTRL + SUPER + ALT + T\", hl.dsp.global(\"quickshell:wallpaperSelectorRandom\"), { description = \"Shell: Random wallpaper\" })"
   },
   {
    "id": "bind-25",
@@ -744,6 +768,7 @@
    "group": "",
    "combo": "CTRL + SUPER + SHIFT + D",
    "description": "Shell: Toggle light/dark mode",
+   "label": "Shell: Toggle light/dark mode",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -752,7 +777,7 @@
      "value": "quickshell:toggleLightDark"
     }
    },
-   "code": "hl.bind(\"CTRL + SUPER + SHIFT + D\", hl.dsp.global(\"quickshell:toggleLightDark\"),\n        { description = \"Shell: Toggle light/dark mode\" })"
+   "code": "hl.bind(\"CTRL + SUPER + SHIFT + D\", hl.dsp.global(\"quickshell:toggleLightDark\"), { description = \"Shell: Toggle light/dark mode\" })"
   },
   {
    "id": "bind-26",
@@ -762,12 +787,13 @@
    "group": "",
    "combo": "CTRL + SUPER + R",
    "description": "Shell: Restart widgets (Ambxst)",
+   "label": "Shell: Restart widgets (Ambxst)",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "pgrep -x qs >/dev/null || qs -p /home/dmitriy/.config/quickshell/end4-pC"
    },
-   "code": "hl.bind(\"CTRL + SUPER + R\", hl.dsp.exec_cmd(\"pgrep -x qs >/dev/null || qs -p /home/dmitriy/.config/quickshell/end4-pC\"),\n    { description = \"Shell: Restart widgets (Ambxst)\" })"
+   "code": "hl.bind(\"CTRL + SUPER + R\", hl.dsp.global(\"quickshell:runCommand:bind-26\"), { description = \"Shell: Restart widgets (Ambxst)\" })"
   },
   {
    "id": "bind-27",
@@ -777,12 +803,13 @@
    "group": "",
    "combo": "SUPER + M",
    "description": "Shell: Open mixer",
+   "label": "Shell: Open mixer",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "pavucontrol"
    },
-   "code": "hl.bind(\"SUPER + M\", hl.dsp.exec_cmd(\"pavucontrol\"), { description = \"Shell: Open mixer\" })"
+   "code": "hl.bind(\"SUPER + M\", hl.dsp.global(\"quickshell:runCommand:bind-27\"), { description = \"Shell: Open mixer\" })"
   },
   {
    "id": "utilities",
@@ -792,6 +819,7 @@
    "group": "Screenshot, Record, OCR, Color picker, Clipboard history",
    "combo": "SUPER + SHIFT + S",
    "description": "Utilities: Screen snip",
+   "label": "Utilities: Screen snip",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -810,12 +838,13 @@
    "group": "Screenshot, Record, OCR, Color picker, Clipboard history",
    "combo": "SUPER + SHIFT + S",
    "description": "",
+   "label": "Utilities: SUPER + SHIFT + S",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "qs -c $qsConfig ipc call TEST_ALIVE || pidof slurp || hyprshot --freeze --clipboard-only --mode region --silent"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + S\",\n    hl.dsp.exec_cmd(qsIsAlive .. \" || pidof slurp || hyprshot --freeze --clipboard-only --mode region --silent\"))"
+   "code": "hl.bind(\"SUPER + SHIFT + S\", hl.dsp.global(\"quickshell:runCommand:utilities-2\"), nil)"
   },
   {
    "id": "utilities-3",
@@ -825,6 +854,7 @@
    "group": "Screenshot, Record, OCR, Color picker, Clipboard history",
    "combo": "SUPER + SHIFT + A",
    "description": "Utilities: Google Lens",
+   "label": "Utilities: Google Lens",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -843,12 +873,13 @@
    "group": "Screenshot, Record, OCR, Color picker, Clipboard history",
    "combo": "SUPER + SHIFT + A",
    "description": "",
+   "label": "Utilities: SUPER + SHIFT + A",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "qs -c $qsConfig ipc call TEST_ALIVE || pidof slurp || $HOME/.config/hypr/hyprland/scripts/snip_to_search.sh"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + A\", hl.dsp.exec_cmd(qsIsAlive .. \" || pidof slurp || \" .. hyprScripts .. \"/snip_to_search.sh\"))"
+   "code": "hl.bind(\"SUPER + SHIFT + A\", hl.dsp.global(\"quickshell:runCommand:utilities-4\"), nil)"
   },
   {
    "id": "utilities-5",
@@ -858,12 +889,13 @@
    "group": "OCR",
    "combo": "SUPER + SHIFT + O",
    "description": "Utilities: OCR region >> clipboard",
+   "label": "Utilities: OCR region >> clipboard",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "echo OCR-not-configured"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + O\", hl.dsp.exec_cmd(\"echo OCR-not-configured\"),\n    { description = \"Utilities: OCR region >> clipboard\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + O\", hl.dsp.global(\"quickshell:runCommand:utilities-5\"), { description = \"Utilities: OCR region >> clipboard\" })"
   },
   {
    "id": "utilities-6",
@@ -873,12 +905,13 @@
    "group": "Color picker",
    "combo": "SUPER + SHIFT + C",
    "description": "Utilities: Pick color #RRGGBB >> clipboard",
+   "label": "Utilities: Pick color #RRGGBB >> clipboard",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "hyprpicker -a"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + C\", hl.dsp.exec_cmd(\"hyprpicker -a\"),\n    { description = \"Utilities: Pick color #RRGGBB >> clipboard\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + C\", hl.dsp.global(\"quickshell:runCommand:utilities-6\"), { description = \"Utilities: Pick color #RRGGBB >> clipboard\" })"
   },
   {
    "id": "utilities-7",
@@ -888,6 +921,7 @@
    "group": "Fullscreen screenshot",
    "combo": "Print",
    "description": "Utilities: Screenshot >> clipboard",
+   "label": "Utilities: Screenshot >> clipboard",
    "options": {
     "locked": true
    },
@@ -895,7 +929,7 @@
     "kind": "command",
     "command": "grim -o \"$(hyprctl activeworkspace -j | jq -r '.monitor')\" - | wl-copy"
    },
-   "code": "hl.bind(\"Print\", hl.dsp.exec_cmd(grimhyprctl .. \" - | wl-copy\"),\n    { locked = true, description = \"Utilities: Screenshot >> clipboard\" })"
+   "code": "hl.bind(\"Print\", hl.dsp.global(\"quickshell:runCommand:utilities-7\"), { locked = true, description = \"Utilities: Screenshot >> clipboard\" })"
   },
   {
    "id": "utilities-8",
@@ -905,6 +939,7 @@
    "group": "Fullscreen screenshot",
    "combo": "CTRL + Print",
    "description": "Utilities: Screenshot >> clipboard & file",
+   "label": "Utilities: Screenshot >> clipboard & file",
    "options": {
     "locked": true,
     "non_consuming": true
@@ -913,7 +948,7 @@
     "kind": "command",
     "command": "mkdir -p $(xdg-user-dir PICTURES)/Screenshots && grim -o \"$(hyprctl activeworkspace -j | jq -r '.monitor')\" $(xdg-user-dir PICTURES)/Screenshots/Screenshot_\"$(date '+%Y-%m-%d_%H.%M.%S')\".png"
    },
-   "code": "hl.bind(\"CTRL + Print\", hl.dsp.exec_cmd(\n    \"mkdir -p $(xdg-user-dir PICTURES)/Screenshots && \" ..\n    grimhyprctl .. \" $(xdg-user-dir PICTURES)/Screenshots/Screenshot_\\\"$(date '+%Y-%m-%d_%H.%M.%S')\\\".png\"\n), { locked = true, non_consuming = true, description = \"Utilities: Screenshot >> clipboard & file\" })"
+   "code": "hl.bind(\"CTRL + Print\", hl.dsp.global(\"quickshell:runCommand:utilities-8\"), { locked = true, non_consuming = true, description = \"Utilities: Screenshot >> clipboard & file\" })"
   },
   {
    "id": "utilities-9",
@@ -923,6 +958,7 @@
    "group": "Fullscreen screenshot",
    "combo": "CTRL + Print",
    "description": "",
+   "label": "Utilities: CTRL + Print",
    "options": {
     "locked": true,
     "non_consuming": true
@@ -931,7 +967,7 @@
     "kind": "command",
     "command": "grim -o \"$(hyprctl activeworkspace -j | jq -r '.monitor')\" - | wl-copy"
    },
-   "code": "hl.bind(\"CTRL + Print\", hl.dsp.exec_cmd(grimhyprctl .. \" - | wl-copy\"), { locked = true, non_consuming = true })"
+   "code": "hl.bind(\"CTRL + Print\", hl.dsp.global(\"quickshell:runCommand:utilities-9\"), { locked = true, non_consuming = true })"
   },
   {
    "id": "utilities-10",
@@ -941,12 +977,13 @@
    "group": "AI",
    "combo": "SUPER + SHIFT + ALT + mouse:273",
    "description": "Utilities: Generate AI summary for selected text",
+   "label": "Utilities: Generate AI summary for selected text",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "$HOME/.config/hypr/hyprland/scripts/ai/primary-buffer-query.sh"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + ALT + mouse:273\", hl.dsp.exec_cmd(hyprScripts .. \"/ai/primary-buffer-query.sh\"),\n    { description = \"Utilities: Generate AI summary for selected text\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + ALT + mouse:273\", hl.dsp.global(\"quickshell:runCommand:utilities-10\"), { description = \"Utilities: Generate AI summary for selected text\" })"
   },
   {
    "id": "screen",
@@ -956,6 +993,7 @@
    "group": "Zoom",
    "combo": "SUPER + Minus",
    "description": "Screen: Zoom out",
+   "label": "Screen: Zoom out",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -971,6 +1009,7 @@
    "group": "Zoom",
    "combo": "SUPER + Equal",
    "description": "Screen: Zoom in",
+   "label": "Screen: Zoom in",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -986,6 +1025,7 @@
    "group": "Zoom with keypad",
    "combo": "SUPER + code:82",
    "description": "",
+   "label": "Screen: SUPER + code:82",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1001,6 +1041,7 @@
    "group": "Zoom with keypad",
    "combo": "SUPER + code:86",
    "description": "",
+   "label": "Screen: SUPER + code:86",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1016,6 +1057,7 @@
    "group": "",
    "combo": "SUPER + SHIFT + N",
    "description": "Media: Next track",
+   "label": "Media: Next track",
    "options": {
     "locked": true
    },
@@ -1023,7 +1065,7 @@
     "kind": "command",
     "command": "playerctl next || playerctl position `bc <<< \"100 * $(playerctl metadata mpris:length) / 1000000 / 100\"`"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + N\", hl.dsp.exec_cmd(mediaNextCommand), { locked = true, description = \"Media: Next track\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + N\", hl.dsp.global(\"quickshell:runCommand:media\"), { locked = true, description = \"Media: Next track\" })"
   },
   {
    "id": "media-2",
@@ -1033,6 +1075,7 @@
    "group": "",
    "combo": "XF86AudioNext",
    "description": "",
+   "label": "Media: XF86AudioNext",
    "options": {
     "locked": true
    },
@@ -1040,7 +1083,7 @@
     "kind": "command",
     "command": "playerctl next || playerctl position `bc <<< \"100 * $(playerctl metadata mpris:length) / 1000000 / 100\"`"
    },
-   "code": "hl.bind(\"XF86AudioNext\", hl.dsp.exec_cmd(mediaNextCommand), { locked = true })"
+   "code": "hl.bind(\"XF86AudioNext\", hl.dsp.global(\"quickshell:runCommand:media-2\"), { locked = true })"
   },
   {
    "id": "media-3",
@@ -1050,6 +1093,7 @@
    "group": "",
    "combo": "XF86AudioPrev",
    "description": "",
+   "label": "Media: XF86AudioPrev",
    "options": {
     "locked": true
    },
@@ -1057,7 +1101,7 @@
     "kind": "command",
     "command": "playerctl previous"
    },
-   "code": "hl.bind(\"XF86AudioPrev\", hl.dsp.exec_cmd(\"playerctl previous\"), { locked = true })"
+   "code": "hl.bind(\"XF86AudioPrev\", hl.dsp.global(\"quickshell:runCommand:media-3\"), { locked = true })"
   },
   {
    "id": "media-4",
@@ -1067,12 +1111,13 @@
    "group": "",
    "combo": "SUPER + SHIFT + ALT + mouse:275",
    "description": "",
+   "label": "Media: SUPER + SHIFT + ALT + mouse:275",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "playerctl previous"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + ALT + mouse:275\", hl.dsp.exec_cmd(\"playerctl previous\"))"
+   "code": "hl.bind(\"SUPER + SHIFT + ALT + mouse:275\", hl.dsp.global(\"quickshell:runCommand:media-4\"), nil)"
   },
   {
    "id": "media-5",
@@ -1082,12 +1127,13 @@
    "group": "",
    "combo": "SUPER + SHIFT + ALT + mouse:276",
    "description": "",
+   "label": "Media: SUPER + SHIFT + ALT + mouse:276",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "playerctl next || playerctl position `bc <<< \"100 * $(playerctl metadata mpris:length) / 1000000 / 100\"`"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + ALT + mouse:276\", hl.dsp.exec_cmd(mediaNextCommand))"
+   "code": "hl.bind(\"SUPER + SHIFT + ALT + mouse:276\", hl.dsp.global(\"quickshell:runCommand:media-5\"), nil)"
   },
   {
    "id": "media-6",
@@ -1097,6 +1143,7 @@
    "group": "",
    "combo": "SUPER + SHIFT + B",
    "description": "Media: Previous track",
+   "label": "Media: Previous track",
    "options": {
     "locked": true
    },
@@ -1104,7 +1151,7 @@
     "kind": "command",
     "command": "playerctl previous"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + B\", hl.dsp.exec_cmd(\"playerctl previous\"),\n    { locked = true, description = \"Media: Previous track\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + B\", hl.dsp.global(\"quickshell:runCommand:media-6\"), { locked = true, description = \"Media: Previous track\" })"
   },
   {
    "id": "media-7",
@@ -1114,6 +1161,7 @@
    "group": "",
    "combo": "SUPER + SHIFT + P",
    "description": "Media: Play/pause media",
+   "label": "Media: Play/pause media",
    "options": {
     "locked": true
    },
@@ -1121,7 +1169,7 @@
     "kind": "command",
     "command": "playerctl play-pause"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + P\", hl.dsp.exec_cmd(\"playerctl play-pause\"),\n    { locked = true, description = \"Media: Play/pause media\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + P\", hl.dsp.global(\"quickshell:runCommand:media-7\"), { locked = true, description = \"Media: Play/pause media\" })"
   },
   {
    "id": "media-8",
@@ -1131,6 +1179,7 @@
    "group": "",
    "combo": "XF86AudioPlay",
    "description": "",
+   "label": "Media: XF86AudioPlay",
    "options": {
     "locked": true
    },
@@ -1138,7 +1187,7 @@
     "kind": "command",
     "command": "playerctl play-pause"
    },
-   "code": "hl.bind(\"XF86AudioPlay\", hl.dsp.exec_cmd(\"playerctl play-pause\"), { locked = true })"
+   "code": "hl.bind(\"XF86AudioPlay\", hl.dsp.global(\"quickshell:runCommand:media-8\"), { locked = true })"
   },
   {
    "id": "media-9",
@@ -1148,6 +1197,7 @@
    "group": "",
    "combo": "XF86AudioPause",
    "description": "",
+   "label": "Media: XF86AudioPause",
    "options": {
     "locked": true
    },
@@ -1155,7 +1205,7 @@
     "kind": "command",
     "command": "playerctl play-pause"
    },
-   "code": "hl.bind(\"XF86AudioPause\", hl.dsp.exec_cmd(\"playerctl play-pause\"), { locked = true })"
+   "code": "hl.bind(\"XF86AudioPause\", hl.dsp.global(\"quickshell:runCommand:media-9\"), { locked = true })"
   },
   {
    "id": "media-10",
@@ -1165,6 +1215,7 @@
    "group": "",
    "combo": "XF86AudioMute",
    "description": "",
+   "label": "Media: XF86AudioMute",
    "options": {
     "locked": true
    },
@@ -1172,7 +1223,7 @@
     "kind": "command",
     "command": "wpctl set-mute @DEFAULT_SINK@ toggle"
    },
-   "code": "hl.bind(\"XF86AudioMute\", hl.dsp.exec_cmd(\"wpctl set-mute @DEFAULT_SINK@ toggle\"), { locked = true })"
+   "code": "hl.bind(\"XF86AudioMute\", hl.dsp.global(\"quickshell:runCommand:media-10\"), { locked = true })"
   },
   {
    "id": "media-11",
@@ -1182,6 +1233,7 @@
    "group": "",
    "combo": "SUPER + SHIFT + M",
    "description": "Media: Toggle mute",
+   "label": "Media: Toggle mute",
    "options": {
     "locked": true
    },
@@ -1189,7 +1241,7 @@
     "kind": "command",
     "command": "wpctl set-mute @DEFAULT_SINK@ toggle"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + M\", hl.dsp.exec_cmd(\"wpctl set-mute @DEFAULT_SINK@ toggle\"),\n    { locked = true, description = \"Media: Toggle mute\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + M\", hl.dsp.global(\"quickshell:runCommand:media-11\"), { locked = true, description = \"Media: Toggle mute\" })"
   },
   {
    "id": "media-12",
@@ -1199,6 +1251,7 @@
    "group": "",
    "combo": "ALT + XF86AudioMute",
    "description": "",
+   "label": "Media: ALT + XF86AudioMute",
    "options": {
     "locked": true
    },
@@ -1206,7 +1259,7 @@
     "kind": "command",
     "command": "wpctl set-mute @DEFAULT_SOURCE@ toggle"
    },
-   "code": "hl.bind(\"ALT + XF86AudioMute\", hl.dsp.exec_cmd(\"wpctl set-mute @DEFAULT_SOURCE@ toggle\"), { locked = true })"
+   "code": "hl.bind(\"ALT + XF86AudioMute\", hl.dsp.global(\"quickshell:runCommand:media-12\"), { locked = true })"
   },
   {
    "id": "media-13",
@@ -1216,6 +1269,7 @@
    "group": "",
    "combo": "XF86AudioMicMute",
    "description": "",
+   "label": "Media: XF86AudioMicMute",
    "options": {
     "locked": true
    },
@@ -1223,7 +1277,7 @@
     "kind": "command",
     "command": "wpctl set-mute @DEFAULT_SOURCE@ toggle"
    },
-   "code": "hl.bind(\"XF86AudioMicMute\", hl.dsp.exec_cmd(\"wpctl set-mute @DEFAULT_SOURCE@ toggle\"), { locked = true })"
+   "code": "hl.bind(\"XF86AudioMicMute\", hl.dsp.global(\"quickshell:runCommand:media-13\"), { locked = true })"
   },
   {
    "id": "media-14",
@@ -1233,6 +1287,7 @@
    "group": "",
    "combo": "SUPER + ALT + M",
    "description": "Media: Toggle mic",
+   "label": "Media: Toggle mic",
    "options": {
     "locked": true
    },
@@ -1240,7 +1295,7 @@
     "kind": "command",
     "command": "wpctl set-mute @DEFAULT_SOURCE@ toggle"
    },
-   "code": "hl.bind(\"SUPER + ALT + M\", hl.dsp.exec_cmd(\"wpctl set-mute @DEFAULT_SOURCE@ toggle\"),\n    { locked = true, description = \"Media: Toggle mic\" })"
+   "code": "hl.bind(\"SUPER + ALT + M\", hl.dsp.global(\"quickshell:runCommand:media-14\"), { locked = true, description = \"Media: Toggle mic\" })"
   },
   {
    "id": "window",
@@ -1250,6 +1305,7 @@
    "group": "Focusing",
    "combo": "SUPER + mouse:272",
    "description": "Window: Move",
+   "label": "Window: Move",
    "options": {
     "mouse": true
    },
@@ -1269,6 +1325,7 @@
    "group": "Focusing",
    "combo": "SUPER + mouse:274",
    "description": "",
+   "label": "Window: SUPER + mouse:274",
    "options": {
     "mouse": true
    },
@@ -1288,6 +1345,7 @@
    "group": "Focusing",
    "combo": "SUPER + mouse:273",
    "description": "Window: Resize",
+   "label": "Window: Resize",
    "options": {
     "mouse": true
    },
@@ -1307,6 +1365,7 @@
    "group": "/# bind = SUPER + ←/↑/→/↓,, -- Focus in direction",
    "combo": "SUPER + Left",
    "description": "Window: Focus Left",
+   "label": "Window: Focus Left",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -1320,7 +1379,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + \" .. \"Left\", hl.dsp.focus({ direction = \"l\" }),\n        { description = \"Window: Focus \" .. \"Left\" })"
+   "code": "hl.bind(\"SUPER + Left\", hl.dsp.focus({ direction = \"l\" }), { description = \"Window: Focus Left\" })"
   },
   {
    "id": "window-5",
@@ -1330,6 +1389,7 @@
    "group": "/# bind = SUPER + ←/↑/→/↓,, -- Focus in direction",
    "combo": "SUPER + Right",
    "description": "Window: Focus Right",
+   "label": "Window: Focus Right",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -1343,7 +1403,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + \" .. \"Right\", hl.dsp.focus({ direction = \"r\" }),\n        { description = \"Window: Focus \" .. \"Right\" })"
+   "code": "hl.bind(\"SUPER + Right\", hl.dsp.focus({ direction = \"r\" }), { description = \"Window: Focus Right\" })"
   },
   {
    "id": "window-6",
@@ -1353,6 +1413,7 @@
    "group": "/# bind = SUPER + ←/↑/→/↓,, -- Focus in direction",
    "combo": "SUPER + Up",
    "description": "Window: Focus Up",
+   "label": "Window: Focus Up",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -1366,7 +1427,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + \" .. \"Up\", hl.dsp.focus({ direction = \"u\" }),\n        { description = \"Window: Focus \" .. \"Up\" })"
+   "code": "hl.bind(\"SUPER + Up\", hl.dsp.focus({ direction = \"u\" }), { description = \"Window: Focus Up\" })"
   },
   {
    "id": "window-7",
@@ -1376,6 +1437,7 @@
    "group": "/# bind = SUPER + ←/↑/→/↓,, -- Focus in direction",
    "combo": "SUPER + Down",
    "description": "Window: Focus Down",
+   "label": "Window: Focus Down",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -1389,7 +1451,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + \" .. \"Down\", hl.dsp.focus({ direction = \"d\" }),\n        { description = \"Window: Focus \" .. \"Down\" })"
+   "code": "hl.bind(\"SUPER + Down\", hl.dsp.focus({ direction = \"d\" }), { description = \"Window: Focus Down\" })"
   },
   {
    "id": "window-8",
@@ -1399,6 +1461,7 @@
    "group": "/# bind = SUPER + ←/↑/→/↓,, -- Focus in direction",
    "combo": "SUPER + BracketLeft",
    "description": "",
+   "label": "Window: SUPER + BracketLeft",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -1412,7 +1475,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + \" .. \"Left\", hl.dsp.focus({ direction = \"l\" }))"
+   "code": "hl.bind(\"SUPER + BracketLeft\", hl.dsp.focus({ direction = \"l\" }), nil)"
   },
   {
    "id": "window-9",
@@ -1422,6 +1485,7 @@
    "group": "/# bind = SUPER + ←/↑/→/↓,, -- Focus in direction",
    "combo": "SUPER + BracketRight",
    "description": "",
+   "label": "Window: SUPER + BracketRight",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -1435,7 +1499,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + \" .. \"Right\", hl.dsp.focus({ direction = \"r\" }))"
+   "code": "hl.bind(\"SUPER + BracketRight\", hl.dsp.focus({ direction = \"r\" }), nil)"
   },
   {
    "id": "window-10",
@@ -1445,6 +1509,7 @@
    "group": "/# bind = SUPER + SHIFT, ←/↑/→/↓,, -- Move in direction",
    "combo": "SUPER + SHIFT + Left",
    "description": "Window: Move Left",
+   "label": "Window: Move Left",
    "options": {},
    "dispatch": {
     "kind": "window.move",
@@ -1458,7 +1523,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + SHIFT + \" .. \"Left\", hl.dsp.window.move({ direction = \"l\" }),\n        { description = \"Window: Move \" .. \"Left\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + Left\", hl.dsp.window.move({ direction = \"l\" }), { description = \"Window: Move Left\" })"
   },
   {
    "id": "window-11",
@@ -1468,6 +1533,7 @@
    "group": "/# bind = SUPER + SHIFT, ←/↑/→/↓,, -- Move in direction",
    "combo": "SUPER + SHIFT + Right",
    "description": "Window: Move Right",
+   "label": "Window: Move Right",
    "options": {},
    "dispatch": {
     "kind": "window.move",
@@ -1481,7 +1547,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + SHIFT + \" .. \"Right\", hl.dsp.window.move({ direction = \"r\" }),\n        { description = \"Window: Move \" .. \"Right\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + Right\", hl.dsp.window.move({ direction = \"r\" }), { description = \"Window: Move Right\" })"
   },
   {
    "id": "window-12",
@@ -1491,6 +1557,7 @@
    "group": "/# bind = SUPER + SHIFT, ←/↑/→/↓,, -- Move in direction",
    "combo": "SUPER + SHIFT + Up",
    "description": "Window: Move Up",
+   "label": "Window: Move Up",
    "options": {},
    "dispatch": {
     "kind": "window.move",
@@ -1504,7 +1571,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + SHIFT + \" .. \"Up\", hl.dsp.window.move({ direction = \"u\" }),\n        { description = \"Window: Move \" .. \"Up\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + Up\", hl.dsp.window.move({ direction = \"u\" }), { description = \"Window: Move Up\" })"
   },
   {
    "id": "window-13",
@@ -1514,6 +1581,7 @@
    "group": "/# bind = SUPER + SHIFT, ←/↑/→/↓,, -- Move in direction",
    "combo": "SUPER + SHIFT + Down",
    "description": "Window: Move Down",
+   "label": "Window: Move Down",
    "options": {},
    "dispatch": {
     "kind": "window.move",
@@ -1527,7 +1595,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + SHIFT + \" .. \"Down\", hl.dsp.window.move({ direction = \"d\" }),\n        { description = \"Window: Move \" .. \"Down\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + Down\", hl.dsp.window.move({ direction = \"d\" }), { description = \"Window: Move Down\" })"
   },
   {
    "id": "window-14",
@@ -1537,6 +1605,7 @@
    "group": "/# bind = SUPER + SHIFT, ←/↑/→/↓,, -- Move in direction",
    "combo": "ALT + F4",
    "description": "",
+   "label": "Window: ALT + F4",
    "options": {
     "non_consuming": true
    },
@@ -1544,7 +1613,7 @@
     "kind": "raw",
     "code": "    function()\n        hl.exec_cmd(\n            \"notify-send \\\"Wrong close keybind\\\" \\\"Super+Q to close. Use Alt+F4 for Windows VMs\\\" -a Hyprland\")\n    end,"
    },
-   "code": "hl.bind(\"ALT + F4\",\n    function()\n        hl.exec_cmd(\n            \"notify-send \\\"Wrong close keybind\\\" \\\"Super+Q to close. Use Alt+F4 for Windows VMs\\\" -a Hyprland\")\n    end,\n    { non_consuming = true })"
+   "code": "hl.bind(\"ALT + F4\", hl.dsp.global(\"quickshell:wrongCloseKeybind\"), { non_consuming = true })"
   },
   {
    "id": "window-15",
@@ -1554,6 +1623,7 @@
    "group": "/# bind = SUPER + SHIFT, ←/↑/→/↓,, -- Move in direction",
    "combo": "SUPER + Q",
    "description": "Window: Close",
+   "label": "Window: Close",
    "options": {},
    "dispatch": {
     "kind": "window.close",
@@ -1571,12 +1641,13 @@
    "group": "/# bind = SUPER + SHIFT, ←/↑/→/↓,, -- Move in direction",
    "combo": "SUPER + SHIFT + ALT + Q",
    "description": "Window: Forcefully zap a window",
+   "label": "Window: Forcefully zap a window",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "hyprctl kill"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + ALT + Q\", hl.dsp.exec_cmd(\"hyprctl kill\"), { description = \"Window: Forcefully zap a window\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + ALT + Q\", hl.dsp.global(\"quickshell:runCommand:window-16\"), { description = \"Window: Forcefully zap a window\" })"
   },
   {
    "id": "window-17",
@@ -1586,6 +1657,7 @@
    "group": "/# binde = SUPER, ;/',, -- Adjust split ratio",
    "combo": "SUPER + Semicolon",
    "description": "",
+   "label": "Window: SUPER + Semicolon",
    "options": {},
    "dispatch": {
     "kind": "layout",
@@ -1594,7 +1666,7 @@
      "value": "splitratio -0.1"
     }
    },
-   "code": "hl.bind(\"SUPER + Semicolon\", hl.dsp.layout(\"splitratio -0.1\"), { repeating = true })"
+   "code": "hl.bind(\"SUPER + Semicolon\", hl.dsp.layout(\"splitratio -0.1\"), nil)"
   },
   {
    "id": "window-18",
@@ -1604,6 +1676,7 @@
    "group": "/# binde = SUPER, ;/',, -- Adjust split ratio",
    "combo": "SUPER + Apostrophe",
    "description": "",
+   "label": "Window: SUPER + Apostrophe",
    "options": {},
    "dispatch": {
     "kind": "layout",
@@ -1612,7 +1685,7 @@
      "value": "splitratio +0.1"
     }
    },
-   "code": "hl.bind(\"SUPER + Apostrophe\", hl.dsp.layout(\"splitratio +0.1\"), { repeating = true })"
+   "code": "hl.bind(\"SUPER + Apostrophe\", hl.dsp.layout(\"splitratio +0.1\"), nil)"
   },
   {
    "id": "window-19",
@@ -1622,6 +1695,7 @@
    "group": "Positioning mode",
    "combo": "SUPER + ALT + Space",
    "description": "Window: Float/Tile",
+   "label": "Window: Float/Tile",
    "options": {},
    "dispatch": {
     "kind": "window.float",
@@ -1645,6 +1719,7 @@
    "group": "Positioning mode",
    "combo": "SUPER + D",
    "description": "Window: Maximize",
+   "label": "Window: Maximize",
    "options": {},
    "dispatch": {
     "kind": "window.fullscreen",
@@ -1662,7 +1737,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + D\", hl.dsp.window.fullscreen({ mode = \"maximized\", action = \"toggle\" }),\n    { description = \"Window: Maximize\" })"
+   "code": "hl.bind(\"SUPER + D\", hl.dsp.window.fullscreen({ action = \"toggle\", mode = \"maximized\" }), { description = \"Window: Maximize\" })"
   },
   {
    "id": "window-21",
@@ -1672,6 +1747,7 @@
    "group": "Positioning mode",
    "combo": "SUPER + F",
    "description": "Window: Fullscreen",
+   "label": "Window: Fullscreen",
    "options": {},
    "dispatch": {
     "kind": "window.fullscreen",
@@ -1689,7 +1765,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + F\", hl.dsp.window.fullscreen({ mode = \"fullscreen\", action = \"toggle\" }),\n    { description = \"Window: Fullscreen\" })"
+   "code": "hl.bind(\"SUPER + F\", hl.dsp.window.fullscreen({ action = \"toggle\", mode = \"fullscreen\" }), { description = \"Window: Fullscreen\" })"
   },
   {
    "id": "window-22",
@@ -1699,6 +1775,7 @@
    "group": "Positioning mode",
    "combo": "SUPER + ALT + F",
    "description": "Window: Fullscreen spoof",
+   "label": "Window: Fullscreen spoof",
    "options": {},
    "dispatch": {
     "kind": "window.fullscreen_state",
@@ -1720,7 +1797,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + ALT + F\", hl.dsp.window.fullscreen_state({ internal = 0, client = 3, action = \"toggle\" }),\n    { description = \"Window: Fullscreen spoof\" })"
+   "code": "hl.bind(\"SUPER + ALT + F\", hl.dsp.window.fullscreen_state({ action = \"toggle\", client = 3.0, internal = 0.0 }), { description = \"Window: Fullscreen spoof\" })"
   },
   {
    "id": "window-23",
@@ -1730,6 +1807,7 @@
    "group": "Positioning mode",
    "combo": "SUPER + P",
    "description": "Window: Pin",
+   "label": "Window: Pin",
    "options": {},
    "dispatch": {
     "kind": "window.pin",
@@ -1747,6 +1825,7 @@
    "group": "/# bind = SUPER+ALT, Hash,, -- Send to workspace -- (1, 2, 3,...)",
    "combo": "SUPER + ALT + 1",
    "description": "Window: Send to workspace 1",
+   "label": "Window: Send to workspace 1",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1762,6 +1841,7 @@
    "group": "/# bind = SUPER+ALT, Hash,, -- Send to workspace -- (1, 2, 3,...)",
    "combo": "SUPER + ALT + 2",
    "description": "Window: Send to workspace 2",
+   "label": "Window: Send to workspace 2",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1777,6 +1857,7 @@
    "group": "/# bind = SUPER+ALT, Hash,, -- Send to workspace -- (1, 2, 3,...)",
    "combo": "SUPER + ALT + 3",
    "description": "Window: Send to workspace 3",
+   "label": "Window: Send to workspace 3",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1792,6 +1873,7 @@
    "group": "/# bind = SUPER+ALT, Hash,, -- Send to workspace -- (1, 2, 3,...)",
    "combo": "SUPER + ALT + 4",
    "description": "Window: Send to workspace 4",
+   "label": "Window: Send to workspace 4",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1807,6 +1889,7 @@
    "group": "/# bind = SUPER+ALT, Hash,, -- Send to workspace -- (1, 2, 3,...)",
    "combo": "SUPER + ALT + 5",
    "description": "Window: Send to workspace 5",
+   "label": "Window: Send to workspace 5",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1822,6 +1905,7 @@
    "group": "/# bind = SUPER+ALT, Hash,, -- Send to workspace -- (1, 2, 3,...)",
    "combo": "SUPER + ALT + 6",
    "description": "Window: Send to workspace 6",
+   "label": "Window: Send to workspace 6",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1837,6 +1921,7 @@
    "group": "/# bind = SUPER+ALT, Hash,, -- Send to workspace -- (1, 2, 3,...)",
    "combo": "SUPER + ALT + 7",
    "description": "Window: Send to workspace 7",
+   "label": "Window: Send to workspace 7",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1852,6 +1937,7 @@
    "group": "/# bind = SUPER+ALT, Hash,, -- Send to workspace -- (1, 2, 3,...)",
    "combo": "SUPER + ALT + 8",
    "description": "Window: Send to workspace 8",
+   "label": "Window: Send to workspace 8",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1867,6 +1953,7 @@
    "group": "/# bind = SUPER+ALT, Hash,, -- Send to workspace -- (1, 2, 3,...)",
    "combo": "SUPER + ALT + 9",
    "description": "Window: Send to workspace 9",
+   "label": "Window: Send to workspace 9",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1882,6 +1969,7 @@
    "group": "/# bind = SUPER+ALT, Hash,, -- Send to workspace -- (1, 2, 3,...)",
    "combo": "SUPER + ALT + 0",
    "description": "Window: Send to workspace 10",
+   "label": "Window: Send to workspace 10",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1897,6 +1985,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + ALT + code:87",
    "description": "",
+   "label": "Window: SUPER + ALT + code:87",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1912,6 +2001,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + ALT + code:88",
    "description": "",
+   "label": "Window: SUPER + ALT + code:88",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1927,6 +2017,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + ALT + code:89",
    "description": "",
+   "label": "Window: SUPER + ALT + code:89",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1942,6 +2033,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + ALT + code:83",
    "description": "",
+   "label": "Window: SUPER + ALT + code:83",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1957,6 +2049,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + ALT + code:84",
    "description": "",
+   "label": "Window: SUPER + ALT + code:84",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1972,6 +2065,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + ALT + code:85",
    "description": "",
+   "label": "Window: SUPER + ALT + code:85",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -1987,6 +2081,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + ALT + code:79",
    "description": "",
+   "label": "Window: SUPER + ALT + code:79",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2002,6 +2097,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + ALT + code:80",
    "description": "",
+   "label": "Window: SUPER + ALT + code:80",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2017,6 +2113,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + ALT + code:81",
    "description": "",
+   "label": "Window: SUPER + ALT + code:81",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2032,6 +2129,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + ALT + code:90",
    "description": "",
+   "label": "Window: SUPER + ALT + code:90",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2047,6 +2145,7 @@
    "group": "#/# bind = SUPER+SHIFT, Scroll ↑/↓,, -- Send to workspace left/right",
    "combo": "SUPER + SHIFT + mouse_down",
    "description": "",
+   "label": "Window: SUPER + SHIFT + mouse_down",
    "options": {},
    "dispatch": {
     "kind": "window.move",
@@ -2060,7 +2159,7 @@
      }
     }
    },
-   "code": "hl.bind(\"key[1]\", hl.dsp.window.move({ workspace = -1 .. \"1\" }))"
+   "code": "hl.bind(\"SUPER + SHIFT + mouse_down\", hl.dsp.window.move({ workspace = \"r-1\" }), nil)"
   },
   {
    "id": "window-45",
@@ -2070,6 +2169,7 @@
    "group": "#/# bind = SUPER+SHIFT, Scroll ↑/↓,, -- Send to workspace left/right",
    "combo": "SUPER + SHIFT + mouse_up",
    "description": "",
+   "label": "Window: SUPER + SHIFT + mouse_up",
    "options": {},
    "dispatch": {
     "kind": "window.move",
@@ -2083,7 +2183,7 @@
      }
     }
    },
-   "code": "hl.bind(\"key[2]\", hl.dsp.window.move({ workspace = \"+1\" .. \"1\" }))"
+   "code": "hl.bind(\"SUPER + SHIFT + mouse_up\", hl.dsp.window.move({ workspace = \"r+1\" }), nil)"
   },
   {
    "id": "window-46",
@@ -2093,6 +2193,7 @@
    "group": "#/# bind = SUPER+SHIFT, Scroll ↑/↓,, -- Send to workspace left/right",
    "combo": "SUPER + ALT + mouse_down",
    "description": "",
+   "label": "Window: SUPER + ALT + mouse_down",
    "options": {},
    "dispatch": {
     "kind": "window.move",
@@ -2106,7 +2207,7 @@
      }
     }
    },
-   "code": "hl.bind(\"\"CTRL + \" .. key[1]\", hl.dsp.window.move({ workspace = \"r-5\" .. \"1\" }))"
+   "code": "hl.bind(\"SUPER + ALT + mouse_down\", hl.dsp.window.move({ workspace = \"r-1\" }), nil)"
   },
   {
    "id": "window-47",
@@ -2116,6 +2217,7 @@
    "group": "#/# bind = SUPER+SHIFT, Scroll ↑/↓,, -- Send to workspace left/right",
    "combo": "SUPER + ALT + mouse_up",
    "description": "",
+   "label": "Window: SUPER + ALT + mouse_up",
    "options": {},
    "dispatch": {
     "kind": "window.move",
@@ -2129,7 +2231,7 @@
      }
     }
    },
-   "code": "hl.bind(\"\"CTRL + \" .. key[2]\", hl.dsp.window.move({ workspace = \"r+5\" .. \"1\" }))"
+   "code": "hl.bind(\"SUPER + ALT + mouse_up\", hl.dsp.window.move({ workspace = \"r+1\" }), nil)"
   },
   {
    "id": "window-48",
@@ -2139,6 +2241,7 @@
    "group": "/# bind = SUPER+SHIFT, Page_↑/↓,, -- Send to workspace left/right",
    "combo": "SUPER + SHIFT + Page_Up",
    "description": "Window: Send to workspace left",
+   "label": "Window: Send to workspace left",
    "options": {},
    "dispatch": {
     "kind": "window.move",
@@ -2152,7 +2255,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + SHIFT + Page_\" .. \"Up\", hl.dsp.window.move({ workspace = -1 .. \"1\" }), {description = \"Window: Send to workspace \" .. \"left\"})"
+   "code": "hl.bind(\"SUPER + SHIFT + Page_Up\", hl.dsp.window.move({ workspace = \"r-1\" }), { description = \"Window: Send to workspace left\" })"
   },
   {
    "id": "window-49",
@@ -2162,6 +2265,7 @@
    "group": "/# bind = SUPER+SHIFT, Page_↑/↓,, -- Send to workspace left/right",
    "combo": "SUPER + SHIFT + Page_Down",
    "description": "Window: Send to workspace right",
+   "label": "Window: Send to workspace right",
    "options": {},
    "dispatch": {
     "kind": "window.move",
@@ -2175,7 +2279,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + SHIFT + Page_\" .. \"Down\", hl.dsp.window.move({ workspace = \"+1\" .. \"1\" }), {description = \"Window: Send to workspace \" .. \"right\"})"
+   "code": "hl.bind(\"SUPER + SHIFT + Page_Down\", hl.dsp.window.move({ workspace = \"r+1\" }), { description = \"Window: Send to workspace right\" })"
   },
   {
    "id": "window-50",
@@ -2185,6 +2289,7 @@
    "group": "/# bind = SUPER+SHIFT, Page_↑/↓,, -- Send to workspace left/right",
    "combo": "SUPER + ALT + Page_down",
    "description": "",
+   "label": "Window: SUPER + ALT + Page_down",
    "options": {},
    "dispatch": {
     "kind": "window.move",
@@ -2198,7 +2303,7 @@
      }
     }
    },
-   "code": "hl.bind(\"key[1]\", hl.dsp.window.move({ workspace = -1 .. \"1\" })) -- # [hidden]"
+   "code": "hl.bind(\"SUPER + ALT + Page_down\", hl.dsp.window.move({ workspace = \"r+1\" }), nil)"
   },
   {
    "id": "window-51",
@@ -2208,6 +2313,7 @@
    "group": "/# bind = SUPER+SHIFT, Page_↑/↓,, -- Send to workspace left/right",
    "combo": "SUPER + ALT + Page_up",
    "description": "",
+   "label": "Window: SUPER + ALT + Page_up",
    "options": {},
    "dispatch": {
     "kind": "window.move",
@@ -2221,7 +2327,7 @@
      }
     }
    },
-   "code": "hl.bind(\"key[2]\", hl.dsp.window.move({ workspace = \"+1\" .. \"1\" })) -- # [hidden]"
+   "code": "hl.bind(\"SUPER + ALT + Page_up\", hl.dsp.window.move({ workspace = \"r-1\" }), nil)"
   },
   {
    "id": "window-52",
@@ -2231,6 +2337,7 @@
    "group": "/# bind = SUPER+SHIFT, Page_↑/↓,, -- Send to workspace left/right",
    "combo": "CTRL + SUPER + SHIFT + Right",
    "description": "",
+   "label": "Window: CTRL + SUPER + SHIFT + Right",
    "options": {},
    "dispatch": {
     "kind": "window.move",
@@ -2244,7 +2351,7 @@
      }
     }
    },
-   "code": "hl.bind(\"\"CTRL + \" .. key[1]\", hl.dsp.window.move({ workspace = \"r-5\" .. \"1\" })) -- # [hidden]"
+   "code": "hl.bind(\"CTRL + SUPER + SHIFT + Right\", hl.dsp.window.move({ workspace = \"r+1\" }), nil)"
   },
   {
    "id": "window-53",
@@ -2254,6 +2361,7 @@
    "group": "/# bind = SUPER+SHIFT, Page_↑/↓,, -- Send to workspace left/right",
    "combo": "CTRL + SUPER + SHIFT + Left",
    "description": "",
+   "label": "Window: CTRL + SUPER + SHIFT + Left",
    "options": {},
    "dispatch": {
     "kind": "window.move",
@@ -2267,7 +2375,7 @@
      }
     }
    },
-   "code": "hl.bind(\"\"CTRL + \" .. key[2]\", hl.dsp.window.move({ workspace = \"r+5\" .. \"1\" })) -- # [hidden]"
+   "code": "hl.bind(\"CTRL + SUPER + SHIFT + Left\", hl.dsp.window.move({ workspace = \"r-1\" }), nil)"
   },
   {
    "id": "window-54",
@@ -2277,6 +2385,7 @@
    "group": "/# bind = SUPER+SHIFT, Page_↑/↓,, -- Send to workspace left/right",
    "combo": "SUPER + ALT + S",
    "description": "Window: Send to scratchpad",
+   "label": "Window: Send to scratchpad",
    "options": {},
    "dispatch": {
     "kind": "window.move",
@@ -2294,7 +2403,7 @@
      }
     }
    },
-   "code": "hl.bind(\"SUPER + ALT + S\",\n    hl.dsp.window.move({ workspace = \"special:special\", follow = false }), { description = \"Window: Send to scratchpad\" })"
+   "code": "hl.bind(\"SUPER + ALT + S\", hl.dsp.window.move({ follow = false, workspace = \"special:special\" }), { description = \"Window: Send to scratchpad\" })"
   },
   {
    "id": "window-55",
@@ -2304,6 +2413,7 @@
    "group": "/# bind = SUPER+SHIFT, Page_↑/↓,, -- Send to workspace left/right",
    "combo": "CTRL + SUPER + S",
    "description": "",
+   "label": "Window: CTRL + SUPER + S",
    "options": {},
    "dispatch": {
     "kind": "workspace.toggle_special",
@@ -2312,7 +2422,7 @@
      "value": "special"
     }
    },
-   "code": "hl.bind(\"CTRL + SUPER + S\", hl.dsp.workspace.toggle_special(\"special\"))"
+   "code": "hl.bind(\"CTRL + SUPER + S\", hl.dsp.workspace.toggle_special(\"special\"), nil)"
   },
   {
    "id": "workspace",
@@ -2322,6 +2432,7 @@
    "group": "/# bind = SUPER, Hash,, -- Focus workspace -- (1, 2, 3,...)",
    "combo": "SUPER + 1",
    "description": "Workspace: Focus 1",
+   "label": "Workspace: Focus 1",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2337,6 +2448,7 @@
    "group": "/# bind = SUPER, Hash,, -- Focus workspace -- (1, 2, 3,...)",
    "combo": "SUPER + 2",
    "description": "Workspace: Focus 2",
+   "label": "Workspace: Focus 2",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2352,6 +2464,7 @@
    "group": "/# bind = SUPER, Hash,, -- Focus workspace -- (1, 2, 3,...)",
    "combo": "SUPER + 3",
    "description": "Workspace: Focus 3",
+   "label": "Workspace: Focus 3",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2367,6 +2480,7 @@
    "group": "/# bind = SUPER, Hash,, -- Focus workspace -- (1, 2, 3,...)",
    "combo": "SUPER + 4",
    "description": "Workspace: Focus 4",
+   "label": "Workspace: Focus 4",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2382,6 +2496,7 @@
    "group": "/# bind = SUPER, Hash,, -- Focus workspace -- (1, 2, 3,...)",
    "combo": "SUPER + 5",
    "description": "Workspace: Focus 5",
+   "label": "Workspace: Focus 5",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2397,6 +2512,7 @@
    "group": "/# bind = SUPER, Hash,, -- Focus workspace -- (1, 2, 3,...)",
    "combo": "SUPER + 6",
    "description": "Workspace: Focus 6",
+   "label": "Workspace: Focus 6",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2412,6 +2528,7 @@
    "group": "/# bind = SUPER, Hash,, -- Focus workspace -- (1, 2, 3,...)",
    "combo": "SUPER + 7",
    "description": "Workspace: Focus 7",
+   "label": "Workspace: Focus 7",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2427,6 +2544,7 @@
    "group": "/# bind = SUPER, Hash,, -- Focus workspace -- (1, 2, 3,...)",
    "combo": "SUPER + 8",
    "description": "Workspace: Focus 8",
+   "label": "Workspace: Focus 8",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2442,6 +2560,7 @@
    "group": "/# bind = SUPER, Hash,, -- Focus workspace -- (1, 2, 3,...)",
    "combo": "SUPER + 9",
    "description": "Workspace: Focus 9",
+   "label": "Workspace: Focus 9",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2457,6 +2576,7 @@
    "group": "/# bind = SUPER, Hash,, -- Focus workspace -- (1, 2, 3,...)",
    "combo": "SUPER + 0",
    "description": "Workspace: Focus 10",
+   "label": "Workspace: Focus 10",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2472,6 +2592,7 @@
    "group": "We also use raw keycodes because some keyboard layouts register number keys as different chars. The codes can be verified with `wev`",
    "combo": "SUPER + code:10",
    "description": "",
+   "label": "Workspace: SUPER + code:10",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2487,6 +2608,7 @@
    "group": "We also use raw keycodes because some keyboard layouts register number keys as different chars. The codes can be verified with `wev`",
    "combo": "SUPER + code:11",
    "description": "",
+   "label": "Workspace: SUPER + code:11",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2502,6 +2624,7 @@
    "group": "We also use raw keycodes because some keyboard layouts register number keys as different chars. The codes can be verified with `wev`",
    "combo": "SUPER + code:12",
    "description": "",
+   "label": "Workspace: SUPER + code:12",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2517,6 +2640,7 @@
    "group": "We also use raw keycodes because some keyboard layouts register number keys as different chars. The codes can be verified with `wev`",
    "combo": "SUPER + code:13",
    "description": "",
+   "label": "Workspace: SUPER + code:13",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2532,6 +2656,7 @@
    "group": "We also use raw keycodes because some keyboard layouts register number keys as different chars. The codes can be verified with `wev`",
    "combo": "SUPER + code:14",
    "description": "",
+   "label": "Workspace: SUPER + code:14",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2547,6 +2672,7 @@
    "group": "We also use raw keycodes because some keyboard layouts register number keys as different chars. The codes can be verified with `wev`",
    "combo": "SUPER + code:15",
    "description": "",
+   "label": "Workspace: SUPER + code:15",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2562,6 +2688,7 @@
    "group": "We also use raw keycodes because some keyboard layouts register number keys as different chars. The codes can be verified with `wev`",
    "combo": "SUPER + code:16",
    "description": "",
+   "label": "Workspace: SUPER + code:16",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2577,6 +2704,7 @@
    "group": "We also use raw keycodes because some keyboard layouts register number keys as different chars. The codes can be verified with `wev`",
    "combo": "SUPER + code:17",
    "description": "",
+   "label": "Workspace: SUPER + code:17",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2592,6 +2720,7 @@
    "group": "We also use raw keycodes because some keyboard layouts register number keys as different chars. The codes can be verified with `wev`",
    "combo": "SUPER + code:18",
    "description": "",
+   "label": "Workspace: SUPER + code:18",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2607,6 +2736,7 @@
    "group": "We also use raw keycodes because some keyboard layouts register number keys as different chars. The codes can be verified with `wev`",
    "combo": "SUPER + code:19",
    "description": "",
+   "label": "Workspace: SUPER + code:19",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2622,6 +2752,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + code:87",
    "description": "",
+   "label": "Workspace: SUPER + code:87",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2637,6 +2768,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + code:88",
    "description": "",
+   "label": "Workspace: SUPER + code:88",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2652,6 +2784,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + code:89",
    "description": "",
+   "label": "Workspace: SUPER + code:89",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2667,6 +2800,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + code:83",
    "description": "",
+   "label": "Workspace: SUPER + code:83",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2682,6 +2816,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + code:84",
    "description": "",
+   "label": "Workspace: SUPER + code:84",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2697,6 +2832,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + code:85",
    "description": "",
+   "label": "Workspace: SUPER + code:85",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2712,6 +2848,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + code:79",
    "description": "",
+   "label": "Workspace: SUPER + code:79",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2727,6 +2864,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + code:80",
    "description": "",
+   "label": "Workspace: SUPER + code:80",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2742,6 +2880,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + code:81",
    "description": "",
+   "label": "Workspace: SUPER + code:81",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2757,6 +2896,7 @@
    "group": "keypad numbers",
    "combo": "SUPER + code:90",
    "description": "",
+   "label": "Workspace: SUPER + code:90",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -2772,6 +2912,7 @@
    "group": "/# bind = CTRL+SUPER+ALT, ←/→,, -- # [hidden] Focus busy left/right",
    "combo": "CTRL + SUPER + Left",
    "description": "Workspace: Focus left",
+   "label": "Workspace: Focus left",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -2785,7 +2926,7 @@
      }
     }
    },
-   "code": "hl.bind(\"CTRL + SUPER + \" .. \"Left\", hl.dsp.focus({ workspace = -1 .. \"1\" }), {description = \"Workspace: Focus \" .. \"left\"})"
+   "code": "hl.bind(\"CTRL + SUPER + Left\", hl.dsp.focus({ workspace = \"r-1\" }), { description = \"Workspace: Focus left\" })"
   },
   {
    "id": "workspace-32",
@@ -2795,6 +2936,7 @@
    "group": "/# bind = CTRL+SUPER+ALT, ←/→,, -- # [hidden] Focus busy left/right",
    "combo": "CTRL + SUPER + Right",
    "description": "Workspace: Focus right",
+   "label": "Workspace: Focus right",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -2808,7 +2950,7 @@
      }
     }
    },
-   "code": "hl.bind(\"CTRL + SUPER + \" .. \"Right\", hl.dsp.focus({ workspace = \"+1\" .. \"1\" }), {description = \"Workspace: Focus \" .. \"right\"})"
+   "code": "hl.bind(\"CTRL + SUPER + Right\", hl.dsp.focus({ workspace = \"r+1\" }), { description = \"Workspace: Focus right\" })"
   },
   {
    "id": "workspace-33",
@@ -2818,6 +2960,7 @@
    "group": "/# bind = CTRL+SUPER+ALT, ←/→,, -- # [hidden] Focus busy left/right",
    "combo": "CTRL + SUPER + ALT + Left",
    "description": "",
+   "label": "Workspace: CTRL + SUPER + ALT + Left",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -2831,7 +2974,7 @@
      }
     }
    },
-   "code": "hl.bind(\"CTRL + SUPER + ALT + \" .. \"Left\", hl.dsp.focus({ workspace = -1 .. \"1\" }))"
+   "code": "hl.bind(\"CTRL + SUPER + ALT + Left\", hl.dsp.focus({ workspace = \"m-1\" }), nil)"
   },
   {
    "id": "workspace-34",
@@ -2841,6 +2984,7 @@
    "group": "/# bind = CTRL+SUPER+ALT, ←/→,, -- # [hidden] Focus busy left/right",
    "combo": "CTRL + SUPER + ALT + Right",
    "description": "",
+   "label": "Workspace: CTRL + SUPER + ALT + Right",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -2854,7 +2998,7 @@
      }
     }
    },
-   "code": "hl.bind(\"CTRL + SUPER + ALT + \" .. \"Right\", hl.dsp.focus({ workspace = \"+1\" .. \"1\" }))"
+   "code": "hl.bind(\"CTRL + SUPER + ALT + Right\", hl.dsp.focus({ workspace = \"m+1\" }), nil)"
   },
   {
    "id": "workspace-35",
@@ -2864,6 +3008,7 @@
    "group": "/# bind = SUPER, Page_↑/↓,, -- Focus left/right",
    "combo": "SUPER + Page_Down",
    "description": "",
+   "label": "Workspace: SUPER + Page_Down",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -2877,7 +3022,7 @@
      }
     }
    },
-   "code": "hl.bind(\"key[1]\", hl.dsp.focus({ workspace = -1 .. \"1\" }))"
+   "code": "hl.bind(\"SUPER + Page_Down\", hl.dsp.focus({ workspace = \"r+1\" }), nil)"
   },
   {
    "id": "workspace-36",
@@ -2887,6 +3032,7 @@
    "group": "/# bind = SUPER, Page_↑/↓,, -- Focus left/right",
    "combo": "SUPER + Page_Up",
    "description": "",
+   "label": "Workspace: SUPER + Page_Up",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -2900,7 +3046,7 @@
      }
     }
    },
-   "code": "hl.bind(\"key[2]\", hl.dsp.focus({ workspace = \"+1\" .. \"1\" }))"
+   "code": "hl.bind(\"SUPER + Page_Up\", hl.dsp.focus({ workspace = \"r-1\" }), nil)"
   },
   {
    "id": "workspace-37",
@@ -2910,6 +3056,7 @@
    "group": "/# bind = SUPER, Page_↑/↓,, -- Focus left/right",
    "combo": "CTRL + SUPER + Page_Down",
    "description": "",
+   "label": "Workspace: CTRL + SUPER + Page_Down",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -2923,7 +3070,7 @@
      }
     }
    },
-   "code": "hl.bind(\"\"CTRL + \" .. key[1]\", hl.dsp.focus({ workspace = \"r-5\" .. \"1\" }))"
+   "code": "hl.bind(\"CTRL + SUPER + Page_Down\", hl.dsp.focus({ workspace = \"r+1\" }), nil)"
   },
   {
    "id": "workspace-38",
@@ -2933,6 +3080,7 @@
    "group": "/# bind = SUPER, Page_↑/↓,, -- Focus left/right",
    "combo": "CTRL + SUPER + Page_Up",
    "description": "",
+   "label": "Workspace: CTRL + SUPER + Page_Up",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -2946,7 +3094,7 @@
      }
     }
    },
-   "code": "hl.bind(\"\"CTRL + \" .. key[2]\", hl.dsp.focus({ workspace = \"r+5\" .. \"1\" }))"
+   "code": "hl.bind(\"CTRL + SUPER + Page_Up\", hl.dsp.focus({ workspace = \"r-1\" }), nil)"
   },
   {
    "id": "workspace-39",
@@ -2956,6 +3104,7 @@
    "group": "/# bind = SUPER, Scroll ↑/↓,, -- Focus left/right",
    "combo": "SUPER + mouse_up",
    "description": "",
+   "label": "Workspace: SUPER + mouse_up",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -2969,7 +3118,7 @@
      }
     }
    },
-   "code": "hl.bind(\"key[1]\", hl.dsp.focus({ workspace = -1 .. \"1\" }))"
+   "code": "hl.bind(\"SUPER + mouse_up\", hl.dsp.focus({ workspace = \"r+1\" }), nil)"
   },
   {
    "id": "workspace-40",
@@ -2979,6 +3128,7 @@
    "group": "/# bind = SUPER, Scroll ↑/↓,, -- Focus left/right",
    "combo": "SUPER + mouse_down",
    "description": "",
+   "label": "Workspace: SUPER + mouse_down",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -2992,7 +3142,7 @@
      }
     }
    },
-   "code": "hl.bind(\"key[2]\", hl.dsp.focus({ workspace = \"+1\" .. \"1\" }))"
+   "code": "hl.bind(\"SUPER + mouse_down\", hl.dsp.focus({ workspace = \"r-1\" }), nil)"
   },
   {
    "id": "workspace-41",
@@ -3002,6 +3152,7 @@
    "group": "/# bind = SUPER, Scroll ↑/↓,, -- Focus left/right",
    "combo": "CTRL + SUPER + mouse_up",
    "description": "",
+   "label": "Workspace: CTRL + SUPER + mouse_up",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -3015,7 +3166,7 @@
      }
     }
    },
-   "code": "hl.bind(\"\"CTRL + \" .. key[1]\", hl.dsp.focus({ workspace = \"r-5\" .. \"1\" }))"
+   "code": "hl.bind(\"CTRL + SUPER + mouse_up\", hl.dsp.focus({ workspace = \"r+1\" }), nil)"
   },
   {
    "id": "workspace-42",
@@ -3025,6 +3176,7 @@
    "group": "/# bind = SUPER, Scroll ↑/↓,, -- Focus left/right",
    "combo": "CTRL + SUPER + mouse_down",
    "description": "",
+   "label": "Workspace: CTRL + SUPER + mouse_down",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -3038,7 +3190,7 @@
      }
     }
    },
-   "code": "hl.bind(\"\"CTRL + \" .. key[2]\", hl.dsp.focus({ workspace = \"r+5\" .. \"1\" }))"
+   "code": "hl.bind(\"CTRL + SUPER + mouse_down\", hl.dsp.focus({ workspace = \"r-1\" }), nil)"
   },
   {
    "id": "workspace-43",
@@ -3048,6 +3200,7 @@
    "group": "/# bind = SUPER, Scroll ↑/↓,, -- Focus left/right",
    "combo": "SUPER + S",
    "description": "Workspace: Toggle scratchpad",
+   "label": "Workspace: Toggle scratchpad",
    "options": {},
    "dispatch": {
     "kind": "workspace.toggle_special",
@@ -3066,6 +3219,7 @@
    "group": "/# bind = SUPER, Scroll ↑/↓,, -- Focus left/right",
    "combo": "SUPER + mouse:275",
    "description": "",
+   "label": "Workspace: SUPER + mouse:275",
    "options": {},
    "dispatch": {
     "kind": "workspace.toggle_special",
@@ -3074,7 +3228,7 @@
      "value": "special"
     }
    },
-   "code": "hl.bind(\"SUPER + mouse:275\", hl.dsp.workspace.toggle_special(\"special\"))"
+   "code": "hl.bind(\"SUPER + mouse:275\", hl.dsp.workspace.toggle_special(\"special\"), nil)"
   },
   {
    "id": "workspace-45",
@@ -3084,6 +3238,7 @@
    "group": "/# bind = SUPER, Scroll ↑/↓,, -- Focus left/right",
    "combo": "CTRL + SUPER + BracketLeft",
    "description": "",
+   "label": "Workspace: CTRL + SUPER + BracketLeft",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -3097,7 +3252,7 @@
      }
     }
    },
-   "code": "hl.bind(\"CTRL + SUPER + \" .. \"BracketLeft\", hl.dsp.focus({ workspace = -1 }))"
+   "code": "hl.bind(\"CTRL + SUPER + BracketLeft\", hl.dsp.focus({ workspace = \"-1\" }), nil)"
   },
   {
    "id": "workspace-46",
@@ -3107,6 +3262,7 @@
    "group": "/# bind = SUPER, Scroll ↑/↓,, -- Focus left/right",
    "combo": "CTRL + SUPER + BracketRight",
    "description": "",
+   "label": "Workspace: CTRL + SUPER + BracketRight",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -3120,7 +3276,7 @@
      }
     }
    },
-   "code": "hl.bind(\"CTRL + SUPER + \" .. \"BracketRight\", hl.dsp.focus({ workspace = \"+1\" }))"
+   "code": "hl.bind(\"CTRL + SUPER + BracketRight\", hl.dsp.focus({ workspace = \"+1\" }), nil)"
   },
   {
    "id": "workspace-47",
@@ -3130,6 +3286,7 @@
    "group": "/# bind = SUPER, Scroll ↑/↓,, -- Focus left/right",
    "combo": "CTRL + SUPER + Up",
    "description": "",
+   "label": "Workspace: CTRL + SUPER + Up",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -3143,7 +3300,7 @@
      }
     }
    },
-   "code": "hl.bind(\"CTRL + SUPER + \" .. \"Up\", hl.dsp.focus({ workspace = \"r-5\" }))"
+   "code": "hl.bind(\"CTRL + SUPER + Up\", hl.dsp.focus({ workspace = \"r-5\" }), nil)"
   },
   {
    "id": "workspace-48",
@@ -3153,6 +3310,7 @@
    "group": "/# bind = SUPER, Scroll ↑/↓,, -- Focus left/right",
    "combo": "CTRL + SUPER + Down",
    "description": "",
+   "label": "Workspace: CTRL + SUPER + Down",
    "options": {},
    "dispatch": {
     "kind": "focus",
@@ -3166,7 +3324,7 @@
      }
     }
    },
-   "code": "hl.bind(\"CTRL + SUPER + \" .. \"Down\", hl.dsp.focus({ workspace = \"r+5\" }))"
+   "code": "hl.bind(\"CTRL + SUPER + Down\", hl.dsp.focus({ workspace = \"r+5\" }), nil)"
   },
   {
    "id": "virtual-machines",
@@ -3176,6 +3334,7 @@
    "group": "",
    "combo": "SUPER + ALT + F1",
    "description": "",
+   "label": "Virtual machines: SUPER + ALT + F1",
    "options": {
     "submap_universal": true
    },
@@ -3193,12 +3352,13 @@
    "group": "Testing",
    "combo": "SUPER + ALT + F11",
    "description": "",
+   "label": "Virtual machines: SUPER + ALT + F11",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "bash -c 'RANDOM_IMAGE=$(find ~/Pictures -type f | shuf -n 1); ACTION=$(notify-send \"Test notification with body image\" \"This notification should contain your user account <b>image</b> and <a href=\\\"https://discord.com/app\\\">Discord</a> <b>icon</b>. Oh and here is a random image in your Pictures folder: <img src=\\\"$RANDOM_IMAGE\\\" alt=\\\"Testing image\\\"/>\" -a \"Hyprland\" -p -h \"string:image-path:/var/lib/AccountsService/icons/$USER\" -t 6000 -i \"discord\" -A \"openImage=Profile image\" -A \"action2=Open the random image\" -A \"action3=Useless button\"); [[ $ACTION == *openImage ]] && xdg-open \"/var/lib/AccountsService/icons/$USER\"; [[ $ACTION == *action2 ]] && xdg-open \"$RANDOM_IMAGE\"'"
    },
-   "code": "hl.bind(\"SUPER + ALT + F11\",\n    hl.dsp.exec_cmd(\n        \"bash -c 'RANDOM_IMAGE=$(find ~/Pictures -type f | shuf -n 1); ACTION=$(notify-send \\\"Test notification with body image\\\" \\\"This notification should contain your user account <b>image</b> and <a href=\\\\\\\"https://discord.com/app\\\\\\\">Discord</a> <b>icon</b>. Oh and here is a random image in your Pictures folder: <img src=\\\\\\\"$RANDOM_IMAGE\\\\\\\" alt=\\\\\\\"Testing image\\\\\\\"/>\\\" -a \\\"Hyprland\\\" -p -h \\\"string:image-path:/var/lib/AccountsService/icons/$USER\\\" -t 6000 -i \\\"discord\\\" -A \\\"openImage=Profile image\\\" -A \\\"action2=Open the random image\\\" -A \\\"action3=Useless button\\\"); [[ $ACTION == *openImage ]] && xdg-open \\\"/var/lib/AccountsService/icons/$USER\\\"; [[ $ACTION == *action2 ]] && xdg-open \\\"$RANDOM_IMAGE\\\"'\")\n) -- # [hidden]"
+   "code": "hl.bind(\"SUPER + ALT + F11\", hl.dsp.global(\"quickshell:runCommand:virtual-machines-2\"), nil)"
   },
   {
    "id": "virtual-machines-3",
@@ -3208,12 +3368,13 @@
    "group": "Testing",
    "combo": "SUPER + ALT + F12",
    "description": "",
+   "label": "Virtual machines: SUPER + ALT + F12",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "bash -c 'RANDOM_IMAGE=$(find ~/Pictures -type f | shuf -n 1); ACTION=$(notify-send \"Test notification\" \"This notification should contain a random image in your <b>Pictures</b> folder and <a href=\\\"https://discord.com/app\\\">Discord</a> <b>icon</b>.\n<i>Flick right to dismiss!</i>\" -a \"Discord (fake)\" -p -h \"string:image-path:$RANDOM_IMAGE\" -t 6000 -i \"discord\" -A \"openImage=Profile image\" -A \"action2=Useless button\"); [[ $ACTION == *openImage ]] && xdg-open \"/var/lib/AccountsService/icons/$USER\"'"
    },
-   "code": "hl.bind(\"SUPER + ALT + F12\",\n    hl.dsp.exec_cmd(\n        \"bash -c 'RANDOM_IMAGE=$(find ~/Pictures -type f | shuf -n 1); ACTION=$(notify-send \\\"Test notification\\\" \\\"This notification should contain a random image in your <b>Pictures</b> folder and <a href=\\\\\\\"https://discord.com/app\\\\\\\">Discord</a> <b>icon</b>.\\n<i>Flick right to dismiss!</i>\\\" -a \\\"Discord (fake)\\\" -p -h \\\"string:image-path:$RANDOM_IMAGE\\\" -t 6000 -i \\\"discord\\\" -A \\\"openImage=Profile image\\\" -A \\\"action2=Useless button\\\"); [[ $ACTION == *openImage ]] && xdg-open \\\"/var/lib/AccountsService/icons/$USER\\\"'\")\n)                                                                                                        -- # [hidden]"
+   "code": "hl.bind(\"SUPER + ALT + F12\", hl.dsp.global(\"quickshell:runCommand:virtual-machines-3\"), nil)"
   },
   {
    "id": "virtual-machines-4",
@@ -3223,12 +3384,13 @@
    "group": "Testing",
    "combo": "SUPER + ALT + Equal",
    "description": "",
+   "label": "Virtual machines: SUPER + ALT + Equal",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "notify-send 'Urgent notification' 'Ah hell no' -u critical -a 'Hyprland keybind'"
    },
-   "code": "hl.bind(\"SUPER + ALT + Equal\",\n    hl.dsp.exec_cmd(\"notify-send 'Urgent notification' 'Ah hell no' -u critical -a 'Hyprland keybind'\")) -- # [hidden]"
+   "code": "hl.bind(\"SUPER + ALT + Equal\", hl.dsp.global(\"quickshell:runCommand:virtual-machines-4\"), nil)"
   },
   {
    "id": "session",
@@ -3238,12 +3400,13 @@
    "group": "",
    "combo": "SUPER + L",
    "description": "Session: Lock",
+   "label": "Session: Lock",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "loginctl lock-session"
    },
-   "code": "hl.bind(\"SUPER + L\", hl.dsp.exec_cmd(\"loginctl lock-session\"), { description = \"Session: Lock\" })"
+   "code": "hl.bind(\"SUPER + L\", hl.dsp.global(\"quickshell:runCommand:session\"), { description = \"Session: Lock\" })"
   },
   {
    "id": "session-2",
@@ -3253,6 +3416,7 @@
    "group": "",
    "combo": "SUPER + SHIFT + L",
    "description": "Session: Sleep",
+   "label": "Session: Sleep",
    "options": {
     "locked": true
    },
@@ -3260,7 +3424,7 @@
     "kind": "command",
     "command": "systemctl suspend || loginctl suspend"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + L\", hl.dsp.exec_cmd(\"systemctl suspend || loginctl suspend\"),\n    { locked = true, description = \"Session: Sleep\" }) -- Sleep"
+   "code": "hl.bind(\"SUPER + SHIFT + L\", hl.dsp.global(\"quickshell:runCommand:session-2\"), { locked = true, description = \"Session: Sleep\" })"
   },
   {
    "id": "session-3",
@@ -3270,12 +3434,13 @@
    "group": "",
    "combo": "CTRL + SHIFT + ALT + SUPER + Delete",
    "description": "Session: Shut down",
+   "label": "Session: Shut down",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "systemctl poweroff || loginctl poweroff"
    },
-   "code": "hl.bind(\"CTRL + SHIFT + ALT + SUPER + Delete\", hl.dsp.exec_cmd(\"systemctl poweroff || loginctl poweroff\"),\n    { description = \"Session: Shut down\" }) -- # [hidden] Power off"
+   "code": "hl.bind(\"CTRL + SHIFT + ALT + SUPER + Delete\", hl.dsp.global(\"quickshell:runCommand:session-3\"), { description = \"Session: Shut down\" })"
   },
   {
    "id": "apps",
@@ -3285,12 +3450,13 @@
    "group": "",
    "combo": "SUPER + Return",
    "description": "App: Terminal",
+   "label": "App: Terminal",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "kitty"
    },
-   "code": "hl.bind(\"SUPER + Return\", hl.dsp.exec_cmd(terminal), { description = \"App: Terminal\" })"
+   "code": "hl.bind(\"SUPER + Return\", hl.dsp.global(\"quickshell:runCommand:apps\"), { description = \"App: Terminal\" })"
   },
   {
    "id": "apps-2",
@@ -3300,12 +3466,13 @@
    "group": "",
    "combo": "SUPER + T",
    "description": "",
+   "label": "Apps: SUPER + T",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "kitty"
    },
-   "code": "hl.bind(\"SUPER + T\", hl.dsp.exec_cmd(terminal))"
+   "code": "hl.bind(\"SUPER + T\", hl.dsp.global(\"quickshell:runCommand:apps-2\"), nil)"
   },
   {
    "id": "apps-3",
@@ -3315,12 +3482,13 @@
    "group": "",
    "combo": "CTRL + ALT + T",
    "description": "",
+   "label": "Apps: CTRL + ALT + T",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "kitty"
    },
-   "code": "hl.bind(\"CTRL + ALT + T\", hl.dsp.exec_cmd(terminal))"
+   "code": "hl.bind(\"CTRL + ALT + T\", hl.dsp.global(\"quickshell:runCommand:apps-3\"), nil)"
   },
   {
    "id": "apps-4",
@@ -3330,12 +3498,13 @@
    "group": "",
    "combo": "SUPER + E",
    "description": "App: File manager",
+   "label": "App: File manager",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'dolphin' 'nautilus' 'nemo' 'thunar' 'kitty -1 fish -c yazi'"
    },
-   "code": "hl.bind(\"SUPER + E\", hl.dsp.exec_cmd(fileManager), { description = \"App: File manager\" })"
+   "code": "hl.bind(\"SUPER + E\", hl.dsp.global(\"quickshell:runCommand:apps-4\"), { description = \"App: File manager\" })"
   },
   {
    "id": "apps-5",
@@ -3345,12 +3514,13 @@
    "group": "",
    "combo": "SUPER + W",
    "description": "App: Browser",
+   "label": "App: Browser",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'google-chrome-stable' 'zen-browser' 'firefox' 'brave' 'chromium' 'microsoft-edge-stable' 'opera' 'librewolf'"
    },
-   "code": "hl.bind(\"SUPER + W\", hl.dsp.exec_cmd(browser), { description = \"App: Browser\" })"
+   "code": "hl.bind(\"SUPER + W\", hl.dsp.global(\"quickshell:runCommand:apps-5\"), { description = \"App: Browser\" })"
   },
   {
    "id": "apps-6",
@@ -3360,12 +3530,13 @@
    "group": "",
    "combo": "SUPER + C",
    "description": "App: Code editor",
+   "label": "App: Code editor",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'windsurf' 'antigravity' 'code' 'codium' 'cursor' 'zed' 'zedit' 'zeditor' 'kate' 'gnome-text-editor' 'emacs' 'command -v nvim && kitty -1 nvim' 'command -v micro && kitty -1 micro'"
    },
-   "code": "hl.bind(\"SUPER + C\", hl.dsp.exec_cmd(codeEditor), { description = \"App: Code editor\" })"
+   "code": "hl.bind(\"SUPER + C\", hl.dsp.global(\"quickshell:runCommand:apps-6\"), { description = \"App: Code editor\" })"
   },
   {
    "id": "apps-7",
@@ -3375,12 +3546,13 @@
    "group": "",
    "combo": "CTRL + SUPER + SHIFT + ALT + W",
    "description": "App: Office software",
+   "label": "App: Office software",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'wps' 'onlyoffice-desktopeditors' 'libreoffice'"
    },
-   "code": "hl.bind(\"CTRL + SUPER + SHIFT + ALT + W\", hl.dsp.exec_cmd(officeSoftware), { description = \"App: Office software\" })"
+   "code": "hl.bind(\"CTRL + SUPER + SHIFT + ALT + W\", hl.dsp.global(\"quickshell:runCommand:apps-7\"), { description = \"App: Office software\" })"
   },
   {
    "id": "apps-8",
@@ -3390,12 +3562,13 @@
    "group": "",
    "combo": "SUPER + X",
    "description": "App: Text editor",
+   "label": "App: Text editor",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'kate' 'gnome-text-editor' 'emacs'"
    },
-   "code": "hl.bind(\"SUPER + X\", hl.dsp.exec_cmd(textEditor), { description = \"App: Text editor\" })"
+   "code": "hl.bind(\"SUPER + X\", hl.dsp.global(\"quickshell:runCommand:apps-8\"), { description = \"App: Text editor\" })"
   },
   {
    "id": "apps-9",
@@ -3405,12 +3578,13 @@
    "group": "",
    "combo": "CTRL + SUPER + V",
    "description": "App: Volume mixer",
+   "label": "App: Volume mixer",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'pavucontrol-qt' 'pavucontrol'"
    },
-   "code": "hl.bind(\"CTRL + SUPER + V\", hl.dsp.exec_cmd(volumeMixer), { description = \"App: Volume mixer\" })"
+   "code": "hl.bind(\"CTRL + SUPER + V\", hl.dsp.global(\"quickshell:runCommand:apps-9\"), { description = \"App: Volume mixer\" })"
   },
   {
    "id": "apps-10",
@@ -3420,12 +3594,13 @@
    "group": "",
    "combo": "SUPER + I",
    "description": "App: Settings app",
+   "label": "App: Settings app",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "qs ipc -p ~/.config/quickshell/end4-pC call settings toggle"
    },
-   "code": "hl.bind(\"SUPER + I\", hl.dsp.exec_cmd(settingsApp), { description = \"App: Settings app\" })"
+   "code": "hl.bind(\"SUPER + I\", hl.dsp.global(\"quickshell:runCommand:apps-10\"), { description = \"App: Settings app\" })"
   },
   {
    "id": "apps-11",
@@ -3435,12 +3610,13 @@
    "group": "",
    "combo": "CTRL + SHIFT + Escape",
    "description": "App: Task manager",
+   "label": "App: Task manager",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'gnome-system-monitor' 'plasma-systemmonitor --page-name Processes' 'command -v btop && kitty -1 fish -c btop'"
    },
-   "code": "hl.bind(\"CTRL + SHIFT + Escape\", hl.dsp.exec_cmd(taskManager), { description = \"App: Task manager\" })"
+   "code": "hl.bind(\"CTRL + SHIFT + Escape\", hl.dsp.global(\"quickshell:runCommand:apps-11\"), { description = \"App: Task manager\" })"
   },
   {
    "id": "apps-12",
@@ -3450,6 +3626,7 @@
    "group": "Cursed stuff",
    "combo": "CTRL + SUPER + Backslash",
    "description": "",
+   "label": "Apps: CTRL + SUPER + Backslash",
    "options": {},
    "dispatch": {
     "kind": "window.resize",
@@ -3471,7 +3648,7 @@
      }
     }
    },
-   "code": "hl.bind(\"CTRL + SUPER + Backslash\", hl.dsp.window.resize({ x = 640, y = 480, \"exact\" }))"
+   "code": "hl.bind(\"CTRL + SUPER + Backslash\", hl.dsp.window.resize({ [\"1\"] = \"exact\", x = 640.0, y = 480.0 }), nil)"
   },
   {
    "id": "bind-28",
@@ -3481,12 +3658,13 @@
    "group": "",
    "combo": "CTRL+SUPER+ALT+Slash",
    "description": "Edit user keybinds",
+   "label": "Edit user keybinds",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "xdg-open ~/.config/hypr/custom/keybinds.lua"
    },
-   "code": "hl.bind(\"CTRL+SUPER+ALT+Slash\", hl.dsp.exec_cmd(\"xdg-open ~/.config/hypr/custom/keybinds.lua\"), {description = \"Edit user keybinds\"} )"
+   "code": "hl.bind(\"CTRL+SUPER+ALT+Slash\", hl.dsp.global(\"quickshell:runCommand:bind-28\"), { description = \"Edit user keybinds\" })"
   },
   {
    "id": "bind-29",
@@ -3496,6 +3674,7 @@
    "group": "",
    "combo": "SUPER + escape",
    "description": "Toggle settings",
+   "label": "Toggle settings",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -3504,7 +3683,7 @@
      "value": "quickshell:settingsToggle"
     }
    },
-   "code": "hl.bind(\"SUPER + escape\", hl.dsp.global(\"quickshell:settingsToggle\"), {description = \"Toggle settings\"})"
+   "code": "hl.bind(\"SUPER + escape\", hl.dsp.global(\"quickshell:settingsToggle\"), { description = \"Toggle settings\" })"
   },
   {
    "id": "bind-30",
@@ -3514,6 +3693,7 @@
    "group": "",
    "combo": "mouse:274",
    "description": "Window: Move (MMB)",
+   "label": "Window: Move (MMB)",
    "options": {
     "mouse": true
    },
@@ -3533,12 +3713,13 @@
    "group": "",
    "combo": "SUPER + CTRL + A",
    "description": "App: Show full Waydroid UI",
+   "label": "App: Show full Waydroid UI",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "waydroid show-full-ui"
    },
-   "code": "hl.bind(\"SUPER + CTRL + A\", hl.dsp.exec_cmd(\"waydroid show-full-ui\"),\n    { description = \"App: Show full Waydroid UI\" })"
+   "code": "hl.bind(\"SUPER + CTRL + A\", hl.dsp.global(\"quickshell:runCommand:bind-31\"), { description = \"App: Show full Waydroid UI\" })"
   },
   {
    "id": "bind-32",
@@ -3548,12 +3729,13 @@
    "group": "",
    "combo": "SUPER + CTRL + SHIFT + A",
    "description": "App: Regenerate Android desktop entries",
+   "label": "App: Regenerate Android desktop entries",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "$HOME/.config/quickshell/$qsConfig/scripts/waydroid-desktop-gen.sh"
    },
-   "code": "hl.bind(\"SUPER + CTRL + SHIFT + A\",\n    hl.dsp.exec_cmd(\"$HOME/.config/quickshell/$qsConfig/scripts/waydroid-desktop-gen.sh\"),\n    { description = \"App: Regenerate Android desktop entries\" })"
+   "code": "hl.bind(\"SUPER + CTRL + SHIFT + A\", hl.dsp.global(\"quickshell:runCommand:bind-32\"), { description = \"App: Regenerate Android desktop entries\" })"
   },
   {
    "id": "apps-13",
@@ -3563,12 +3745,13 @@
    "group": "",
    "combo": "CTRL + SUPER + M",
    "description": "YTM",
+   "label": "YTM",
    "options": {},
    "dispatch": {
     "kind": "command",
     "command": "youtube-music"
    },
-   "code": "hl.bind(\"CTRL + SUPER + M\", hl.dsp.exec_cmd(\"youtube-music\"), {description = \"YTM\"})"
+   "code": "hl.bind(\"CTRL + SUPER + M\", hl.dsp.global(\"quickshell:runCommand:apps-13\"), { description = \"YTM\" })"
   },
   {
    "id": "window-56",
@@ -3578,6 +3761,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:10",
    "description": "Window: Send to workspace 1 and switch",
+   "label": "Window: Send to workspace 1 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3593,6 +3777,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:11",
    "description": "Window: Send to workspace 2 and switch",
+   "label": "Window: Send to workspace 2 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3608,6 +3793,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:12",
    "description": "Window: Send to workspace 3 and switch",
+   "label": "Window: Send to workspace 3 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3623,6 +3809,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:13",
    "description": "Window: Send to workspace 4 and switch",
+   "label": "Window: Send to workspace 4 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3638,6 +3825,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:14",
    "description": "Window: Send to workspace 5 and switch",
+   "label": "Window: Send to workspace 5 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3653,6 +3841,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:15",
    "description": "Window: Send to workspace 6 and switch",
+   "label": "Window: Send to workspace 6 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3668,6 +3857,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:16",
    "description": "Window: Send to workspace 7 and switch",
+   "label": "Window: Send to workspace 7 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3683,6 +3873,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:17",
    "description": "Window: Send to workspace 8 and switch",
+   "label": "Window: Send to workspace 8 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3698,6 +3889,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:18",
    "description": "Window: Send to workspace 9 and switch",
+   "label": "Window: Send to workspace 9 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3713,6 +3905,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:19",
    "description": "Window: Send to workspace 10 and switch",
+   "label": "Window: Send to workspace 10 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3728,6 +3921,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:87",
    "description": "Window: Send to workspace 1 and switch",
+   "label": "Window: Send to workspace 1 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3743,6 +3937,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:88",
    "description": "Window: Send to workspace 2 and switch",
+   "label": "Window: Send to workspace 2 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3758,6 +3953,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:89",
    "description": "Window: Send to workspace 3 and switch",
+   "label": "Window: Send to workspace 3 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3773,6 +3969,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:83",
    "description": "Window: Send to workspace 4 and switch",
+   "label": "Window: Send to workspace 4 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3788,6 +3985,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:84",
    "description": "Window: Send to workspace 5 and switch",
+   "label": "Window: Send to workspace 5 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3803,6 +4001,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:85",
    "description": "Window: Send to workspace 6 and switch",
+   "label": "Window: Send to workspace 6 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3818,6 +4017,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:79",
    "description": "Window: Send to workspace 7 and switch",
+   "label": "Window: Send to workspace 7 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3833,6 +4033,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:80",
    "description": "Window: Send to workspace 8 and switch",
+   "label": "Window: Send to workspace 8 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3848,6 +4049,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:81",
    "description": "Window: Send to workspace 9 and switch",
+   "label": "Window: Send to workspace 9 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3863,6 +4065,7 @@
    "group": "/# bind = SUPER+SHIFT, Hash,, -- Send to workspace and switch -- (1, 2, 3,...)",
    "combo": "SUPER + SHIFT + code:90",
    "description": "Window: Send to workspace 10 and switch",
+   "label": "Window: Send to workspace 10 and switch",
    "options": {},
    "dispatch": {
     "kind": "raw",
@@ -3878,6 +4081,7 @@
    "group": "/# bind = SUPER+SHIFT, V,, -- Advanced Paste: paste clipboard in another format --",
    "combo": "SUPER + SHIFT + V",
    "description": "Utilities: Advanced Paste",
+   "label": "Utilities: Advanced Paste",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -3886,7 +4090,7 @@
      "value": "quickshell:advancedPaste"
     }
    },
-   "code": "hl.bind(\"SUPER + SHIFT + V\", hl.dsp.global(\"quickshell:advancedPaste\"), {description = \"Utilities: Advanced Paste\"})"
+   "code": "hl.bind(\"SUPER + SHIFT + V\", hl.dsp.global(\"quickshell:advancedPaste\"), { description = \"Utilities: Advanced Paste\" })"
   },
   {
    "id": "utilities-12",
@@ -3896,6 +4100,7 @@
    "group": "/# bind = SUPER+SHIFT, F,, -- Find My Mouse: highlight the pointer --",
    "combo": "SUPER + SHIFT + F",
    "description": "Utilities: Find My Mouse",
+   "label": "Utilities: Find My Mouse",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -3904,7 +4109,7 @@
      "value": "quickshell:findMouse"
     }
    },
-   "code": "hl.bind(\"SUPER + SHIFT + F\", hl.dsp.global(\"quickshell:findMouse\"), {description = \"Utilities: Find My Mouse\"})"
+   "code": "hl.bind(\"SUPER + SHIFT + F\", hl.dsp.global(\"quickshell:findMouse\"), { description = \"Utilities: Find My Mouse\" })"
   },
   {
    "id": "utilities-13",
@@ -3914,6 +4119,7 @@
    "group": "/# bind = SUPER+SHIFT, U,, -- Toggle the on-screen ruler --",
    "combo": "SUPER + SHIFT + U",
    "description": "Utilities: Screen ruler",
+   "label": "Utilities: Screen ruler",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -3922,7 +4128,7 @@
      "value": "quickshell:screenRuler"
     }
    },
-   "code": "hl.bind(\"SUPER + SHIFT + U\", hl.dsp.global(\"quickshell:screenRuler\"), {description = \"Utilities: Screen ruler\"})"
+   "code": "hl.bind(\"SUPER + SHIFT + U\", hl.dsp.global(\"quickshell:screenRuler\"), { description = \"Utilities: Screen ruler\" })"
   },
   {
    "id": "utilities-14",
@@ -3932,6 +4138,7 @@
    "group": "/# bind = SUPER+SHIFT, I,, -- Image Preview: view a file or clipboard image --",
    "combo": "SUPER + SHIFT + I",
    "description": "Utilities: Image preview",
+   "label": "Utilities: Image preview",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -3940,7 +4147,7 @@
      "value": "quickshell:imagePreview"
     }
    },
-   "code": "hl.bind(\"SUPER + SHIFT + I\", hl.dsp.global(\"quickshell:imagePreview\"), {description = \"Utilities: Image preview\"})"
+   "code": "hl.bind(\"SUPER + SHIFT + I\", hl.dsp.global(\"quickshell:imagePreview\"), { description = \"Utilities: Image preview\" })"
   }
  ]
 }

@@ -6,6 +6,8 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
 import qs.services
+import qs.modules.common
+import qs.modules.ii.cheatsheet
 
 /**
  * Small PowerToys-style desktop utilities.
@@ -83,6 +85,18 @@ Singleton {
         function alwaysOnTop(): void { root.toggleAlwaysOnTop() }
     }
 
+    /**
+     * Cheatsheet.qml owns quickshell:cheatsheetToggle/Open/Close, but only
+     * WaffleFamily loads it. Instantiate it here for the default ii family so
+     * the SUPER+Slash bind is live in both families. Gated on !waffle so the
+     * waffle family's own PanelLoader stays the single instance (and there is
+     * never a duplicate GlobalShortcut registration) while waffle is active.
+     */
+    Loader {
+        active: Config.ready && Config.options.panelFamily !== "waffle"
+        sourceComponent: Cheatsheet {}
+    }
+
     CompositorGlobalShortcut {
         name: "findMouse"
         description: "Find My Mouse — highlight the pointer"
@@ -93,5 +107,26 @@ Singleton {
         name: "screenRuler"
         description: "Toggle the screen ruler"
         onPressed: root.toggleRuler()
+    }
+
+    /**
+     * The ALT+F4 Hyprland bind is non-consuming and must never close the
+     * window (ALT+F4 is reserved for Windows VMs). Its old raw code called
+     * hl.exec_cmd(), which is a no-op on Hyprland 0.57.2, so the "wrong close
+     * keybind" hint never appeared. The bind now dispatches this global
+     * shortcut instead, and the notification is sent from QML — the same
+     * bridge pattern used for the generated runCommand:<id> shortcuts.
+     */
+    function wrongCloseKeybind(): void {
+        Quickshell.execDetached([
+            "notify-send", "Wrong close keybind",
+            "Super+Q to close. Use Alt+F4 for Windows VMs", "-a", "Hyprland"
+        ]);
+    }
+
+    CompositorGlobalShortcut {
+        name: "wrongCloseKeybind"
+        description: "ALT+F4 hint — use Super+Q to close"
+        onPressed: root.wrongCloseKeybind()
     }
 }
