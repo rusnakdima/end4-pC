@@ -10,7 +10,14 @@ The catalog is the frozen default list (defaults/hyprland/keybinds.json).
 The overlay (optional) contains only user changes, keyed by bind id:
   { "overrides": { "<id>": { "combo", "description", "dispatch", "options", "enabled" } },
     "adds": [ { "id", "category", "combo", "description", "dispatch", "options" } ],
-    "disabled": ["<id>", ...] }
+    "disabled": ["<id>", ...],
+    "seriesOverrides": { "<seriesId>": { "mods": "SUPER + CTRL", "enabled": true } } }
+
+`seriesOverrides` applies one edit to every raw bind in a catalog series
+(identified by its `seriesId` metadata). `mods` rewrites the modifier prefix of
+each member's stored Lua `code` and `combo` in lockstep; `enabled: false`
+disables the whole series. It exists because raw binds emit their `code`
+verbatim, so a normal per-bind combo override cannot take effect on them.
 
 Nothing in the catalog is ever modified by this script. Overlay data is
 validated before generation; invalid overlay entries are rejected with a
@@ -138,15 +145,19 @@ def render_bind(b, commands, exec_mode='bridge'):
     d = b.get('dispatch')
     if not isinstance(d, dict):
         raise ValueError(f"{b.get('id')}: missing dispatch spec")
+    # raw / unknown kinds (and legacy command binds) emit the stored statement
+    # verbatim. Overlay adds carry it only under dispatch.code, so fall back to
+    # that when the bind-level copy is absent — otherwise no line is emitted.
+    stored = b.get('code') or d.get('code', '')
     kind = d.get('kind')
     if kind == 'raw':
-        return b.get('code', '')
+        return stored
     if kind == 'command' and exec_mode == 'legacy':
         # Phase-1 fidelity mode: emit the original statement verbatim.
-        return b.get('code', '')
+        return stored
     expr = dispatch_expr(d, b.get('id'))
     if expr is None:
-        return b.get('code', '')
+        return stored
     if kind == 'command':
         cid = command_id_of(d, b.get('id'))
         commands[cid] = {
@@ -161,6 +172,44 @@ def render_bind(b, commands, exec_mode='bridge'):
     if opts:
         optstr = lua_value(opts)
     return f'hl.bind({lua_string(b["combo"])}, {expr}, {optstr})'
+
+
+# --- series (multi-bind) overrides -------------------------------------------
+RAW_PREFIX_RE = re.compile(r'"[^"\\]*code:')
+
+
+def rewrite_raw_combo(code, mods):
+    """Replace the modifier prefix before `code:` in a raw bind's first string.
+
+    Raw binds emit `code` verbatim, so a series edit must rewrite the literal
+    combo inside that string, e.g. `"SUPER + SHIFT + code:"` -> `"CTRL + code:"`.
+    Only the first string literal containing `code:` is touched; the rest of
+    the Lua statement (function body, options) is preserved byte-for-byte.
+    """
+    new, n = RAW_PREFIX_RE.subn('"' + mods + ' + code:', code, count=1)
+    if n == 0:
+        raise ValueError(f'raw code has no string literal ending in code:: {code!r}')
+    return new
+
+
+def apply_series_overrides(nb, series_overrides):
+    """Apply a series-level override to a merged bind. Returns a new bind dict."""
+    sid = nb.get('seriesId')
+    if not sid or sid not in series_overrides:
+        return nb
+    spec = series_overrides[sid]
+    if not isinstance(spec, dict):
+        return nb
+    nb = dict(nb)
+    if 'mods' in spec and spec['mods']:
+        mods = spec['mods']
+        d = nb.get('dispatch') or {}
+        if d.get('kind') in ('raw', 'unknown') and nb.get('code'):
+            nb['code'] = rewrite_raw_combo(nb['code'], mods)
+        # Keep combo in sync for display/collision checks even on raw binds.
+        nb['combo'] = re.sub(r'^(.*?)(code:)', lambda m: mods + ' + ' + m.group(2),
+                             nb.get('combo', ''), count=1)
+    return nb
 
 
 # --- I/O ---------------------------------------------------------------------
@@ -233,6 +282,7 @@ def validate_overlay(catalog, overlay):
     if not isinstance(overlay, dict):
         return ['overlay must be a JSON object']
     catalog_ids = {b.get('id') for b in catalog.get('binds', [])}
+    catalog_by_id = {b.get('id'): b for b in catalog.get('binds', [])}
     seen_ids = set(catalog_ids)
 
     overrides = overlay.get('overrides', {})
@@ -255,6 +305,15 @@ def validate_overlay(catalog, overlay):
                     parse_combo(ov['combo'])
                 except ValueError as exc:
                     errors.append(f'overrides.{bid}: combo: {exc}')
+                target_dispatch = (catalog_by_id.get(bid) or {}).get('dispatch')
+                if (isinstance(target_dispatch, dict)
+                        and target_dispatch.get('kind') == 'raw'):
+                    errors.append(
+                        f'overrides.{bid}: combo override has no effect on a raw '
+                        f'bind (raw binds emit their stored code verbatim); '
+                        f'edit defaults/hyprland/keybinds.json and change the raw '
+                        f'`code` statement instead, or use a command/global bind'
+                    )
             if 'dispatch' in ov:
                 try:
                     validate_dispatch(ov['dispatch'], bid)
@@ -292,6 +351,17 @@ def validate_overlay(catalog, overlay):
                     validate_dispatch(add['dispatch'], bid)
                 except ValueError as exc:
                     errors.append(f'adds[{i}]: dispatch: {exc}')
+                d = add['dispatch']
+                kind = d.get('kind') if isinstance(d, dict) else None
+                if kind in ('raw', 'unknown') and not (
+                    (isinstance(add.get('code'), str) and add['code'].strip()) or
+                    (isinstance(d.get('code'), str) and d['code'].strip())
+                ):
+                    errors.append(
+                        f'adds[{i}]: {kind} dispatch needs a bind-level "code" or '
+                        f'"dispatch.code" hl.bind(...) statement; otherwise no '
+                        f'bind is emitted'
+                    )
 
     disabled = overlay.get('disabled', [])
     if not isinstance(disabled, list):
@@ -301,18 +371,48 @@ def validate_overlay(catalog, overlay):
             if bid not in catalog_ids:
                 errors.append(f'disabled: unknown bind id {bid!r}')
 
-    unknown = set(overlay) - {'overrides', 'adds', 'disabled'}
+    series_overrides = overlay.get('seriesOverrides', {})
+    series_ids = {b.get('seriesId') for b in catalog.get('binds', []) if b.get('seriesId')}
+    if not isinstance(series_overrides, dict):
+        errors.append('seriesOverrides must be an object')
+    else:
+        for sid, spec in series_overrides.items():
+            if sid not in series_ids:
+                errors.append(f'seriesOverrides: unknown series id {sid!r}')
+                continue
+            if not isinstance(spec, dict):
+                errors.append(f'seriesOverrides.{sid}: must be an object')
+                continue
+            allowed_series = {'mods', 'enabled'}
+            for key in spec:
+                if key not in allowed_series:
+                    errors.append(f'seriesOverrides.{sid}: unsupported field {key!r}')
+            if 'mods' in spec:
+                mods = spec['mods']
+                if not isinstance(mods, str) or not mods.strip():
+                    errors.append(f'seriesOverrides.{sid}: mods must be a non-empty string')
+                else:
+                    # "SUPER + CTRL" etc. — validate by appending a dummy key.
+                    try:
+                        parse_combo(mods + ' + X')
+                    except ValueError as exc:
+                        errors.append(f'seriesOverrides.{sid}: mods: {exc}')
+            if 'enabled' in spec and not isinstance(spec['enabled'], bool):
+                errors.append(f'seriesOverrides.{sid}: enabled must be boolean')
+
+    unknown = set(overlay) - {'overrides', 'adds', 'disabled', 'seriesOverrides'}
     for key in sorted(unknown):
         errors.append(f'unsupported top-level overlay field {key!r}')
     return errors
 
 
 # --- merge -------------------------------------------------------------------
-def merged_binds(catalog, overlay):
+def merged_binds(catalog, overlay, exec_mode='bridge'):
     binds = []
     overrides = (overlay or {}).get('overrides', {})
     adds = (overlay or {}).get('adds', [])
     disabled = set((overlay or {}).get('disabled', []))
+    series_overrides = (overlay or {}).get('seriesOverrides', {})
     for b in catalog['binds']:
         if b['id'] in disabled:
             continue
@@ -324,14 +424,26 @@ def merged_binds(catalog, overlay):
                     nb[key] = ov[key]
             if ov.get('enabled') is False:
                 continue
+        so = series_overrides.get(nb.get('seriesId')) if nb.get('seriesId') else None
+        if isinstance(so, dict) and so.get('enabled') is False:
+            continue
+        nb = apply_series_overrides(nb, series_overrides)
+        if (nb.get('dispatch') or {}).get('kind') != 'raw':
+            # combo/dispatch/options overrides change the emitted statement;
+            # keep the stored code in sync (consumed by the validator).
+            nb['code'] = render_bind(nb, {}, exec_mode)
         binds.append(nb)
     for a in adds:
         nb = dict(a)
         nb.setdefault('options', {})
         nb.setdefault('description', '')
-        nb.setdefault('label', '')
+        if not nb.get('label'):
+            nb['label'] = nb.get('description') or nb.get('id', '')
         nb.setdefault('category', '')
         nb.setdefault('source', 'custom')
+        # Adds have no catalog code; render_bind falls back to dispatch.code
+        # for raw/unknown binds, so every add gets a reproducible statement.
+        nb['code'] = render_bind(nb, {}, exec_mode)
         binds.append(nb)
     return binds
 
@@ -359,7 +471,7 @@ def main():
         return 2
 
     try:
-        binds = merged_binds(catalog, overlay)
+        binds = merged_binds(catalog, overlay, args.exec_mode)
         commands = OrderedDict()
 
         def render_set(source, preamble):

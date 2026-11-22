@@ -39,6 +39,11 @@ Singleton {
     // object, so the list, the cheatsheet and the live config cannot drift.
     property var overlay: KeybindStore.newOverlay()
 
+    // The frozen catalog is read-only, but edits need it for id lookup and to
+    // know which binds are raw Lua (their combo cannot be overridden).
+    property var catalog: null
+    property bool catalogLoaded: false
+
     // Every add in the overlay, as the form/filter view objects. There is no
     // raw residue in a JSON file, so every entry is editable.
     property var entries: []
@@ -86,6 +91,25 @@ Singleton {
                 root.overlay = KeybindStore.newOverlay();
                 root.entries = [];
             }
+        }
+    }
+
+    FileView {
+        id: catalogFile
+        path: root.catalogPath
+        preload: true
+
+        onLoaded: {
+            try {
+                root.catalog = JSON.parse(catalogFile.text() ?? "null");
+            } catch (e) {
+                console.error("[kbd] catalog parse failed: " + e);
+            }
+            root.catalogLoaded = true;
+        }
+        onLoadFailed: error => {
+            console.error("[kbd] catalog load failed: " + error);
+            root.catalogLoaded = true;
         }
     }
 
@@ -183,6 +207,25 @@ Singleton {
         return root.entries.find(entry => entry.id === id) ?? null;
     }
 
+    // The frozen catalog entry for an id, or null when the id is unknown
+    // (for example a hand-written override). DisabledKeybinds uses this to
+    // label the Deleted section and to pick the right generated file.
+    function catalogBind(id) {
+        return KeybindStore.catalogBind(root.catalog, id);
+    }
+
+    function isRawBind(id) {
+        return KeybindStore.isRawBind(root.catalogBind(id));
+    }
+
+    function isDisabled(id) {
+        return KeybindStore.isDisabled(root.overlay, id);
+    }
+
+    function isOverridden(id) {
+        return Object.prototype.hasOwnProperty.call(root.overlay.overrides ?? {}, String(id ?? ""));
+    }
+
     // The validation code of KeybindStore.validate, or "" when the entry can
     // be saved. The caller translates the code.
     function validate(entry) {
@@ -207,13 +250,14 @@ Singleton {
         return { ok: true, error: "", id: id };
     }
 
-    // Replaces the add with the given id. Unknown id: nothing is written.
+    // Replaces the add with the given id, or writes a narrow override for a
+    // frozen catalog bind. An id that is neither is refused without a write.
     function update(id, entry) {
         if (!root.loaded) return { ok: false, error: "not-loaded" };
 
         const adds = root.overlay.adds ?? [];
         const index = adds.findIndex(item => String(item.id ?? "") === id);
-        if (index === -1) return { ok: false, error: "not-found" };
+        if (index === -1) return updateCatalogBind(id, entry);
 
         const current = KeybindStore.addToEntry(adds[index]);
         const next = Object.assign({}, current, entry, { id: id });
@@ -225,6 +269,42 @@ Singleton {
         const overlay = KeybindStore.withAdds(root.overlay, updated);
         root.overlay = overlay;
         root.entries = overlay.adds.map(item => KeybindStore.addToEntry(item));
+        root.write();
+        return { ok: true, error: "" };
+    }
+
+    // A frozen catalog bind can only be changed through overrides[id]: the
+    // catalog itself is never edited. Raw binds are refused outright — their
+    // Lua is emitted verbatim, so neither combo nor description can be
+    // overridden without making the panel disagree with what Hyprland loads.
+    function updateCatalogBind(id, entry) {
+        const catalog = root.catalogBind(id);
+        if (catalog === null) return { ok: false, error: "not-found" };
+
+        const patch = {};
+        const allowed = ["combo", "description", "category", "dispatch", "options", "enabled", "label", "name", "command"];
+        for (const key of allowed) {
+            if (Object.prototype.hasOwnProperty.call(entry ?? {}, key)) patch[key] = entry[key];
+        }
+        if (Object.keys(patch).length === 0) return { ok: false, error: "not-found" };
+        if (KeybindStore.isRawBind(catalog)) return { ok: false, error: "raw-combo" };
+
+        // The form speaks name/command; the overlay stores description/dispatch.
+        if ("name" in patch) {
+            patch.description = patch.name;
+            delete patch.name;
+        }
+        if ("command" in patch) {
+            patch.dispatch = { kind: "command", id: id, command: String(patch.command ?? "") };
+            delete patch.command;
+        }
+        if ("combo" in patch && String(patch.combo ?? "").trim() === "")
+            return { ok: false, error: "empty-combo" };
+
+        const overrides = Object.assign({}, root.overlay.overrides ?? {});
+        overrides[id] = Object.assign({}, overrides[id] ?? {}, patch);
+        root.overlay = KeybindStore.withOverrides(root.overlay, overrides);
+        root.entries = (root.overlay.adds ?? []).map(item => KeybindStore.addToEntry(item));
         root.write();
         return { ok: true, error: "" };
     }
@@ -244,17 +324,51 @@ Singleton {
         return { ok: true, error: "" };
     }
 
-    // Narrow combo override for a catalog bind. Used by the conflict fixer for
-    // holders that do not come from an overlay add. Only `combo` is written; a
-    // command bind's dispatch/options stay with the frozen catalog.
+    // Narrow combo override for a catalog bind. Used by the conflict fixer and
+    // by row capture for binds that do not come from an overlay add. Only
+    // `combo` is written; dispatch/options stay with the frozen catalog. Raw
+    // Lua binds are refused: their combo is part of the verbatim statement.
     function setOverride(id, combo) {
         if (!root.loaded || String(id ?? "") === "") return { ok: false, error: "bad-id" };
+        if (root.isRawBind(id)) return { ok: false, error: "raw-combo" };
         const overrides = Object.assign({}, root.overlay.overrides ?? {});
         overrides[id] = Object.assign({}, overrides[id] ?? {}, KeybindStore.comboOverride(combo));
         const overlay = KeybindStore.withOverrides(root.overlay, overrides);
         root.overlay = overlay;
         root.entries = (overlay.adds ?? []).map(item => KeybindStore.addToEntry(item));
         root.write();
+        return { ok: true, error: "" };
+    }
+
+    // One edit for every member of a catalog series. Series members are raw
+    // Lua binds: their code is emitted verbatim, so a per-bind combo override
+    // is refused. The generator rewrites each member's code and combo from
+    // seriesOverrides[seriesId].mods instead. A null patch value clears that
+    // field — that is how "enable" and "reset" undo a previous edit.
+    function setSeriesOverride(seriesId, patch) {
+        if (!root.loaded || String(seriesId ?? "") === "") return { ok: false, error: "bad-id" };
+        const id = String(seriesId);
+        const series = (root.catalog?.binds ?? []).filter(
+            bind => String(bind?.seriesId ?? "") === id);
+        if (series.length === 0) return { ok: false, error: "not-found" };
+
+        const spec = {};
+        if (Object.prototype.hasOwnProperty.call(patch ?? {}, "mods")) {
+            const mods = patch.mods === null ? null : String(patch.mods ?? "").trim();
+            if (mods === "") return { ok: false, error: "empty-combo" };
+            spec.mods = mods;
+        }
+        if (Object.prototype.hasOwnProperty.call(patch ?? {}, "enabled")) {
+            if (patch.enabled !== null && typeof patch.enabled !== "boolean")
+                return { ok: false, error: "not-found" };
+            spec.enabled = patch.enabled;
+        }
+        if (Object.keys(spec).length === 0) return { ok: false, error: "not-found" };
+
+        root.overlay = KeybindStore.withSeriesOverride(root.overlay, id, spec);
+        root.entries = (root.overlay.adds ?? []).map(item => KeybindStore.addToEntry(item));
+        root.write();
+        console.log("[kbd] series override id=" + id + " " + JSON.stringify(spec));
         return { ok: true, error: "" };
     }
 
@@ -268,5 +382,59 @@ Singleton {
         root.entries = (overlay.adds ?? []).map(item => KeybindStore.addToEntry(item));
         root.write();
         return { ok: true, error: "" };
+    }
+
+    // Delete/restore of a frozen catalog bind. `disabled` is the generator's
+    // own contract, so a disable survives every later overlay save: the
+    // generator reads the id list on each run and omits that bind again.
+    function disableMany(ids) {
+        if (!root.loaded) return { ok: false, error: "not-loaded" };
+        const wanted = (ids ?? []).map(id => String(id ?? "")).filter(id => id !== "");
+        if (wanted.length === 0) return { ok: false, error: "bad-id" };
+
+        const before = (root.overlay.disabled ?? []).map(id => String(id ?? ""));
+        if (wanted.every(id => before.indexOf(id) !== -1)) return { ok: true, error: "" };
+
+        let overlay = root.overlay;
+        for (const id of wanted) overlay = KeybindStore.withDisabled(overlay, id, true);
+        root.overlay = overlay;
+        root.write();
+        return { ok: true, error: "" };
+    }
+
+    function disable(id) {
+        return root.disableMany([id]);
+    }
+
+    function enableMany(ids) {
+        if (!root.loaded) return { ok: false, error: "not-loaded" };
+        const wanted = (ids ?? []).map(id => String(id ?? "")).filter(id => id !== "");
+        if (wanted.length === 0) return { ok: false, error: "bad-id" };
+
+        const before = (root.overlay.disabled ?? []).map(id => String(id ?? ""));
+        const anyDisabled = wanted.some(id => before.indexOf(id) !== -1);
+        const overrides = Object.assign({}, root.overlay.overrides ?? {});
+        let clearedEnabled = false;
+        for (const id of wanted) {
+            const current = overrides[id];
+            if (current && current.enabled === false) {
+                const next = Object.assign({}, current);
+                delete next.enabled;
+                if (Object.keys(next).length === 0) delete overrides[id];
+                else overrides[id] = next;
+                clearedEnabled = true;
+            }
+        }
+        if (!anyDisabled && !clearedEnabled) return { ok: true, error: "" };
+
+        let overlay = root.overlay;
+        for (const id of wanted) overlay = KeybindStore.withDisabled(overlay, id, false);
+        root.overlay = KeybindStore.withOverrides(overlay, overrides);
+        root.write();
+        return { ok: true, error: "" };
+    }
+
+    function enable(id) {
+        return root.enableMany([id]);
     }
 }

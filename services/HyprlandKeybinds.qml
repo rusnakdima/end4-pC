@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 
 import qs.modules.common
 import qs.modules.common.functions
-import qs.services
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -40,7 +39,15 @@ Singleton {
     property var overlay: ({ overrides: {}, adds: [], disabled: [] })
 
     // The single merged list. Every derived property below reads from this.
+    // KeybindStore.effectiveBinds applies overlay overrides (combo included)
+    // and drops disabled ids, so the combo shown here is the one the generator
+    // emits — not one from the abandoned keybind_overrides.conf path.
     property var effectiveBinds: KeybindStore.effectiveBinds(root.catalog, root.overlay)
+
+    // One logical row per catalog series, in catalog order. Built from the
+    // same merged list the trees use, so a member's combo already carries any
+    // seriesOverrides[sid].mods rewrite.
+    property var series: KeybindStore.groupBySeries(root.effectiveBinds, root.overlay)
 
     onEffectiveBindsChanged: root.buildTrees()
 
@@ -99,8 +106,18 @@ Singleton {
             group: String(b.group ?? ""),
             combo: combo,
             originalCombo: original,
+            // Display-only fields for catalog binds that carry `keyLabel`:
+            // a raw `code:10` token becomes "1" (or "Num 7") in the panel.
+            keyLabel: String(b.keyLabel ?? ""),
+            seriesId: String(b.seriesId ?? ""),
+            seriesLabel: String(b.seriesLabel ?? ""),
+            seriesEnabled: b.seriesEnabled !== false,
+            displayCombo: String(b.displayCombo ?? KeybindStore.displayCombo(b, combo)),
             source: String(b.source ?? "main"),
             hidden: hidden,
+            // Raw binds emit their Lua verbatim, so the settings page must not
+            // offer a combo rebind for them: the generator would reject it.
+            raw: KeybindStore.isRawBind(b),
             catalogBind: b
         };
     }
@@ -129,6 +146,10 @@ Singleton {
         const main = [];
         const custom = [];
         for (const b of (root.effectiveBinds ?? [])) {
+            // A disabled series is omitted by the generator, so it must not
+            // show up as a live bind (or a conflict) elsewhere either. The
+            // series row itself keeps the id so it can be re-enabled.
+            if (b.seriesEnabled === false) continue;
             if (String(b.source ?? "") === "main") main.push(b);
             else custom.push(b);
         }
@@ -212,11 +233,18 @@ Singleton {
         return out;
     }
 
-    // "SUPER + SHIFT + S" for a bind.
+    // "SUPER + SHIFT + S" for a bind. Conflict indices and capture keep this
+    // raw form; only the places that show a combo use displayCombo below.
     function comboOf(bind) {
         const mods = bind?.mods ?? [];
         const key = bind?.key ?? "";
         return [...mods, key].filter(part => part !== "").join(" + ");
+    }
+
+    // Human label for a `code:N` token from a catalog bind's `keyLabel`
+    // ("1", "Num 7"). Display only — capture of new binds is untouched.
+    function displayCombo(combo, bind) {
+        return KeybindStore.displayCombo(bind, combo);
     }
 
     // Every combination with the binds that hold it. Two holders means a real
@@ -245,7 +273,11 @@ Singleton {
                     } else {
                         const id = "bind_" + combo.replace(/[^A-Za-z0-9_]/g, "_");
                         const sourceLine = String(bind?.line ?? ("seq" + (++plainSeq)));
-                        put(HyprlandBindOverrides.comboFor(id, combo), {
+                        // `combo` is already the effective combo from the
+                        // overlay; a legacy keybind_overrides.conf is not
+                        // read by the generator and must not index a key
+                        // Hyprland does not listen for.
+                        put(combo, {
                             // `id` stays the NUL-separated self-exclusion token
                             // that rows pass to repeatUsers. `overrideId` is
                             // the bare key OtherBindRow uses; `uid` keeps two
@@ -264,13 +296,10 @@ Singleton {
             walk(tree);
             for (const [action, entry] of actions) {
                 const label = entry.comment !== "" ? entry.comment : action;
-                const override = HyprlandBindOverrides.comboFor(action, "");
-                if (override !== "") {
-                    put(override, { "id": action, "label": label, "file": file, "bind": entry.bind });
-                } else {
-                    for (const combo of entry.combos) {
-                        put(combo, { "id": action, "label": label, "file": file, "bind": entry.bind });
-                    }
+                // Same as the plain-bind branch: only the overlay combo is
+                // real. action aliases are already in entry.combos.
+                for (const combo of entry.combos) {
+                    put(combo, { "id": action, "label": label, "file": file, "bind": entry.bind });
                 }
             }
         };

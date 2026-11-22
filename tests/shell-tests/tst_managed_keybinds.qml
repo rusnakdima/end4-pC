@@ -304,4 +304,74 @@ TestCase {
         verify(ManagedKeybinds.entryForSource(missingId) === null,
             "entryForSource must reject an id that is not an overlay add");
     }
+
+    // --- default binds: disable durability and combo overrides --------------
+
+    // The regression the marker-based delete caused: a default bind was
+    // commented out in generated Lua, then the next overlay save regenerated
+    // the file and silently brought it back. Here the disable is an overlay id,
+    // so every later save keeps it.
+    function test_disable_default_bind_then_overlay_save_stays_disabled() {
+        reseed([]);
+        const disabled = ManagedKeybinds.disable("screen");
+        verify(disabled.ok, "disable failed: " + disabled.error);
+        waitForFileToContain('"screen"', "the disabled id never reached the temp overlay");
+        verify(ManagedKeybinds.isDisabled("screen"));
+
+        let overlay = KeybindStore.parseOverlay(readTempOverlay());
+        compare(overlay.disabled.indexOf("screen") !== -1, true);
+
+        // An unrelated create rewrites the whole overlay file.
+        const created = createAndWait("After delete", "true", "SUPER + F12");
+        overlay = KeybindStore.parseOverlay(readTempOverlay());
+        compare(overlay.disabled.indexOf("screen") !== -1, true,
+            "the next overlay save undid the delete:\n" + readTempOverlay());
+
+        // The list the settings page reads still omits the deleted bind.
+        const catalog = { binds: [{
+            id: "screen", combo: "SUPER + Minus", description: "Screen",
+            category: "Screen", source: "main",
+            dispatch: { kind: "raw", code: "hl.bind(\"SUPER + Minus\", function() end)" }
+        }] };
+        const binds = KeybindStore.effectiveBinds(catalog, overlay);
+        compare(binds.length, 1, "the deleted default bind reappeared in effectiveBinds");
+        compare(binds[0].id, created.id);
+
+        const restored = ManagedKeybinds.enable("screen");
+        verify(restored.ok, "enable failed: " + restored.error);
+        waitForFileToLose('"screen"', "the restored id is still in the temp overlay");
+        verify(!ManagedKeybinds.isDisabled("screen"));
+    }
+
+    function test_update_of_a_default_bind_writes_an_overlay_override() {
+        reseed([]);
+        const updated = ManagedKeybinds.update("bind", { combo: "SUPER + GRAVE" });
+        verify(updated.ok, "update of a catalog id failed: " + updated.error);
+        waitForFileToContain('"bind"', "the override never reached the temp overlay");
+
+        const overlay = KeybindStore.parseOverlay(readTempOverlay());
+        compare(overlay.overrides["bind"].combo, "SUPER + GRAVE");
+        compare(overlay.adds.length, 0, "an override must not create an add");
+        verify(ManagedKeybinds.isOverridden("bind"));
+
+        const cleared = ManagedKeybinds.clearOverride("bind");
+        verify(cleared.ok, "clearOverride failed: " + cleared.error);
+        waitForFileToLose('"bind"', "the override is still in the temp overlay");
+        verify(!ManagedKeybinds.isOverridden("bind"));
+    }
+
+    function test_raw_default_bind_refuses_a_combo_override() {
+        tryVerify(() => ManagedKeybinds.catalogLoaded, 5000,
+            "the catalog never loaded, so raw binds cannot be recognised");
+        reseed([]);
+        const viaSetter = ManagedKeybinds.setOverride("screen", "SUPER + Z");
+        verify(!viaSetter.ok, "a raw bind's combo must not be overridable");
+        compare(viaSetter.error, "raw-combo");
+
+        const viaUpdate = ManagedKeybinds.update("screen", { combo: "SUPER + Z" });
+        verify(!viaUpdate.ok, "update must refuse a raw bind too");
+        compare(viaUpdate.error, "raw-combo");
+        verify(readTempOverlay().indexOf("screen") === -1,
+            "nothing may be written for a refused raw override");
+    }
 }

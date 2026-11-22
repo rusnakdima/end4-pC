@@ -1027,7 +1027,10 @@
     "kind": "raw",
     "code": "hl.bind(\"SUPER + code:82\", function() zoomfunction(-0.3) end, { repeating = true })"
    },
-   "code": "hl.bind(\"SUPER + code:82\", function() zoomfunction(-0.3) end, { repeating = true })"
+   "code": "hl.bind(\"SUPER + code:82\", function() zoomfunction(-0.3) end, { repeating = true })",
+   "seriesId": "screen-zoom",
+   "seriesLabel": "Zoom with keypad",
+   "keyLabel": "Num 2"
   },
   {
    "id": "screen-4",
@@ -1043,7 +1046,10 @@
     "kind": "raw",
     "code": "hl.bind(\"SUPER + code:86\", function() zoomfunction(0.3) end, { repeating = true })"
    },
-   "code": "hl.bind(\"SUPER + code:86\", function() zoomfunction(0.3) end, { repeating = true })"
+   "code": "hl.bind(\"SUPER + code:86\", function() zoomfunction(0.3) end, { repeating = true })",
+   "seriesId": "screen-zoom",
+   "seriesLabel": "Zoom with keypad",
+   "keyLabel": "Num 6"
   },
   {
    "id": "media",
@@ -1987,7 +1993,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + ALT + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = false }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + ALT + code:\" .. 87, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(1), follow = false }))\n    end)"
+   "code": "hl.bind(\"SUPER + ALT + code:\" .. 87, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(1), follow = false }))\n    end)",
+   "seriesId": "window-move-workspace",
+   "seriesLabel": "Move window to workspace 1–10",
+   "keyLabel": "Num 7"
   },
   {
    "id": "window-35",
@@ -2003,7 +2012,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + ALT + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = false }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + ALT + code:\" .. 88, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(2), follow = false }))\n    end)"
+   "code": "hl.bind(\"SUPER + ALT + code:\" .. 88, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(2), follow = false }))\n    end)",
+   "seriesId": "window-move-workspace",
+   "seriesLabel": "Move window to workspace 1–10",
+   "keyLabel": "Num 8"
   },
   {
    "id": "window-36",
@@ -2019,7 +2031,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + ALT + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = false }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + ALT + code:\" .. 89, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(3), follow = false }))\n    end)"
+   "code": "hl.bind(\"SUPER + ALT + code:\" .. 89, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(3), follow = false }))\n    end)",
+   "seriesId": "window-move-workspace",
+   "seriesLabel": "Move window to workspace 1–10",
+   "keyLabel": "Num 9"
   },
   {
    "id": "window-37",
@@ -2035,7 +2050,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + ALT + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = false }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + ALT + code:\" .. 83, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(4), follow = false }))\n    end)"
+   "code": "hl.bind(\"SUPER + ALT + code:\" .. 83, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(4), follow = false }))\n    end)",
+   "seriesId": "window-move-workspace",
+   "seriesLabel": "Move window to workspace 1–10",
+   "keyLabel": "Num 4"
   },
   {
    "id": "window-38",
@@ -2051,7 +2069,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + ALT + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = false }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + ALT + code:\" .. 84, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(5), follow = false }))\n    end)"
+   "code": "hl.bind(\"SUPER + ALT + code:\" .. 84, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(5), follow = false }))\n    end)",
+   "seriesId": "window-move-workspace",
+   "seriesLabel": "Move window to workspace 1–10",
+   "keyLabel": "Num 5"
   },
   {
    "id": "window-39",
@@ -2067,7 +2088,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + ALT + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = false }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + ALT + code:\" .. 85, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(6), follow = false }))\n    end)"
+   "code": "hl.bind(\"SUPER + ALT + code:\" .. 85, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(6), follow = false }))\n    end)",
+   "seriesId": "window-move-workspace",
+   "seriesLabel": "Move window to workspace 1–10",
+   "keyLabel": "Num 6"
   },
   {
    "id": "window-40",
@@ -2083,7 +2107,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + ALT + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = false }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + ALT + code:\" .. 79, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(7), follow = false }))\n    end)"
+   "code": "hl.bind(\"SUPER + ALT + code:\" .. 79, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(7), follow = false }))\n    end)",
+   "seriesId": "window-move-workspace",
+   "seriesLabel": "Move window to workspace 1–10",
+   "keyLabel": "Num 1"
   },
   {
    "id": "window-41",
@@ -2099,7 +2126,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + ALT + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = false }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + ALT + code:\" .. 80, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(8), follow = false }))\n    end)"
+   "code": "hl.bind(\"SUPER + ALT + code:\" .. 80, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(8), follow = false }))\n    end)",
+   "seriesId": "window-move-workspace",
+   "seriesLabel": "Move window to workspace 1–10",
+   "keyLabel": "Num 2"
   },
   {
    "id": "window-42",
@@ -2115,7 +2145,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + ALT + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = false }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + ALT + code:\" .. 81, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(9), follow = false }))\n    end)"
+   "code": "hl.bind(\"SUPER + ALT + code:\" .. 81, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(9), follow = false }))\n    end)",
+   "seriesId": "window-move-workspace",
+   "seriesLabel": "Move window to workspace 1–10",
+   "keyLabel": "Num 3"
   },
   {
    "id": "window-43",
@@ -2131,7 +2164,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + ALT + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = false }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + ALT + code:\" .. 90, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(10), follow = false }))\n    end)"
+   "code": "hl.bind(\"SUPER + ALT + code:\" .. 90, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(10), follow = false }))\n    end)",
+   "seriesId": "window-move-workspace",
+   "seriesLabel": "Move window to workspace 1–10",
+   "keyLabel": "Num 0"
   },
   {
    "id": "window-44",
@@ -2594,7 +2630,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numberkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 10, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(1) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 10, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(1) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "1"
   },
   {
    "id": "workspace-12",
@@ -2610,7 +2649,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numberkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 11, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(2) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 11, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(2) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "2"
   },
   {
    "id": "workspace-13",
@@ -2626,7 +2668,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numberkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 12, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(3) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 12, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(3) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "3"
   },
   {
    "id": "workspace-14",
@@ -2642,7 +2687,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numberkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 13, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(4) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 13, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(4) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "4"
   },
   {
    "id": "workspace-15",
@@ -2658,7 +2706,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numberkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 14, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(5) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 14, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(5) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "5"
   },
   {
    "id": "workspace-16",
@@ -2674,7 +2725,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numberkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 15, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(6) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 15, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(6) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "6"
   },
   {
    "id": "workspace-17",
@@ -2690,7 +2744,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numberkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 16, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(7) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 16, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(7) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "7"
   },
   {
    "id": "workspace-18",
@@ -2706,7 +2763,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numberkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 17, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(8) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 17, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(8) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "8"
   },
   {
    "id": "workspace-19",
@@ -2722,7 +2782,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numberkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 18, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(9) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 18, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(9) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "9"
   },
   {
    "id": "workspace-20",
@@ -2738,7 +2801,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numberkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 19, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(10) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 19, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(10) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "0"
   },
   {
    "id": "workspace-21",
@@ -2754,7 +2820,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 87, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(1) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 87, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(1) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "Num 7"
   },
   {
    "id": "workspace-22",
@@ -2770,7 +2839,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 88, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(2) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 88, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(2) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "Num 8"
   },
   {
    "id": "workspace-23",
@@ -2786,7 +2858,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 89, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(3) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 89, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(3) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "Num 9"
   },
   {
    "id": "workspace-24",
@@ -2802,7 +2877,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 83, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(4) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 83, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(4) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "Num 4"
   },
   {
    "id": "workspace-25",
@@ -2818,7 +2896,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 84, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(5) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 84, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(5) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "Num 5"
   },
   {
    "id": "workspace-26",
@@ -2834,7 +2915,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 85, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(6) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 85, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(6) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "Num 6"
   },
   {
    "id": "workspace-27",
@@ -2850,7 +2934,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 79, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(7) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 79, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(7) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "Num 1"
   },
   {
    "id": "workspace-28",
@@ -2866,7 +2953,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 80, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(8) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 80, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(8) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "Num 2"
   },
   {
    "id": "workspace-29",
@@ -2882,7 +2972,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 81, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(9) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 81, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(9) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "Num 3"
   },
   {
    "id": "workspace-30",
@@ -2898,7 +2991,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + code:\" .. numpadkey[i], function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(i) }))\n    end)"
    },
-   "code": "hl.bind(\"SUPER + code:\" .. 90, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(10) }))\n    end)"
+   "code": "hl.bind(\"SUPER + code:\" .. 90, function()\n        hl.dispatch(hl.dsp.focus({ workspace = workspace_in_group(10) }))\n    end)",
+   "seriesId": "workspace-switch",
+   "seriesLabel": "Switch to workspace 1–10",
+   "keyLabel": "Num 0"
   },
   {
    "id": "workspace-31",
@@ -3763,7 +3859,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowRow[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 10, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(1), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 1 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 10, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(1), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 1 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "1"
   },
   {
    "id": "window-57",
@@ -3779,7 +3878,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowRow[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 11, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(2), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 2 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 11, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(2), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 2 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "2"
   },
   {
    "id": "window-58",
@@ -3795,7 +3897,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowRow[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 12, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(3), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 3 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 12, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(3), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 3 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "3"
   },
   {
    "id": "window-59",
@@ -3811,7 +3916,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowRow[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 13, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(4), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 4 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 13, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(4), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 4 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "4"
   },
   {
    "id": "window-60",
@@ -3827,7 +3935,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowRow[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 14, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(5), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 5 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 14, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(5), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 5 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "5"
   },
   {
    "id": "window-61",
@@ -3843,7 +3954,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowRow[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 15, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(6), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 6 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 15, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(6), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 6 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "6"
   },
   {
    "id": "window-62",
@@ -3859,7 +3973,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowRow[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 16, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(7), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 7 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 16, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(7), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 7 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "7"
   },
   {
    "id": "window-63",
@@ -3875,7 +3992,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowRow[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 17, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(8), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 8 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 17, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(8), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 8 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "8"
   },
   {
    "id": "window-64",
@@ -3891,7 +4011,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowRow[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 18, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(9), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 9 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 18, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(9), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 9 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "9"
   },
   {
    "id": "window-65",
@@ -3907,7 +4030,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowRow[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 19, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(10), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 10 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 19, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(10), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 10 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "0"
   },
   {
    "id": "window-66",
@@ -3923,7 +4049,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowNumpad[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 87, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(1), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 1 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 87, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(1), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 1 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "Num 7"
   },
   {
    "id": "window-67",
@@ -3939,7 +4068,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowNumpad[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 88, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(2), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 2 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 88, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(2), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 2 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "Num 8"
   },
   {
    "id": "window-68",
@@ -3955,7 +4087,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowNumpad[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 89, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(3), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 3 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 89, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(3), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 3 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "Num 9"
   },
   {
    "id": "window-69",
@@ -3971,7 +4106,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowNumpad[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 83, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(4), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 4 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 83, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(4), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 4 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "Num 4"
   },
   {
    "id": "window-70",
@@ -3987,7 +4125,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowNumpad[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 84, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(5), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 5 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 84, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(5), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 5 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "Num 5"
   },
   {
    "id": "window-71",
@@ -4003,7 +4144,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowNumpad[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 85, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(6), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 6 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 85, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(6), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 6 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "Num 6"
   },
   {
    "id": "window-72",
@@ -4019,7 +4163,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowNumpad[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 79, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(7), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 7 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 79, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(7), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 7 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "Num 1"
   },
   {
    "id": "window-73",
@@ -4035,7 +4182,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowNumpad[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 80, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(8), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 8 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 80, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(8), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 8 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "Num 2"
   },
   {
    "id": "window-74",
@@ -4051,7 +4201,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowNumpad[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 81, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(9), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 9 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 81, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(9), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 9 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "Num 3"
   },
   {
    "id": "window-75",
@@ -4067,7 +4220,10 @@
     "kind": "raw",
     "code": "    hl.bind(\"SUPER + SHIFT + code:\" .. workspaceFollowNumpad[i], function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(i), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. i .. \" and switch\" })"
    },
-   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 90, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(10), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 10 .. \" and switch\" })"
+   "code": "hl.bind(\"SUPER + SHIFT + code:\" .. 90, function()\n        hl.dispatch(hl.dsp.window.move({ workspace = workspace_in_group(10), follow = true }))\n    end, { description = \"Window: Send to workspace \" .. 10 .. \" and switch\" })",
+   "seriesId": "window-send-workspace",
+   "seriesLabel": "Send window to workspace 1–10",
+   "keyLabel": "Num 0"
   },
   {
    "id": "utilities-11",

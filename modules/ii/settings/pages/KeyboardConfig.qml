@@ -62,19 +62,20 @@ ContentPage {
         HyprlandKeybinds.shellActions, GlobalStates.keybindFilter,
         ["description", "action", "combos"])
 
-    // A category name matches every bind below it; otherwise match the bind's
-    // own text and its combination. The extra searchCombo field is only used
-    // by the filter — the row still receives the original bind object.
+    // Series members get one grouped row below, so they are left out of the
+    // flat "Other keybinds" list. Every other bind renders exactly as before.
     function filterOtherSections(sections, query) {
         const out = [];
         const tokens = String(query ?? "").trim().toLowerCase().split(/\s+/).filter(t => t !== "");
         for (const section of (sections ?? [])) {
             const category = String(section?.name ?? "").toLowerCase();
             const categoryMatches = tokens.length > 0 && tokens.every(t => category.includes(t));
+            const plain = (section?.binds ?? []).filter(
+                bind => String(bind?.seriesId ?? "") === "");
             const binds = categoryMatches
-                ? (section?.binds ?? [])
+                ? plain
                 : CF.StringUtils.filterByQuery(
-                    (section?.binds ?? []).map(bind => Object.assign({}, bind, {
+                    plain.map(bind => Object.assign({}, bind, {
                         searchCombo: HyprlandKeybinds.comboOf(bind)
                     })),
                     query,
@@ -85,11 +86,16 @@ ContentPage {
     }
 
     // The arguments are read here so QML tracks both services and the query.
+    readonly property var visibleSeries: CF.StringUtils.filterByQuery(
+        HyprlandKeybinds.series, GlobalStates.keybindFilter,
+        ["seriesLabel", "mods", "memberLabels"])
+
     readonly property var visibleOtherSections: page.filterOtherSections(
         HyprlandKeybinds.otherSections, GlobalStates.keybindFilter)
 
     readonly property int keybindMatchCount: page.visibleManaged.length
-        + page.visibleShell.length + page.visibleOtherSections.length
+        + page.visibleShell.length + page.visibleSeries.length
+        + page.visibleOtherSections.length
 
     // ------------------------------------------------------
     // Deleting shell / compositor binds (recoverable)
@@ -146,11 +152,23 @@ ContentPage {
     function moveConflictHolder(group, holder, combo) {
         if (String(combo ?? "") === "") return;
         const original = page.originalConflictHolder(group, holder);
+        const catalogId = String(original?.bind?.id ?? "");
+        // Without a catalog id there is no key the generator can write an
+        // override for; refusing is better than writing a dead override file.
+        if (catalogId === "") return;
+        if (ManagedKeybinds.isRawBind(catalogId)) {
+            page.captureError = page.formErrorMessage("raw-combo");
+            return;
+        }
+
+        // A conflict fix is a rebind like any other, so it goes through the
+        // same overlay service. `fixHolder` uses `overrideId` for a plain
+        // bind, which is why it is set to the catalog id here.
         const service = KeybindConflicts.fixHolder(
-            original, combo,
+            Object.assign({}, original, { overrideId: catalogId }), combo,
             bind => ManagedKeybinds.entryForSource(bind),
             ManagedKeybinds,
-            HyprlandBindOverrides);
+            ManagedKeybinds);
         if (service === "managed" || service === "override") {
             page.conflictResolved = true;
             conflictResolvedTimer.restart();
@@ -346,9 +364,22 @@ ContentPage {
     // a shell action, or the bind_<key> id of one of the compositor's own
     // binds.
     property string capturing: ""
+    // The frozen catalog ids behind the row being captured. A default bind is
+    // rebound by writing overrides[id] in the JSON overlay; the old
+    // keybind_overrides.conf was never read by the generator, so it could
+    // show a combo Hyprland did not actually listen for.
+    property var captureCatalogIds: []
+    // Set when a row cannot be edited here (raw Lua bind) or a write failed.
+    property string captureError: ""
 
-    function startCapture(action) {
-        page.capturing = action;
+    function startCapture(captureKey, catalogIds, raw) {
+        if (raw === true) {
+            page.captureError = Translation.tr("This keybind is raw Lua; its keys cannot be changed in Settings.");
+            return;
+        }
+        page.captureError = "";
+        page.captureCatalogIds = (catalogIds ?? []).map(id => String(id ?? "")).filter(id => id !== "");
+        page.capturing = captureKey;
         captureTimeout.restart();
         Qt.callLater(() => page.forceActiveFocus());
     }
@@ -359,6 +390,7 @@ ContentPage {
     function stopCapture() {
         if (page.capturing === "") return;
         page.capturing = "";
+        page.captureCatalogIds = [];
         captureTimeout.stop();
     }
 
@@ -431,6 +463,22 @@ ContentPage {
             return true;
         }
 
+        if (page.captureCatalogIds.length > 0) {
+            // One save per captured key. A loop shortcut owns several catalog
+            // binds; all of their overrides are written through the same
+            // service so the cheatsheet and the generated Lua stay in step.
+            let firstError = "";
+            for (const catalogId of page.captureCatalogIds) {
+                const result = ManagedKeybinds.setOverride(catalogId, combo);
+                if (!result.ok && firstError === "") firstError = result.error;
+            }
+            if (firstError !== "") page.captureError = page.formErrorMessage(firstError);
+            page.stopCapture();
+            return true;
+        }
+
+        // Only a row with no catalog id falls back to the legacy overrides
+        // file; every bind from the catalog takes the overlay path above.
         HyprlandBindOverrides.setOverride(page.capturing, combo);
         page.stopCapture();
         return true;
@@ -461,6 +509,7 @@ ContentPage {
 
     function openCreateForm() {
         page.stopCapture();
+        page.captureError = "";
         page.formMode = "create";
         page.formEditId = "";
         page.formOriginalCombo = "";
@@ -474,17 +523,16 @@ ContentPage {
 
     function openEditForm(entry) {
         page.stopCapture();
+        page.captureError = "";
         page.formMode = "edit";
         page.formEditId = entry.id;
         page.formOriginalCombo = entry.combo;
         page.formName = entry.name;
         page.formCategory = entry.category;
         page.formCommand = entry.command;
-        // Show what the bind does right now: an override written through
-        // the other-bind rows moves it, and the form must not display a key
-        // the compositor does not actually listen for.
-        page.formCombo = HyprlandBindOverrides.comboFor(
-            "bind_" + entry.combo.replace(/[^A-Za-z0-9_]/g, "_"), entry.combo);
+        // The form edits an overlay add: `entry.combo` is the combo the
+        // generator emits, including a combo moved by a conflict fix.
+        page.formCombo = entry.combo;
         page.formError = "";
         page.formOpen = true;
     }
@@ -514,6 +562,7 @@ ContentPage {
         case "newline-command": return Translation.tr("The command must be on one line.");
         case "newline-category": return Translation.tr("The category must be on one line.");
         case "empty-combo": return Translation.tr("Press a key combination first.");
+        case "raw-combo": return Translation.tr("This keybind is raw Lua; its keys cannot be changed in Settings.");
         case "not-loaded": return Translation.tr("The keybind file has not loaded yet. Try again.");
         case "not-found": return Translation.tr("That keybind is no longer in the file.");
         default: return Translation.tr("The keybind could not be saved.");
@@ -813,6 +862,17 @@ ContentPage {
                             }
                         }
 
+                        // A refused rebind (raw Lua) or a failed overlay write
+                        // is reported here instead of silently doing nothing.
+                        StyledText {
+                            Layout.fillWidth: true
+                            visible: page.captureError !== ""
+                            text: page.captureError
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            color: page.conflictColor
+                            wrapMode: Text.Wrap
+                        }
+
                         // ---- Panel-managed keybinds ---------------------------
                         // The form replaces the button and the list while it is
                         // open. The Loader destroys it on close, so every open
@@ -900,6 +960,28 @@ ContentPage {
                             }
                         }
 
+                        // ---- Keybind series ------------------------------------
+                        // Raw multi-key groups (workspace switching, window
+                        // moving, keypad zoom) get one logical row each. The
+                        // member list is collapsed until asked for, and the
+                        // modifier prefix / enabled state are one write for
+                        // every bind in the series.
+                        StyledText {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 8
+                            visible: page.visibleSeries.length > 0
+                            text: Translation.tr("Keybind series")
+                            font.pixelSize: Appearance.font.pixelSize.title
+                            color: Appearance.colors.colOnLayer1
+                        }
+                        Repeater {
+                            model: page.visibleSeries
+                            delegate: SeriesRow {
+                                required property var modelData
+                                seriesData: modelData
+                            }
+                        }
+
                         // ---- The compositor's own binds ------------------------
                         StyledText {
                             Layout.fillWidth: true
@@ -980,10 +1062,11 @@ ContentPage {
             }
         }
 
-        // Recoverable deletions live in the two config files as marker
-        // blocks. This section lists them so a delete can be undone. Like the
-        // keybind block it is Hyprland-only, and it only exists while there
-        // is something to restore.
+        // Recoverable deletions are ids in the overlay's `disabled` array.
+        // This section lists them so a delete can be undone by clearing that
+        // id; a later overlay save cannot undo a delete. Like the keybind
+        // block it is Hyprland-only, and it only exists while there is
+        // something to restore.
         Loader {
             Layout.fillWidth: true
             active: WM.compositor === "hyprland" && DisabledKeybinds.disabled.length > 0
@@ -1019,9 +1102,9 @@ ContentPage {
 
                                         StyledText {
                                             Layout.fillWidth: true
-                                            // Blocks read back from disk have no
-                                            // persisted label; the service falls
-                                            // back to the id, which is shown here.
+                                            // A disable re-read from the overlay
+                                            // has no persisted label; the service
+                                            // falls back to the catalog id.
                                             text: (deletedRow.modelData.label ?? "") !== ""
                                                 ? deletedRow.modelData.label
                                                 : (deletedRow.modelData.id ?? "")
@@ -1106,7 +1189,10 @@ ContentPage {
                 spacing: 8
 
                 Repeater {
-                    model: String(panel.modelData?.combo ?? "").split(" + ")
+                    // A raw bind's code:N reads as its catalog keyLabel here
+                    // too; the conflict index itself still uses the raw combo.
+                    model: CF.StringUtils.keyLabels(HyprlandKeybinds.displayCombo(
+                        panel.modelData?.combo ?? "", panel.modelData?.holders?.[0]?.bind))
                     delegate: KeyboardKey {
                         required property var modelData
                         key: modelData
@@ -1300,9 +1386,17 @@ ContentPage {
         // `title` to find the row a search result points at.
         readonly property string title: KeybindLabels.shell(actionData)
 
+        // `combos` comes from HyprlandKeybinds' merged list, so the combo the
+        // row shows is the one generated from the overlay override.
         readonly property string defaultCombo: actionData?.combos?.[0] ?? ""
-        readonly property string combo: HyprlandBindOverrides.comboFor(actionData?.action ?? "", shortcutRow.defaultCombo)
+        readonly property string combo: shortcutRow.defaultCombo
         readonly property var aliases: (actionData?.combos ?? []).slice(1)
+        readonly property var catalogIds: (actionData?.binds ?? [])
+            .map(bind => String(bind?.id ?? "")).filter(id => id !== "")
+        readonly property string catalogId: shortcutRow.catalogIds[0] ?? ""
+        readonly property bool raw: (actionData?.binds ?? []).some(bind => bind?.raw === true)
+        readonly property bool overridden: shortcutRow.catalogIds
+            .some(id => ManagedKeybinds.isOverridden(id))
         // Who else holds this combination right now, so a repeat is visible
         // before the user has to discover it by pressing the key. Counted
         // across the theme's and the user's keybind file; the row's own
@@ -1387,7 +1481,8 @@ ContentPage {
                     anchors.fill: parent
                     anchors.margins: -6
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: page.startCapture(shortcutRow.actionData.action)
+                    onClicked: page.startCapture(
+                        shortcutRow.actionData.action, shortcutRow.catalogIds, shortcutRow.raw)
                 }
             }
 
@@ -1410,12 +1505,13 @@ ContentPage {
                     anchors.fill: parent
                     anchors.margins: -6
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: page.startCapture(shortcutRow.actionData.action)
+                    onClicked: page.startCapture(
+                        shortcutRow.actionData.action, shortcutRow.catalogIds, shortcutRow.raw)
                 }
             }
 
             MaterialSymbol {
-                visible: HyprlandBindOverrides.isOverridden(shortcutRow.actionData?.action ?? "")
+                visible: shortcutRow.overridden && !shortcutRow.capturing
                 iconSize: Appearance.font.pixelSize.larger
                 color: Appearance.colors.colSubtext
                 text: "restart_alt"
@@ -1425,14 +1521,15 @@ ContentPage {
                     anchors.margins: -6
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                        HyprlandBindOverrides.clearOverride(shortcutRow.actionData.action);
+                        for (const id of shortcutRow.catalogIds)
+                            ManagedKeybinds.clearOverride(id);
                         page.stopCapture();
                     }
                 }
             }
 
-            // Delete is recoverable: the service comments out every bind the
-            // action generates and moves them to the Deleted section.
+            // Delete is recoverable: DisabledKeybinds adds the action's ids
+            // to overlay.disabled and moves the row to the Deleted section.
             Item {
                 id: shortcutDeleteButton
                 visible: !shortcutRow.capturing && shortcutRow.deleteEnabled
@@ -1472,12 +1569,208 @@ ContentPage {
         }
     }
 
-    // A keybind that is not a shell action. It is stored under the key it
-    // was written with, so a rebind writes "bind_<key> = <combo>" into the
-    // overrides file and the wrapper in custom/env.lua moves the bind on
-    // the next reload. The wrapper skips shell shortcuts, which is why
-    // this bind and a shortcut can share a key without moving together —
-    // the yellow line still shows the share, because both dispatches run.
+    // One logical row for a set of raw binds that share a catalog seriesId.
+    // The label and count come straight from the catalog; the member caps show
+    // each bind's keyLabel and the combo it actually loads with. The edit
+    // controls write one seriesOverrides entry instead of N per-bind overrides
+    // (raw binds refuse those), through the same overlay save pipeline.
+    component SeriesRow: Rectangle {
+        id: seriesRow
+        required property var seriesData
+
+        readonly property var group: seriesRow.seriesData
+        readonly property string modsText: String(seriesRow.group?.mods ?? "")
+        property bool expanded: false
+
+        function applyMods() {
+            const mods = seriesModsField.text.trim();
+            if (mods === "") return;
+            ManagedKeybinds.setSeriesOverride(
+                seriesRow.group?.seriesId ?? "", { mods: mods });
+            seriesModsField.focus = false;
+        }
+
+        Layout.fillWidth: true
+        implicitHeight: seriesColumn.implicitHeight + 24
+        color: Appearance.colors.colLayer1
+        radius: Appearance.rounding.normal
+        opacity: seriesRow.group?.enabled === false ? 0.65 : 1
+
+        ColumnLayout {
+            id: seriesColumn
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 8
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: seriesRow.group?.seriesLabel ?? ""
+                        font.pixelSize: Appearance.font.pixelSize.normal
+                        color: Appearance.colors.colOnLayer1
+                        elide: Text.ElideRight
+                    }
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: Translation.tr("%1 keybinds").arg(seriesRow.group?.count ?? 0)
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        color: Appearance.colors.colSubtext
+                    }
+                    StyledText {
+                        Layout.fillWidth: true
+                        visible: seriesRow.group?.enabled === false
+                        text: Translation.tr("Disabled")
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        color: page.conflictColor
+                    }
+                }
+
+                Item {
+                    id: seriesExpandButton
+                    implicitWidth: 24
+                    implicitHeight: 24
+                    property string tip: seriesRow.expanded
+                        ? Translation.tr("Hide keybinds") : Translation.tr("Show keybinds")
+                    Accessible.name: seriesExpandButton.tip
+                    Accessible.role: Accessible.Button
+
+                    MaterialSymbol {
+                        anchors.centerIn: parent
+                        text: seriesRow.expanded ? "expand_less" : "expand_more"
+                        iconSize: Appearance.font.pixelSize.larger
+                        color: Appearance.colors.colSubtext
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        anchors.margins: -6
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: seriesRow.expanded = !seriesRow.expanded
+                    }
+                    StyledToolTip { text: seriesExpandButton.tip }
+                }
+            }
+
+            // One modifier prefix for all members. The field follows the
+            // service when not being typed in, like the colour sliders above.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                MaterialTextField {
+                    id: seriesModsField
+                    Layout.fillWidth: true
+                    placeholderText: Translation.tr("Modifiers, e.g. SUPER + CTRL")
+                    text: seriesRow.modsText
+                    onAccepted: seriesRow.applyMods()
+                }
+                Binding {
+                    target: seriesModsField
+                    property: "text"
+                    value: seriesRow.modsText
+                    when: !seriesModsField.activeFocus
+                }
+                RippleButton {
+                    enabled: seriesModsField.text.trim() !== ""
+                    buttonText: Translation.tr("Apply")
+                    buttonRadius: Appearance.rounding.full
+                    onClicked: seriesRow.applyMods()
+                }
+                Item {
+                    id: seriesEnableButton
+                    implicitWidth: 24
+                    implicitHeight: 24
+                    property string tip: seriesRow.group?.enabled === false
+                        ? Translation.tr("Enable series") : Translation.tr("Disable series")
+                    Accessible.name: seriesEnableButton.tip
+                    Accessible.role: Accessible.Button
+
+                    MaterialSymbol {
+                        anchors.centerIn: parent
+                        text: seriesRow.group?.enabled === false ? "visibility_off" : "visibility"
+                        iconSize: Appearance.font.pixelSize.normal
+                        color: seriesRow.group?.enabled === false
+                            ? page.conflictColor : Appearance.colors.colSubtext
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        anchors.margins: -6
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            const enabled = seriesRow.group?.enabled !== false;
+                            ManagedKeybinds.setSeriesOverride(
+                                seriesRow.group?.seriesId ?? "",
+                                { enabled: enabled ? null : false });
+                        }
+                    }
+                    StyledToolTip { text: seriesEnableButton.tip }
+                }
+                Item {
+                    id: seriesResetButton
+                    visible: seriesRow.group?.overridden === true
+                    implicitWidth: 24
+                    implicitHeight: 24
+                    Accessible.name: Translation.tr("Reset modifiers")
+                    Accessible.role: Accessible.Button
+
+                    MaterialSymbol {
+                        anchors.centerIn: parent
+                        text: "restart_alt"
+                        iconSize: Appearance.font.pixelSize.normal
+                        color: Appearance.colors.colSubtext
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        anchors.margins: -6
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: ManagedKeybinds.setSeriesOverride(
+                            seriesRow.group?.seriesId ?? "", { mods: null })
+                    }
+                    StyledToolTip { text: Translation.tr("Reset modifiers") }
+                }
+            }
+
+            // Expanded member list: keyLabel first, then the combo it loads
+            // with (including a series mods rewrite).
+            ColumnLayout {
+                Layout.fillWidth: true
+                visible: seriesRow.expanded
+                spacing: 4
+
+                Repeater {
+                    model: seriesRow.group?.members ?? []
+                    delegate: RowLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        KeyboardKey {
+                            key: modelData.keyLabel
+                            pixelSize: Appearance.font.pixelSize.smaller
+                        }
+                        StyledText {
+                            Layout.fillWidth: true
+                            text: modelData.displayCombo
+                            font.pixelSize: Appearance.font.pixelSize.small
+                            color: Appearance.colors.colSubtext
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // A keybind that is not a shell action. Rebinding it writes
+    // overrides[id].combo into the JSON overlay; the generator rebuilds the
+    // bind from that combo. A raw-Lua bind is exempt: its statement is emitted
+    // verbatim, so the row shows a lock instead of an edit affordance.
     //
     // The layout is the shortcut row's: description on the left in the same
     // size, key caps after it, the edit affordance and the reset last.
@@ -1501,8 +1794,17 @@ ContentPage {
 
         readonly property string originalCombo: HyprlandKeybinds.comboOf(bindData)
         readonly property string overrideId: "bind_" + otherBindRow.originalCombo.replace(/[^A-Za-z0-9_]/g, "_")
-        readonly property string combo: HyprlandBindOverrides.comboFor(otherBindRow.overrideId, otherBindRow.originalCombo)
-        readonly property bool overridden: HyprlandBindOverrides.isOverridden(otherBindRow.overrideId)
+        // `bindData` comes from effectiveBinds, so this is already the combo
+        // the generator emits from the overlay. Display swaps a catalog
+        // `code:N` token for its human keyLabel; capture/conflicts keep combo.
+        readonly property string combo: otherBindRow.originalCombo
+        readonly property string displayCombo: HyprlandKeybinds.displayCombo(
+            otherBindRow.combo, bindData)
+        readonly property string catalogId: String(bindData?.catalogBind?.id ?? bindData?.id ?? "")
+        readonly property bool raw: bindData?.raw === true
+            || String(bindData?.catalogBind?.dispatch?.kind ?? "") === "raw"
+        readonly property bool overridden: otherBindRow.catalogId !== ""
+            && ManagedKeybinds.isOverridden(otherBindRow.catalogId)
         readonly property bool capturing: page.capturing === otherBindRow.overrideId
         // Same combination, other holder: the keybind files are counted
         // per file, so the row excludes itself by file and id and still
@@ -1567,7 +1869,7 @@ ContentPage {
                     spacing: 4
 
                     Repeater {
-                        model: otherBindRow.combo.split(" + ")
+                        model: CF.StringUtils.keyLabels(otherBindRow.displayCombo)
                         delegate: KeyboardKey {
                             required property var modelData
                             key: modelData
@@ -1579,29 +1881,45 @@ ContentPage {
                 MouseArea {
                     anchors.fill: parent
                     anchors.margins: -6
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: page.startCapture(otherBindRow.overrideId)
+                    cursorShape: otherBindRow.raw ? Qt.ArrowCursor : Qt.PointingHandCursor
+                    onClicked: page.startCapture(
+                        otherBindRow.overrideId, [otherBindRow.catalogId], otherBindRow.raw)
                 }
             }
 
             // A visible edit affordance, the same one the shortcut rows have.
+            // A raw bind's Lua is emitted verbatim, so there is nothing to
+            // capture: show a lock and explain it in the tooltip instead.
             Item {
                 visible: !otherBindRow.capturing
                 implicitWidth: 20
                 implicitHeight: 20
+                property bool hovered: rawEditMouseArea.containsMouse
+                Accessible.name: otherBindRow.raw
+                    ? Translation.tr("Keys fixed (raw Lua)")
+                    : Translation.tr("Edit keybind")
+                Accessible.role: Accessible.Button
 
                 MaterialSymbol {
                     anchors.centerIn: parent
-                    text: "edit"
+                    text: otherBindRow.raw ? "lock" : "edit"
                     iconSize: Appearance.font.pixelSize.normal
                     color: Appearance.colors.colSubtext
                 }
 
                 MouseArea {
+                    id: rawEditMouseArea
                     anchors.fill: parent
                     anchors.margins: -6
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: page.startCapture(otherBindRow.overrideId)
+                    hoverEnabled: true
+                    cursorShape: otherBindRow.raw ? Qt.ArrowCursor : Qt.PointingHandCursor
+                    onClicked: page.startCapture(
+                        otherBindRow.overrideId, [otherBindRow.catalogId], otherBindRow.raw)
+                }
+
+                StyledToolTip {
+                    extraVisibleCondition: otherBindRow.raw
+                    text: Translation.tr("This keybind is raw Lua; its keys cannot be changed in Settings.")
                 }
             }
 
@@ -1616,14 +1934,14 @@ ContentPage {
                     anchors.margins: -6
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                        HyprlandBindOverrides.clearOverride(otherBindRow.overrideId);
+                        ManagedKeybinds.clearOverride(otherBindRow.catalogId);
                         page.stopCapture();
                     }
                 }
             }
 
-            // Delete is recoverable: the service comments out this source
-            // line and moves it to the Deleted section.
+            // Delete is recoverable: DisabledKeybinds adds this id to
+            // overlay.disabled and moves the row to the Deleted section.
             Item {
                 id: otherBindDeleteButton
                 visible: !otherBindRow.capturing && otherBindRow.deleteEnabled
@@ -1679,9 +1997,9 @@ ContentPage {
 
         readonly property string fileCombo: entry.combo
         readonly property string overrideId: "bind_" + managedRow.fileCombo.replace(/[^A-Za-z0-9_]/g, "_")
-        // What the bind does right now: another row's override may have
-        // moved it off the combo written in the file.
-        readonly property string combo: HyprlandBindOverrides.comboFor(managedRow.overrideId, managedRow.fileCombo)
+        // An override add is rewritten in place, so the entry already holds
+        // the combo the generator emits.
+        readonly property string combo: managedRow.fileCombo
         // The id the conflict index gives a plain bind in the custom file,
         // so the row never reports itself as a conflict.
         readonly property var repeats: HyprlandKeybinds.repeatUsers(

@@ -4,7 +4,9 @@ How Hyprland keybinds are stored, generated and edited in end4-pC.
 
 The frozen catalog plus an optional user overlay are the only inputs. Everything
 Hyprland loads, and everything the shell uses to run commands from binds, is
-**generated** from them. Never edit a generated file by hand.
+**generated** from them. Settings writes only the overlay — never a generated
+Lua file, a `keybind_overrides.conf`, or the catalog. Never edit a generated
+file by hand: a later save regenerates it wholesale.
 
 ## How the pieces fit together
 
@@ -44,7 +46,7 @@ Two Hyprland 0.57.2 quirks explain the design:
 | Path | Role | Written by |
 |---|---|---|
 | `defaults/hyprland/keybinds.json` | Frozen default catalog (207 binds); the single source of truth | Project (committed) |
-| `~/.config/hypr/custom/keybind-overlay.json` | User overrides, adds and disabled ids | Settings only |
+| `~/.config/hypr/custom/keybind-overlay.json` | User overrides, adds and disabled ids — the only write path | Settings only (via `ManagedKeybinds`) |
 | `scripts/hyprland/generate_keybinds.py` | Merges catalog + overlay, renders all three outputs | — |
 | `~/.config/hypr/hyprland/keybinds.lua` | Generated main binds | Generator |
 | `~/.config/hypr/custom/keybinds.lua` | Generated custom binds (also carries the preamble, including the tap-Super block) | Generator |
@@ -52,7 +54,7 @@ Two Hyprland 0.57.2 quirks explain the design:
 | `services/GeneratedCommandShortcuts.qml` | Registers one global shortcut per generated id and runs its command | — |
 | `services/ManagedKeybinds.qml` | Settings IO: reads/writes the overlay, runs the generator, reloads Hyprland | — |
 | `services/HyprlandKeybinds.qml` | Merged, effective bind list for the settings page and cheatsheet | — |
-| `services/DisabledKeybinds.qml` | Recoverable disable/restore of bind lines | — |
+| `services/DisabledKeybinds.qml` | Recoverable delete/restore via `overlay.disabled` (no Lua markers) | — |
 | `modules/common/functions/KeybindStore.js` | Overlay parse/render and merge helpers used by Settings | — |
 | `scripts/hyprland/get_keybinds.py` | Legacy Lua parser; no longer used at runtime (kept for reference/tests) | — |
 | `defaults/hyprland/keybinds.baseline.json` | Frozen id set/counts for drift detection (refresh with `--bless`) | — |
@@ -111,8 +113,9 @@ generator never writes it. A missing overlay is the normal case (defaults only).
   `dispatch.kind` to `"command"` and `dispatch.id` to the same `id` — that id
   becomes a `generated-commands.json` entry. `code` is the legacy-mode fallback
   statement.
-- `disabled`: catalog ids to omit entirely from the generated output.
-  (The Settings *delete/disable* action uses comment markers instead — see below.)
+- `disabled`: catalog ids to omit entirely from the generated output. Settings'
+  *Delete* action adds ids here through `ManagedKeybinds.disable()`; *Restore*
+  removes them with `enable()`. No comment markers are written to Lua.
 
 For a normal edit, prefer the Settings UI over hand-writing this file.
 
@@ -124,19 +127,24 @@ Settings → **Keyboard**:
   captured combination. `ManagedKeybinds.create()` stores it as an overlay
   `adds` entry (`KeybindStore.makeAdd`).
 - **Change** — editing one of the panel's adds rewrites that `adds` entry.
-  Rebinding a catalog (theme) bind writes only `overrides[id].combo` via
-  `ManagedKeybinds.setOverride()`; the catalog's dispatch and options stay
-  frozen.
-- **Disable / delete** — the *Deleted* section uses
-  `services/DisabledKeybinds.qml`, which comments the bind's lines out inside
-  recoverable marker blocks (`-- >>> end4-pC disabled keybind: <id>` …
-  `-- <<< end4-pC disabled keybind <<<`), clears any override for it and
-  reloads. **Restore** puts the exact original bytes back.
+  Rebinding a catalog (theme) bind — from a row or a conflict move — writes
+  `overrides[id].combo` through `ManagedKeybinds` (`setOverride()` /
+  `update()`); the catalog's dispatch and options stay frozen. A `raw` bind
+  (76 of the 207 defaults) emits its Lua verbatim, so its keys are not
+  editable in Settings and its combo override is refused.
+- **Disable / delete** — `services/DisabledKeybinds.qml` maps the row's delete
+  id to its catalog ids and calls `ManagedKeybinds.disable()`, which appends
+  them to `overlay.disabled`. The bind disappears from the generated Lua on
+  the next regeneration; **Restore** calls `enable()` to remove them. Because
+  the ids live in the overlay, a later create/rebind/save cannot resurrect a
+  deleted bind.
 
 Every Settings save goes through the same chain: write the overlay → run
 `generate_keybinds.py` (same contract as `sync.sh`) → `hyprctl reload`. The
 generator rewrites the Lua files and the command bridge wholesale, so the
-overlay stays the only file Settings modifies for add/change.
+overlay stays the only file Settings modifies for add/change/delete. The
+legacy `keybind_overrides.conf` and Lua comment markers are not part of this
+contract and are ignored by the generator.
 
 ## Command bridge
 

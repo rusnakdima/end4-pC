@@ -42,6 +42,13 @@ TestCase {
         };
     }
 
+    function rawCatalogBind(id, combo) {
+        const bind = catalogBind(id, combo, "Raw " + id, "Screen");
+        bind.dispatch = { kind: "raw", code: "hl.bind(\"" + combo + "\", function() end)" };
+        bind.code = bind.dispatch.code;
+        return bind;
+    }
+
     function sampleCatalog() {
         return { binds: [
             catalogBind("cat-a", "SUPER + A", "Alpha", "Apps"),
@@ -242,6 +249,81 @@ TestCase {
         sameJson(KeybindStore.comboOverride(undefined), { combo: "" });
     }
 
+    // --- disabled: the delete contract that survives every later save -------
+
+    function test_with_disabled_is_an_immutable_add_and_remove() {
+        const base = KeybindStore.newOverlay();
+        base.overrides = { "cat-a": KeybindStore.comboOverride("SUPER + Z") };
+        base.adds = [KeybindStore.makeAdd(addEntry("", "Mine", "", "true", "F9"), "usr-1")];
+
+        const disabled = KeybindStore.withDisabled(base, "cat-b", true);
+        sameJson(disabled.disabled, ["cat-b"]);
+        sameJson(disabled.overrides, base.overrides, "a disable must not touch overrides");
+        sameJson(disabled.adds, base.adds, "a disable must not touch adds");
+        sameJson(base.disabled, [], "the input overlay was mutated");
+
+        const twice = KeybindStore.withDisabled(disabled, "cat-b", true);
+        sameJson(twice.disabled, ["cat-b"], "an id must not be disabled twice");
+        sameJson(KeybindStore.withDisabled(twice, "cat-b", false).disabled, []);
+        sameJson(KeybindStore.withDisabled(twice, "cat-c", false).disabled, ["cat-b"],
+            "enabling a bind that is not disabled must not change the list");
+
+        verify(KeybindStore.isDisabled(disabled, "cat-b"));
+        verify(!KeybindStore.isDisabled(disabled, "cat-a"));
+    }
+
+    function test_disable_default_bind_then_overlay_save_keeps_it_disabled() {
+        // The regression: a delete used to splice markers into generated Lua,
+        // which the next generator run wiped. Here every save rewrites the
+        // whole overlay from the previous one, so the id must survive.
+        let overlay = KeybindStore.newOverlay();
+        overlay = KeybindStore.withDisabled(overlay, "cat-b", true);
+        overlay = createAdd(overlay, "usr-1",
+            addEntry("", "After delete", "Utilities", "true", "SUPER + F12")).overlay;
+        overlay = KeybindStore.withOverrides(overlay,
+            { "cat-a": KeybindStore.comboOverride("SUPER + Z") });
+
+        // Simulate the file round-trip the generator reads on every save.
+        const onDisk = KeybindStore.parseOverlay(KeybindStore.renderOverlay(overlay));
+        sameJson(onDisk.disabled, ["cat-b"], "a later overlay save undid the delete");
+
+        const binds = KeybindStore.effectiveBinds(sampleCatalog(), onDisk);
+        compare(binds.length, 3, "cat-b must stay out of the merged list");
+        verify(!binds.some(bind => bind.id === "cat-b"), "the deleted default bind came back");
+        compare(binds[0].id, "cat-a");
+        compare(binds[2].id, "usr-1");
+
+        // Restore clears only that id.
+        const restored = KeybindStore.withDisabled(onDisk, "cat-b", false);
+        sameJson(KeybindStore.parseOverlay(KeybindStore.renderOverlay(restored)).disabled, []);
+        compare(KeybindStore.effectiveBinds(sampleCatalog(), restored).length, 4);
+    }
+
+    function test_raw_bind_lookup_refuses_to_be_treated_as_editable() {
+        const catalog = sampleCatalog();
+        catalog.binds.push(rawCatalogBind("raw-1", "SUPER + Minus"));
+        verify(KeybindStore.isRawBind(KeybindStore.catalogBind(catalog, "raw-1")));
+        verify(!KeybindStore.isRawBind(KeybindStore.catalogBind(catalog, "cat-a")));
+        verify(KeybindStore.isRawBind(null) === false);
+        verify(KeybindStore.catalogBind(catalog, "not-there") === null);
+        compare(KeybindStore.catalogBind(catalog, "raw-1").combo, "SUPER + Minus",
+            "looking a bind up must not copy or rewrite it");
+    }
+
+    function test_effective_binds_ignores_an_old_raw_combo_override() {
+        const catalog = sampleCatalog();
+        catalog.binds.push(rawCatalogBind("raw-1", "SUPER + Minus"));
+        const overlay = KeybindStore.newOverlay();
+        overlay.overrides = { "raw-1": { combo: "SUPER + Z", description: "Renamed" } };
+
+        const binds = KeybindStore.effectiveBinds(catalog, overlay);
+        const raw = binds.find(bind => bind.id === "raw-1");
+        compare(raw.combo, "SUPER + Minus",
+            "a legacy raw override must not make the panel drift from the generated Lua");
+        compare(raw.description, "Raw raw-1");
+        compare(raw.originalCombo, "SUPER + Minus");
+    }
+
     function test_validate_rejects_an_invalid_entry_without_building_an_add() {
         compare(KeybindStore.validate(addEntry("", "Name", "", "true", "F9")), "");
         compare(KeybindStore.validate(addEntry("", "", "", "true", "F9")), "empty-name");
@@ -363,5 +445,142 @@ TestCase {
         compare(binds[3].id, "usr-1");
         compare(binds[3].combo, "SUPER + F12");
         compare(binds[3].source, "custom");
+    }
+
+    // --- series: one logical row per catalog multi-bind group ---------------
+    // The members are raw binds, so their only legal group edit lives in
+    // seriesOverrides. Everything here is in memory: no overlay file is
+    // written and no generator is invoked.
+
+    function seriesCatalogBind(id, combo, keyLabel, seriesId, seriesLabel) {
+        const bind = rawCatalogBind(id, combo);
+        bind.seriesId = seriesId;
+        bind.seriesLabel = seriesLabel;
+        bind.keyLabel = keyLabel;
+        return bind;
+    }
+
+    function seriesCatalog() {
+        return { binds: [
+            catalogBind("cat-a", "SUPER + A", "Alpha", "Apps"),
+            seriesCatalogBind("ws-1", "SUPER + code:10", "1",
+                "workspace-switch", "Switch to workspace 1–10"),
+            seriesCatalogBind("ws-2", "SUPER + code:11", "2",
+                "workspace-switch", "Switch to workspace 1–10"),
+            seriesCatalogBind("zoom-1", "SUPER + code:82", "Num 2",
+                "screen-zoom", "Zoom with keypad")
+        ] };
+    }
+
+    function test_group_by_series_groups_binds_and_ignores_plain_ones() {
+        const overlay = KeybindStore.newOverlay();
+        const binds = KeybindStore.effectiveBinds(seriesCatalog(), overlay);
+        const groups = KeybindStore.groupBySeries(binds, overlay);
+
+        compare(groups.length, 2, "only binds with a seriesId get a row");
+        compare(groups[0].seriesId, "workspace-switch");
+        compare(groups[0].seriesLabel, "Switch to workspace 1–10",
+            "the catalog label is used verbatim");
+        compare(groups[0].count, 2);
+        sameJson(groups[0].members.map(member => member.keyLabel), ["1", "2"]);
+        compare(groups[0].members[0].id, "ws-1", "members keep their catalog id");
+        compare(groups[0].mods, "SUPER");
+        compare(groups[0].memberLabels, "1, 2", "the labels are searchable");
+        compare(groups[1].seriesId, "screen-zoom");
+        compare(groups[1].count, 1);
+        compare(groups[1].members[0].displayCombo, "SUPER + Num 2",
+            "a numpad keyLabel is readable in the member list");
+    }
+
+    function test_series_override_round_trips_mods_and_enabled() {
+        let overlay = KeybindStore.newOverlay();
+        overlay = KeybindStore.withSeriesOverride(overlay, "workspace-switch", { mods: "CTRL + SHIFT" });
+        overlay = KeybindStore.withSeriesOverride(overlay, "workspace-switch", { enabled: false });
+        overlay = KeybindStore.withSeriesOverride(overlay, "screen-zoom", { mods: "ALT" });
+
+        sameJson(KeybindStore.seriesOverrideOf(overlay, "workspace-switch"),
+            { mods: "CTRL + SHIFT", enabled: false });
+        sameJson(KeybindStore.seriesOverrideOf(overlay, "screen-zoom"), { mods: "ALT" });
+        sameJson(KeybindStore.seriesOverrideOf(overlay, "missing"), {});
+        sameJson(KeybindStore.seriesOverrideOf(null, "workspace-switch"), {});
+
+        const onDisk = KeybindStore.parseOverlay(KeybindStore.renderOverlay(overlay));
+        sameJson(KeybindStore.seriesOverrideOf(onDisk, "workspace-switch"),
+            { mods: "CTRL + SHIFT", enabled: false }, "render -> parse must keep series edits");
+        compare(onDisk.overrides["ws-1"], undefined,
+            "a series edit is not a per-bind override");
+
+        // A null patch value clears one field and keeps the other.
+        let cleared = KeybindStore.withSeriesOverride(overlay, "workspace-switch", { enabled: null });
+        sameJson(KeybindStore.seriesOverrideOf(cleared, "workspace-switch"), { mods: "CTRL + SHIFT" });
+        cleared = KeybindStore.withSeriesOverride(cleared, "workspace-switch", { mods: null });
+        verify(cleared.seriesOverrides["workspace-switch"] === undefined,
+            "an empty spec must drop the series id");
+        sameJson(KeybindStore.seriesOverrideOf(cleared, "screen-zoom"), { mods: "ALT" },
+            "clearing one series must not touch another");
+    }
+
+    function test_series_override_writes_are_immutable_and_survive_other_saves() {
+        const base = KeybindStore.newOverlay();
+        base.overrides = { "cat-a": KeybindStore.comboOverride("SUPER + Z") };
+        const withSeries = KeybindStore.withSeriesOverride(base, "screen-zoom", { mods: "ALT" });
+
+        sameJson(base.overrides, { "cat-a": { combo: "SUPER + Z" } },
+            "the input overlay was mutated");
+        verify(base.seriesOverrides === undefined, "the input overlay gained a series section");
+        sameJson(withSeries.overrides, base.overrides, "a series edit must not touch overrides");
+
+        // The other immutable helpers must carry the section forward so a
+        // later create/edit/delete cannot silently undo a series edit.
+        const withAdds = KeybindStore.withAdds(withSeries, []);
+        const withOverrides = KeybindStore.withOverrides(withAdds, base.overrides);
+        const withDisabled = KeybindStore.withDisabled(withOverrides, "cat-b", true);
+        sameJson(KeybindStore.seriesOverrideOf(withDisabled, "screen-zoom"), { mods: "ALT" },
+            "a later overlay save dropped the series edit");
+        sameJson(withDisabled.disabled, ["cat-b"]);
+        sameJson(withDisabled.overrides, base.overrides);
+    }
+
+    function test_series_mods_rewrite_the_displayed_combo_and_key_label() {
+        let overlay = KeybindStore.newOverlay();
+        overlay = KeybindStore.withSeriesOverride(overlay, "workspace-switch", { mods: "CTRL + SHIFT" });
+        const binds = KeybindStore.effectiveBinds(seriesCatalog(), overlay);
+        const group = KeybindStore.groupBySeries(binds, overlay)[0];
+
+        compare(binds[1].combo, "CTRL + SHIFT + code:10",
+            "every member's combo follows the series mods");
+        compare(binds[2].combo, "CTRL + SHIFT + code:11");
+        compare(binds[1].originalCombo, "SUPER + code:10",
+            "the frozen combo stays the reset target");
+        compare(group.mods, "CTRL + SHIFT");
+        compare(group.defaultMods, "SUPER");
+        sameJson(group.members.map(member => member.displayCombo),
+            ["CTRL + SHIFT + 1", "CTRL + SHIFT + 2"],
+            "keyLabel replaces code:N in the displayed combo");
+        compare(KeybindStore.displayCombo(binds[3], binds[3].combo), "SUPER + Num 2",
+            "numpad labels are readable too");
+    }
+
+    function test_series_disabled_flag_and_raw_bind_refuses_a_per_bind_override() {
+        let overlay = KeybindStore.newOverlay();
+        overlay = KeybindStore.withSeriesOverride(overlay, "workspace-switch", { enabled: false });
+        // A hand-written per-bind combo override for a raw series member must
+        // not win: the generator rejects it (the code is emitted verbatim).
+        overlay.overrides = { "ws-1": { combo: "SUPER + Z", description: "Renamed" } };
+        const catalog = seriesCatalog();
+        const binds = KeybindStore.effectiveBinds(catalog, overlay);
+
+        compare(binds[1].combo, "SUPER + code:10",
+            "a raw member refused the per-bind combo override");
+        compare(binds[1].description, "Raw ws-1");
+        compare(binds[1].originalCombo, "SUPER + code:10");
+        verify(binds[1].seriesEnabled === false, "a disabled series must be flagged for the UI");
+        verify(KeybindStore.isRawBind(KeybindStore.catalogBind(catalog, "ws-1")),
+            "series members are raw binds, which is why seriesOverrides exists");
+
+        const group = KeybindStore.groupBySeries(binds, overlay)[0];
+        verify(group.enabled === false,
+            "the series row must stay visible so the series can be re-enabled");
+        compare(group.members[0].displayCombo, "SUPER + 1");
     }
 }

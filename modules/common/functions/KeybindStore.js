@@ -1,12 +1,11 @@
-// The managed keybind block inside ~/.config/hypr/custom/keybinds.lua.
+// Legacy Lua managed-block helpers, followed by the JSON overlay store the
+// live settings path actually uses.
 //
-// The settings panel owns exactly one region of that file, delimited by the
-// markers below; everything outside the markers belongs to the user and must
-// survive every write byte-for-byte. Within the block each keybind is one
-// hl.bind line preceded by a "-- panel-id:" comment (which the keybind
-// parser ignores: it is neither a "--##!" heading, nor "--#/#", nor a bind),
-// and a "--##! Category" heading is emitted when the category changes so the
-// cheatsheet groups the entries.
+// The first half still parses/renders the old "-- >>> end4-pC managed
+// keybinds" region because tst_keybindstore.qml exercises it. Nothing in the
+// live path writes that region any more: generated Lua files are rewritten
+// wholesale by the catalog generator, so every user change goes into the
+// overlay below instead.
 //
 // The logic lives in a plain JavaScript module so that it can be tested
 // without the Quickshell runtime, like KeyCombos.js.
@@ -183,12 +182,24 @@ function parseBlock(text) {
 //                                    dispatch, options, enabled } },
 //     "adds": [ { id, category, combo, description, dispatch, options,
 //                 code } ],
-//     "disabled": [ "<bind-id>", ... ] }
+//     "disabled": [ "<bind-id>", ... ],
+//     "seriesOverrides": { "<seriesId>": { mods, enabled } } }
+//
+// `seriesOverrides` is optional: raw binds emit their Lua verbatim, so a
+// per-bind combo override cannot move them. One series edit rewrites the
+// modifier prefix of every member in the generator instead.
 
 var OVERLAY_DEFAULT = { overrides: {}, adds: [], disabled: [] };
 
 function newOverlay() {
     return { overrides: {}, adds: [], disabled: [] };
+}
+
+// An overlay with no series edits keeps the original three-section shape the
+// generator and the older round-trip tests expect.
+function hasSeriesOverrides(overlay) {
+    const value = overlay?.seriesOverrides;
+    return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 // Parse the overlay defensively: a partial or hand-broken file must not take
@@ -204,6 +215,7 @@ function parseOverlay(text) {
             result.overrides = parsed.overrides;
         if (Array.isArray(parsed.adds)) result.adds = parsed.adds;
         if (Array.isArray(parsed.disabled)) result.disabled = parsed.disabled;
+        if (hasSeriesOverrides(parsed)) result.seriesOverrides = parsed.seriesOverrides;
     } catch (e) {
         console.error("[KeybindStore] overlay parse failed: " + e);
     }
@@ -214,11 +226,13 @@ function parseOverlay(text) {
 // there is no marker splicing to get wrong.
 function renderOverlay(data) {
     const overlay = data ?? newOverlay();
-    return JSON.stringify({
+    const out = {
         overrides: overlay.overrides ?? {},
         adds: overlay.adds ?? [],
         disabled: overlay.disabled ?? []
-    }, null, 2) + "\n";
+    };
+    if (hasSeriesOverrides(overlay)) out.seriesOverrides = overlay.seriesOverrides;
+    return JSON.stringify(out, null, 2) + "\n";
 }
 
 // Lua string literal, used for the `code` fallback emitted for new binds.
@@ -246,13 +260,31 @@ function effectiveBinds(catalog, overlay) {
         if (override && override.enabled === false) continue;
         const next = Object.assign({}, b);
         if (override) {
-            // Keep the catalog's combo so an override written through the
-            // older keybind_overrides.conf still keys off the original line.
+            // Remember the frozen combo: the UI uses it as the identity of a
+            // row (and as the reset target) while `combo` below is what the
+            // generator actually emits from the overlay.
             next.originalCombo = b.combo;
             // Only these fields are user-editable. `code`, `source`, `line`
             // and the dispatch of a command bind stay with the frozen catalog.
-            for (const key of ["combo", "description", "category", "dispatch", "options"]) {
-                if (Object.prototype.hasOwnProperty.call(override, key)) next[key] = override[key];
+            // A raw bind is exempt: the generator emits its code verbatim and
+            // rejects such an override, so honouring it here would drift.
+            if (!isRawBind(b)) {
+                for (const key of ["combo", "description", "category", "dispatch", "options"]) {
+                    if (Object.prototype.hasOwnProperty.call(override, key)) next[key] = override[key];
+                }
+            }
+        }
+        // A series edit moves every member's combo in lockstep with the raw
+        // Lua the generator emits. The frozen combo is kept as originalCombo
+        // so rows still have a stable identity and a reset target.
+        const sid = String(b.seriesId ?? "");
+        if (sid !== "") {
+            const spec = seriesOverrideOf(ov, sid);
+            next.seriesEnabled = spec.enabled !== false;
+            const mods = String(spec.mods ?? "");
+            if (mods !== "") {
+                if (next.originalCombo === undefined) next.originalCombo = b.combo;
+                next.combo = applySeriesMods(next.combo, mods);
             }
         }
         out.push(next);
@@ -310,6 +342,7 @@ function withAdds(overlay, adds) {
     const next = newOverlay();
     next.overrides = overlay?.overrides ?? {};
     next.disabled = overlay?.disabled ?? [];
+    if (hasSeriesOverrides(overlay)) next.seriesOverrides = overlay.seriesOverrides;
     next.adds = adds;
     return next;
 }
@@ -318,8 +351,150 @@ function withOverrides(overlay, overrides) {
     const next = newOverlay();
     next.adds = overlay?.adds ?? [];
     next.disabled = overlay?.disabled ?? [];
+    if (hasSeriesOverrides(overlay)) next.seriesOverrides = overlay.seriesOverrides;
     next.overrides = overrides;
     return next;
+}
+
+// --- multi-bind series overrides --------------------------------------------
+// A series is a set of raw catalog binds sharing a `seriesId`. The generator
+// rewrites each member's stored Lua `code` and combo from one
+// seriesOverrides[sid].mods value, so the helpers below keep that extra
+// overlay section optional and immutable just like overrides/adds/disabled.
+
+function seriesOverrideOf(overlay, seriesId) {
+    const id = String(seriesId ?? "");
+    if (id === "") return {};
+    const spec = (overlay?.seriesOverrides ?? {})[id];
+    if (spec === null || typeof spec !== "object" || Array.isArray(spec)) return {};
+    return Object.assign({}, spec);
+}
+
+// A null/undefined patch value clears that field; an empty spec removes the
+// series id entirely. Other series and the three original sections survive.
+function withSeriesOverride(overlay, seriesId, patch) {
+    const id = String(seriesId ?? "");
+    const next = newOverlay();
+    next.overrides = overlay?.overrides ?? {};
+    next.adds = overlay?.adds ?? [];
+    next.disabled = overlay?.disabled ?? [];
+    const series = Object.assign({}, overlay?.seriesOverrides ?? {});
+    const spec = Object.assign({}, series[id] ?? {});
+    for (const key of Object.keys(patch ?? {})) {
+        const value = patch[key];
+        if (value === null || value === undefined) delete spec[key];
+        else spec[key] = value;
+    }
+    if (Object.keys(spec).length === 0) delete series[id];
+    else series[id] = spec;
+    if (Object.keys(series).length > 0) next.seriesOverrides = series;
+    return next;
+}
+
+// Mirror the generator's raw-combo rewrite: everything before the first
+// `code:` is replaced by the series modifier prefix.
+function applySeriesMods(combo, mods) {
+    const prefix = String(mods ?? "");
+    if (prefix === "") return String(combo ?? "");
+    return String(combo ?? "").replace(/^(.*?)(code:)/,
+        (match, before, code) => prefix + " + " + code);
+}
+
+function comboMods(combo) {
+    const parts = String(combo ?? "").split(" + ")
+        .map(part => part.trim()).filter(part => part !== "");
+    if (parts.length < 2) return "";
+    return parts.slice(0, -1).join(" + ");
+}
+
+// Display-only label for a `code:N` token. Capture still produces Qt key
+// names for NEW binds; this only makes a catalog bind's own keyLabel ("1",
+// "Num 7") readable in the settings rows and key caps.
+function displayCombo(bind, combo) {
+    const label = String(bind?.keyLabel ?? "");
+    const parts = String(combo ?? bind?.combo ?? "").split(" + ")
+        .map(part => part.trim()).filter(part => part !== "");
+    if (label === "") return parts.join(" + ");
+    return parts.map(part => /^code:/.test(part) ? label : part).join(" + ");
+}
+
+// One logical row per series, in catalog order. `binds` are the effective
+// binds, so a member's combo already reflects any series mods rewrite.
+function groupBySeries(binds, overlay) {
+    const groups = [];
+    const byId = new Map();
+    for (const b of (binds ?? [])) {
+        const id = String(b?.seriesId ?? "");
+        if (id === "") continue;
+        let group = byId.get(id);
+        if (group === undefined) {
+            const spec = seriesOverrideOf(overlay, id);
+            const combo = String(b.combo ?? "");
+            group = {
+                seriesId: id,
+                seriesLabel: String(b.seriesLabel ?? id),
+                count: 0,
+                mods: comboMods(combo),
+                defaultMods: comboMods(String(b.originalCombo ?? combo)),
+                enabled: spec.enabled !== false,
+                overridden: Object.keys(spec).length > 0,
+                memberLabels: "",
+                members: []
+            };
+            byId.set(id, group);
+            groups.push(group);
+        }
+        const parts = String(b.combo ?? "").split(" + ");
+        const keyLabel = String(b.keyLabel ?? parts[parts.length - 1] ?? "");
+        group.count += 1;
+        group.memberLabels += (group.memberLabels === "" ? "" : ", ") + keyLabel;
+        group.members.push({
+            id: String(b.id ?? ""),
+            keyLabel: keyLabel,
+            combo: String(b.combo ?? ""),
+            displayCombo: displayCombo(b, b.combo)
+        });
+    }
+    return groups;
+}
+
+// Immutable update of the overlay's `disabled` array — the contract the
+// generator already honours. Adding a catalog id there omits the bind from the
+// generated Lua entirely; removing it restores it. Nothing is ever written to
+// a generated file, so a later overlay save cannot undo a delete.
+function withDisabled(overlay, id, disabled) {
+    const wanted = String(id ?? "");
+    const next = newOverlay();
+    next.overrides = overlay?.overrides ?? {};
+    next.adds = overlay?.adds ?? [];
+    if (hasSeriesOverrides(overlay)) next.seriesOverrides = overlay.seriesOverrides;
+    const ids = (overlay?.disabled ?? []).filter(item => String(item ?? "") !== wanted);
+    if (disabled === true) ids.push(wanted);
+    next.disabled = ids;
+    return next;
+}
+
+function isDisabled(overlay, id) {
+    const wanted = String(id ?? "");
+    return (overlay?.disabled ?? []).some(item => String(item ?? "") === wanted);
+}
+
+// A raw bind's `code` is emitted verbatim, so a combo override cannot be
+// applied to it: the generator rejects the overlay and the cheatsheet would
+// drift from what Hyprland loaded. The UI uses this to refuse combo editing
+// before writing anything.
+function isRawBind(bind) {
+    const kind = String(bind?.dispatch?.kind ?? "");
+    return kind === "raw";
+}
+
+// Look up a catalog bind by its stable id, or null when the id is unknown.
+function catalogBind(catalog, id) {
+    const wanted = String(id ?? "");
+    for (const bind of (catalog?.binds ?? [])) {
+        if (String(bind?.id ?? "") === wanted) return bind;
+    }
+    return null;
 }
 
 // A narrow override patch: only combo/description/category/enabled are ever
