@@ -1653,7 +1653,10 @@ ContentPage {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: seriesRow.expanded = !seriesRow.expanded
                     }
-                    StyledToolTip { text: seriesExpandButton.tip }
+                    StyledToolTip {
+                        extraVisibleCondition: page.enabled
+                        text: seriesExpandButton.tip
+                    }
                 }
             }
 
@@ -1709,7 +1712,10 @@ ContentPage {
                                 { enabled: enabled ? null : false });
                         }
                     }
-                    StyledToolTip { text: seriesEnableButton.tip }
+                    StyledToolTip {
+                        extraVisibleCondition: page.enabled
+                        text: seriesEnableButton.tip
+                    }
                 }
                 Item {
                     id: seriesResetButton
@@ -1732,7 +1738,10 @@ ContentPage {
                         onClicked: ManagedKeybinds.setSeriesOverride(
                             seriesRow.group?.seriesId ?? "", { mods: null })
                     }
-                    StyledToolTip { text: Translation.tr("Reset modifiers") }
+                    StyledToolTip {
+                        extraVisibleCondition: page.enabled
+                        text: Translation.tr("Reset modifiers")
+                    }
                 }
             }
 
