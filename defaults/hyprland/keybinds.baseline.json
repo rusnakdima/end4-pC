@@ -1,0 +1,23 @@
+{
+ "catalog_binds": 207,
+ "hyprctl_binds": 205,
+ "runtime_only_ids": [
+  "bind",
+  "bind-2"
+ ],
+ "id_sha256": "c242df6fcb7302451aea533271ada4fa67ca6ac4698abc23b40311b7db3d8cc9",
+ "duplicate_combo_whitelist": {
+  "SUPER + SHIFT + S": [
+   "utilities",
+   "utilities-2"
+  ],
+  "SUPER + SHIFT + A": [
+   "utilities-3",
+   "utilities-4"
+  ],
+  "CTRL + Print": [
+   "utilities-8",
+   "utilities-9"
+  ]
+ }
+}

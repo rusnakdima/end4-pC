@@ -54,7 +54,9 @@ Two Hyprland 0.57.2 quirks explain the design:
 | `services/HyprlandKeybinds.qml` | Merged, effective bind list for the settings page and cheatsheet | — |
 | `services/DisabledKeybinds.qml` | Recoverable disable/restore of bind lines | — |
 | `modules/common/functions/KeybindStore.js` | Overlay parse/render and merge helpers used by Settings | — |
-| `scripts/hyprland/get_keybinds.py` | Parses the generated Lua for the cheatsheet | — |
+| `scripts/hyprland/get_keybinds.py` | Legacy Lua parser; no longer used at runtime (kept for reference/tests) | — |
+| `defaults/hyprland/keybinds.baseline.json` | Frozen id set/counts for drift detection (refresh with `--bless`) | — |
+| `scripts/hyprland/validate_keybind_catalog.py` | Validates catalog + optional overlay and generated output | — |
 | `sync.sh` | Deploys the tree, then regenerates all keybind outputs | — |
 
 ## Catalog fields
@@ -183,12 +185,25 @@ python3 scripts/hyprland/generate_keybinds.py \
 
 luac -p /tmp/opencode/keybinds-main.lua /tmp/opencode/keybinds-custom.lua  # generated Lua parses
 
+python3 scripts/hyprland/validate_keybind_catalog.py                     # frozen catalog checks
+python3 scripts/hyprland/validate_keybind_catalog.py --overlay <file>     # also validate an overlay
+
 ./sync.sh --keybinds-only --dry-run                                      # deploy plan, writes nothing
 ```
+
+`validate_keybind_catalog.py` compares the id list, counts, and duplicate
+combos against the frozen baseline in `defaults/hyprland/keybinds.baseline.json`
+(never edited by hand during normal work). When intentionally changing the
+frozen set — adding/removing a default bind, renaming an id — refresh that
+baseline with `python3 scripts/hyprland/validate_keybind_catalog.py --bless`.
+With `--overlay`, it also validates the overlay (fail-fast on unknown ids,
+duplicate ids, bad combos, missing/invalid dispatch, conflicting command ids)
+and checks the generated Lua + `generated-commands.json` for parity.
 
 Pass `--overlay <file>` to the generator (using a **temp copy**) to validate a
 specific overlay. Useful checks beyond the commands above: the generator prints
 `generated <N> binds; <M> command bridges`, `generated-commands.json` must be
 parseable with `python3 -m json.tool`, `hyprctl binds -j` shows the loaded binds
-after a reload, and `scripts/hyprland/get_keybinds.py` parses the generated Lua
-for the cheatsheet.
+after a reload. (`scripts/hyprland/get_keybinds.py` is a legacy Lua parser that
+is no longer used at runtime: the settings page and cheatsheet read the JSON
+catalog + overlay directly via `services/HyprlandKeybinds.qml`.)
