@@ -568,6 +568,14 @@ MouseArea {
                     Loader {
                         id: gridLoader
                         anchors.fill: parent
+                        // The search/filter toolbar floats over the bottom of
+                        // this region. Reserve its height so the last row of
+                        // thumbnails (and their hover download buttons) never
+                        // sits under it and stays clickable.
+                        anchors.bottomMargin: root.toolbarVisible ? extraOptions.implicitHeight + 16 : 0
+                        Behavior on anchors.bottomMargin {
+                            NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
+                        }
                         sourceComponent: root.source === "local" ? localGridComponent
                             : root.source === "wallhaven" ? wallhavenGridComponent
                             : onlineGridComponent
