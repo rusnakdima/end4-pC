@@ -274,7 +274,7 @@ ContentPage {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 12
+                spacing: 10
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -575,6 +575,7 @@ ContentPage {
                         mainText: Translation.tr("Localhost")
                         materialIcon: "computer"
                         onClicked: {
+                            page.set("network.bindMode", "custom")
                             page.set("network.address", "127.0.0.1")
                             addressField.text = "127.0.0.1"
                         }
@@ -584,6 +585,7 @@ ContentPage {
                         mainText: Translation.tr("LAN + VPN")
                         materialIcon: "public"
                         onClicked: {
+                            page.set("network.bindMode", "custom")
                             page.set("network.address", "0.0.0.0")
                             addressField.text = "0.0.0.0"
                         }
@@ -594,6 +596,7 @@ ContentPage {
                         materialIcon: "vpn_lock"
                         visible: page.tailscaleAddress !== ""
                         onClicked: {
+                            page.set("network.bindMode", "custom")
                             page.set("network.address", page.tailscaleAddress)
                             addressField.text = page.tailscaleAddress
                         }
@@ -985,20 +988,15 @@ ContentPage {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: 10
 
                 // Management bar: only meaningful while someone is connected.
                 RowLayout {
                     Layout.fillWidth: true
                     visible: Vnc.clients.length > 0
-                    spacing: 8
+                    spacing: 10
 
-                    StyledText {
-                        Layout.fillWidth: true
-                        text: Translation.tr("%1 active session(s)").arg(Vnc.clients.length)
-                        color: Appearance.colors.colSubtext
-                        font.pixelSize: Appearance.font.pixelSize.smaller
-                    }
+                    Item { Layout.fillWidth: true }
 
                     RippleButtonWithIcon {
                         mainText: Translation.tr("Refresh")
@@ -1018,7 +1016,7 @@ ContentPage {
                 // Empty state with the same glass-card language as a client.
                 Rectangle {
                     Layout.fillWidth: true
-                    implicitHeight: emptyRow.implicitHeight + 20
+                    implicitHeight: emptyRow.implicitHeight + 24
                     visible: Vnc.clients.length === 0
                     radius: Appearance.rounding.small
                     color: ColorUtils.transparentize(Appearance.colors.colLayer1, 0.4)
@@ -1028,13 +1026,14 @@ ContentPage {
                         anchors {
                             left: parent.left
                             right: parent.right
-                            margins: 10
+                            margins: 12
                         }
                         spacing: 10
 
                         Rectangle {
                             Layout.preferredWidth: 34
                             Layout.preferredHeight: 34
+                            Layout.alignment: Qt.AlignVCenter
                             radius: 17
                             color: Appearance.colors.colSecondaryContainer
                             MaterialSymbol {
@@ -1070,7 +1069,7 @@ ContentPage {
                     delegate: Rectangle {
                         required property var modelData
                         Layout.fillWidth: true
-                        implicitHeight: clientCard.implicitHeight + 16
+                        implicitHeight: clientCard.implicitHeight + 24
                         radius: Appearance.rounding.small
                         color: ColorUtils.transparentize(Appearance.colors.colLayer1, 0.4)
                         border.width: 1
@@ -1081,17 +1080,18 @@ ContentPage {
                             anchors {
                                 left: parent.left
                                 right: parent.right
-                                margins: 8
+                                margins: 12
                             }
-                            spacing: 6
+                            spacing: 8
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                spacing: 8
+                                spacing: 10
 
                                 Rectangle {
                                     Layout.preferredWidth: 34
                                     Layout.preferredHeight: 34
+                                    Layout.alignment: Qt.AlignVCenter
                                     radius: 17
                                     color: Appearance.colors.colSecondaryContainer
                                     MaterialSymbol {
@@ -1104,32 +1104,30 @@ ContentPage {
 
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: 1
-
-                                    StyledText {
-                                        Layout.fillWidth: true
-                                        text: page.clientName(modelData)
-                                        font.bold: true
-                                        elide: Text.ElideRight
-                                        color: Appearance.colors.colOnSurface
-                                    }
+                                    Layout.minimumWidth: 0
+                                    Layout.alignment: Qt.AlignVCenter
+                                    spacing: 2
 
                                     RowLayout {
                                         Layout.fillWidth: true
-                                        spacing: 6
+                                        Layout.minimumWidth: 0
+                                        spacing: 8
 
                                         StyledText {
                                             Layout.fillWidth: true
-                                            text: modelData.address || "—"
+                                            Layout.minimumWidth: 0
+                                            text: page.clientName(modelData)
+                                            font.bold: true
                                             elide: Text.ElideRight
-                                            color: Appearance.colors.colSubtext
-                                            font.pixelSize: Appearance.font.pixelSize.smaller
+                                            color: Appearance.colors.colOnSurface
                                         }
 
                                         Rectangle {
+                                            Layout.preferredWidth: Math.min(150, kindLabel.implicitWidth + 18)
+                                            Layout.preferredHeight: 20
+                                            Layout.alignment: Qt.AlignVCenter
                                             radius: Appearance.rounding.small
                                             color: ColorUtils.transparentize(Appearance.colors.colPrimary, 0.85)
-                                            implicitHeight: 20
 
                                             RowLayout {
                                                 anchors {
@@ -1144,11 +1142,29 @@ ContentPage {
                                                     color: Appearance.colors.colPrimary
                                                 }
                                                 StyledText {
+                                                    id: kindLabel
+                                                    Layout.fillWidth: true
                                                     text: page.kindLabel(modelData.kind)
                                                     color: Appearance.colors.colPrimary
                                                     font.pixelSize: Appearance.font.pixelSize.smaller
+                                                    elide: Text.ElideRight
                                                 }
                                             }
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Layout.minimumWidth: 0
+                                        spacing: 8
+
+                                        StyledText {
+                                            Layout.fillWidth: true
+                                            Layout.minimumWidth: 0
+                                            text: modelData.address || "—"
+                                            elide: Text.ElideRight
+                                            color: Appearance.colors.colSubtext
+                                            font.pixelSize: Appearance.font.pixelSize.smaller
                                         }
 
                                         StyledText {
@@ -1160,12 +1176,14 @@ ContentPage {
                                 }
 
                                 RippleButtonWithIcon {
+                                    Layout.alignment: Qt.AlignVCenter
                                     mainText: page.expandedClients[modelData.id] ? Translation.tr("Hide") : Translation.tr("Details")
                                     materialIcon: page.expandedClients[modelData.id] ? "expand_less" : "expand_more"
                                     onClicked: page.toggleClientDetails(modelData.id)
                                 }
 
                                 RippleButtonWithIcon {
+                                    Layout.alignment: Qt.AlignVCenter
                                     mainText: Translation.tr("Disconnect")
                                     materialIcon: "link_off"
                                     enabled: !Vnc.busy
@@ -1194,7 +1212,7 @@ ContentPage {
                                         spacing: 8
 
                                         StyledText {
-                                            Layout.preferredWidth: 88
+                                            Layout.preferredWidth: 96
                                             text: modelData.label
                                             color: Appearance.colors.colSubtext
                                             font.pixelSize: Appearance.font.pixelSize.smaller
@@ -1223,7 +1241,7 @@ ContentPage {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: 10
 
                 StyledText {
                     Layout.fillWidth: true
@@ -1238,7 +1256,7 @@ ContentPage {
                     delegate: Rectangle {
                         required property var modelData
                         Layout.fillWidth: true
-                        implicitHeight: outputRow.implicitHeight + 16
+                        implicitHeight: outputRow.implicitHeight + 24
                         radius: Appearance.rounding.small
                         color: ColorUtils.transparentize(Appearance.colors.colLayer1, 0.4)
                         border.width: 1
@@ -1249,9 +1267,9 @@ ContentPage {
                             anchors {
                                 left: parent.left
                                 right: parent.right
-                                margins: 8
+                                margins: 12
                             }
-                            spacing: 8
+                            spacing: 10
 
                             Rectangle {
                                 Layout.preferredWidth: 34
@@ -1343,7 +1361,7 @@ ContentPage {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: 10
 
                 RowLayout {
                     Layout.fillWidth: true
