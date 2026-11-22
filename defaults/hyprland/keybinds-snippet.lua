@@ -51,17 +51,14 @@ hl.window_rule({ match = { class = "org.quickshell", title = "Image Preview" }, 
 --
 -- Hyprland 0.57.2's Lua `release = true` binds never fire and `hl.dsp.exec_cmd()`
 -- is a no-op, so detect a tap from the `input.keyboard.key` event stream: each
--- event carries the keycode, a millisecond timestamp and the press/release
--- state. A tap is a short, uninterrupted Super press. A mouse click while Super
--- is held is invisible to Lua, but holding Super to click takes much longer
--- than a tap, so the duration gate suppresses the launcher in that case.
+-- event carries the keycode and the press/release state. A tap is an
+-- uninterrupted Super press with no other key held.
 --
 -- Unbind first so an inherited (possibly global) bind on the same key
 -- cannot double-toggle the launcher.
 hl.unbind("SUPER + SUPER_L")
 hl.unbind("SUPER + SUPER_R")
-local end4pcSuperTapMs = 350
-local end4pcSuperPressAt = 0
+local end4pcSuperWasDown = false
 local end4pcSuperCombo = false
 local function end4pcOtherKeyDown()
     for c = 8, 255 do
@@ -72,19 +69,16 @@ end
 hl.on("input.keyboard.key", function(code, ts, state)
     if code == 133 or code == 134 then
         if state == 1 then
-            -- Super pressed: start timing a potential tap.
-            end4pcSuperPressAt = ts
+            end4pcSuperWasDown = true
             end4pcSuperCombo = end4pcOtherKeyDown()
-        elseif state == 0 and end4pcSuperPressAt ~= 0 then
-            -- Super released: commit only a short, uninterrupted tap.
-            local held = ts - end4pcSuperPressAt
-            if not end4pcSuperCombo and not end4pcOtherKeyDown() and held <= end4pcSuperTapMs then
+        elseif state == 0 and end4pcSuperWasDown then
+            if not end4pcSuperCombo and not end4pcOtherKeyDown() then
                 hl.dispatch(hl.dsp.global("quickshell:searchToggle"))
             end
-            end4pcSuperPressAt = 0
+            end4pcSuperWasDown = false
             end4pcSuperCombo = false
         end
-    elseif end4pcSuperPressAt ~= 0 and state == 1 then
+    elseif state == 1 and end4pcSuperWasDown then
         -- Another key pressed while Super is held: a combo, not a tap.
         end4pcSuperCombo = true
     end

@@ -43,7 +43,7 @@ Two Hyprland 0.57.2 quirks explain the design:
 
 | Path | Role | Written by |
 |---|---|---|
-| `defaults/hyprland/keybinds.json` | Frozen default catalog (207 binds); the single source of truth | Project (committed) |
+| `defaults/hyprland/keybinds.json` | Frozen default catalog (206 binds); the single source of truth | Project (committed) |
 | `~/.config/hypr/custom/keybind-overlay.json` | User overrides, adds and disabled ids | Settings only |
 | `scripts/hyprland/generate_keybinds.py` | Merges catalog + overlay, renders all three outputs | — |
 | `~/.config/hypr/hyprland/keybinds.lua` | Generated main binds | Generator |

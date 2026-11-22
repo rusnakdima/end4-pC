@@ -54,10 +54,10 @@ GENERATOR = os.path.join(HERE, 'generate_keybinds.py')
 # Embedded fallback baseline. The checked-in baseline file is authoritative
 # when present; these values keep the validator usable without it.
 FALLBACK_BASELINE = {
-    'catalog_binds': 207,
-    'hyprctl_binds': 205,
+    'catalog_binds': 206,
+    'hyprctl_binds': 204,
     'runtime_only_ids': ['bind', 'bind-2'],
-    'id_sha256': 'c242df6fcb7302451aea533271ada4fa67ca6ac4698abc23b40311b7db3d8cc9',
+    'id_sha256': 'ed8c573afcd161999c33cfc3c159e8e89767842b3cdf2401709bab7064001b3d',
     'duplicate_combo_whitelist': {
         'SUPER + SHIFT + S': ['utilities', 'utilities-2'],
         'SUPER + SHIFT + A': ['utilities-3', 'utilities-4'],
