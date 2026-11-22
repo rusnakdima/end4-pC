@@ -181,43 +181,39 @@ install_hyprland_config() {
 # ---------------------------------------------------------------------------
 # Default keybinds
 # ---------------------------------------------------------------------------
-# A few binds extend the theme's Hyprland defaults but cannot live in the
-# deployed keybinds file: that file comes from the vendored dots/ tree, which
-# is not part of every checkout. They are injected into the user-owned
-# ~/.config/hypr/custom/keybinds.lua behind a marker instead, the same way
-# optional/waydroid does it. The marker keeps the step idempotent, and the
-# shell's keybind manager only rewrites its own block, so this one survives
-# every save and every update.
+# All keybinds now come from one JSON catalog (defaults/hyprland/keybinds.json)
+# which is rendered into the live main/custom Lua files by the migrated
+# sync.sh. install_qs_config already deployed sync.sh, the catalog, the
+# generator and the QML command bridge into ~/.config/quickshell/end4-pC, so
+# delegate here instead of duplicating the generation logic. sync.sh detects
+# the target user itself (SUDO_USER under sudo), so this is correct even when
+# the installer runs elevated. --no-reload avoids reloading Hyprland mid-install.
 install_keybind_defaults() {
-    local snippet="$SOURCE_DIR/defaults/hyprland/keybinds-snippet.lua"
-    local dest="$TARGET_HOME/.config/hypr/custom/keybinds.lua"
-    local marker="end4-pC workspace-follow keybinds"
+    local deployed_sync="$TARGET_HOME/.config/quickshell/end4-pC/sync.sh"
 
-    [[ -f "$snippet" ]] || return 0
+    if [[ ! -f "$deployed_sync" || ! -f "$SOURCE_DIR/defaults/hyprland/keybinds.json" ]]; then
+        echo "[install] WARN: keybind catalog or sync.sh missing; skipping keybind generation" >&2
+        return 0
+    fi
 
-    echo "[install] Adding default keybinds..."
-    mkdir -p "$(dirname "$dest")"
-    touch "$dest"
-    if grep -qF "$marker" "$dest"; then
-        echo "[install] default keybinds already present"
+    echo "[install] Generating keybinds from catalog..."
+    if [[ -n "${TARGET_USER:-}" && "${TARGET_USER}" != "$(id -un)" ]]; then
+        # Installer runs as root (or another user) for a different target: run
+        # sync.sh as the target user with an explicit HOME so its own
+        # resolve_target_home() lands on the same home this installer used.
+        sudo -u "$TARGET_USER" env HOME="$TARGET_HOME" \
+            "$deployed_sync" --keybinds-only --no-reload
     else
-        { printf '\n'; cat "$snippet"; } >> "$dest"
-        echo "[install] default keybinds written to custom/keybinds.lua"
+        "$deployed_sync" --keybinds-only --no-reload
     fi
-    if grep -qF 'quickshell:imagePreview' "$dest"; then
-        echo "[install] image preview keybind already present"
-    else
-        {
-            printf '\n-- >>> end4-pC image-preview keybind >>>\n'
-            printf -- '--#/# bind = SUPER+SHIFT, I,, -- Image Preview: view a file or clipboard image --\n'
-            printf 'hl.bind("SUPER + SHIFT + I", hl.dsp.global("quickshell:imagePreview"), {description = "Utilities: Image preview"})\n'
-            printf -- '-- <<< end4-pC image-preview keybind <<<\n'
-        } >> "$dest"
-        echo "[install] image preview keybind written to custom/keybinds.lua"
-    fi
-    # The installer may run under sudo: hand the file back to its owner.
+
+    # The generator writes as the invoking user; make sure the live Hyprland
+    # files and the command bridge are owned by the target user either way.
     if [[ $(id -u) -eq 0 && -n "${TARGET_USER:-}" ]]; then
-        chown "$TARGET_USER:" "$dest" 2>/dev/null || true
+        chown "$TARGET_USER:" \
+            "$TARGET_HOME/.config/hypr/hyprland/keybinds.lua" \
+            "$TARGET_HOME/.config/hypr/custom/keybinds.lua" \
+            "$TARGET_HOME/.config/quickshell/end4-pC/state/generated-commands.json" 2>/dev/null || true
     fi
 }
 
@@ -856,6 +852,15 @@ verify() {
 
     check "~/.config/quickshell/end4-pC/shell.qml exists" \
         test -f "$TARGET_HOME/.config/quickshell/end4-pC/shell.qml"
+    check "generated main keybinds.lua exists" \
+        test -f "$TARGET_HOME/.config/hypr/hyprland/keybinds.lua"
+    check "generated custom keybinds.lua exists" \
+        test -f "$TARGET_HOME/.config/hypr/custom/keybinds.lua"
+    check "generated command bridge JSON exists" \
+        test -f "$TARGET_HOME/.config/quickshell/end4-pC/state/generated-commands.json"
+    check "command bridge JSON is non-empty" \
+        python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if isinstance(d,dict) and len(d)>0 else 1)' \
+        "$TARGET_HOME/.config/quickshell/end4-pC/state/generated-commands.json"
     check "~/.config/fish/config.fish exists" \
         test -f "$TARGET_HOME/.config/fish/config.fish"
     check "~/.config/kitty/kitty.conf exists" \
