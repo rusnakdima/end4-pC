@@ -92,7 +92,7 @@ ContentPage {
         NoticeBox {
             Layout.fillWidth: true
             visible: externalMonitors.length === 0
-            materialIcon: "monitor_off"
+            materialIcon: "desktop_access_disabled"
             text: Translation.tr("Connect an external monitor by cable to use projection modes.")
         }
 
@@ -112,7 +112,7 @@ ContentPage {
                     ProjectionCard {
                         value: "pc"
                         label: Translation.tr("PC screen only")
-                        icon: "laptop"
+                        icon: "laptop_mac"
                         description: Translation.tr("Use only the built-in screen.")
                     }
                     ProjectionCard {

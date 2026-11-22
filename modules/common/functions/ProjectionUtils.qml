@@ -21,7 +21,7 @@ Singleton {
     id: root
 
     readonly property var modes: [
-        { value: "pc",        label: "PC screen only",     icon: "laptop" },
+        { value: "pc",        label: "PC screen only",     icon: "laptop_mac" },
         { value: "duplicate", label: "Duplicate",          icon: "content_copy" },
         { value: "extend",    label: "Extend",             icon: "desktop_windows" },
         { value: "second",    label: "Second screen only", icon: "tv" }
