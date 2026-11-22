@@ -309,8 +309,20 @@ def check_generated(catalog_path, binds, overlay_path, baseline, label, errors):
                 text = fh.read()
             lua_text += text
             generated += sum(1 for line in text.splitlines() if BIND_RE.match(line))
-        if generated != len(binds):
-            fail(errors, f'{label}: count parity: {len(binds)} binds but '
+        # The preambles may contain their own hl.bind calls (helpers, rules,
+        # or generated detectors). Those are emitted verbatim, not from the
+        # catalog bind list, so count them separately for the parity check.
+        catalog = load_json(catalog_path)
+        preamble_binds = sum(
+            1
+            for key in ('preamble', 'customPreamble')
+            for line in (catalog.get(key) or [])
+            if BIND_RE.match(line)
+        )
+        expected = len(binds) + preamble_binds
+        if generated != expected:
+            fail(errors, f'{label}: count parity: {len(binds)} binds + '
+                         f'{preamble_binds} preamble binds = {expected} but '
                          f'generated Lua has {generated}')
 
         commands_data = load_json(commands)
