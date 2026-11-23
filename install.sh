@@ -718,16 +718,35 @@ JSONEOF
 # ---------------------------------------------------------------------------
 install_sddm_theme() {
     echo "[install] Installing SDDM greeter..."
+    local theme_src="$SOURCE_DIR/sddm/ii-sddm-theme"
     local theme_dest="/usr/share/sddm/themes/ii-sddm-theme"
     require_sudo "the SDDM greeter" || return 0
+    if [[ ! -d "$theme_src" ]]; then
+        echo "[install] WARN: vendored ii-sddm-theme source not found, skipping system install"
+        return 0
+    fi
+
     if [[ ! -d "$theme_dest" ]]; then
-        if [[ -d "$SOURCE_DIR/ii-sddm-theme" ]]; then
-            $ELEVATE cp -r "$SOURCE_DIR/ii-sddm-theme" "$theme_dest"
-        elif [[ -d "$SOURCE_DIR/../ii-sddm-theme" ]]; then
-            $ELEVATE cp -r "$SOURCE_DIR/../ii-sddm-theme" "$theme_dest"
-        else
-            echo "[install] WARN: ii-sddm-theme source not found, skipping system install"
-        fi
+        $ELEVATE cp -r "$theme_src" "$theme_dest"
+    else
+        # Update code in place, but keep each device's generated state.
+        local PRESERVE_GENERATED=1
+        while IFS= read -r -d '' src; do
+            local rel="${src#"$theme_src"/}"
+            if [[ "$PRESERVE_GENERATED" == "1" ]]; then
+                case "$rel" in
+                    Components/Settings.qml|iiMatugen/Settings.qml|noMatugen/Settings.qml|Matugen/Settings.qml|Themes/ii-sddm.conf|Backgrounds/*)
+                        continue
+                        ;;
+                esac
+            fi
+            $ELEVATE mkdir -p "$theme_dest/$(dirname "$rel")"
+            $ELEVATE cp -f "$src" "$theme_dest/$rel"
+        done < <(find "$theme_src" -type f \
+            \( -name '*.qml' -o -name 'qmldir' -o -name '*.js' \
+               -o -name 'setup.sh' -o -name 'check.sh' \
+               -o -name 'uninstall.sh' -o -name 'change_avatar.sh' \
+               -o -name 'PATCHES.md' \) -print0)
     fi
 
     # Ensure backgrounds dir exists
