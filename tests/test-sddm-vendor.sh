@@ -32,4 +32,11 @@ done
 tracked="$(cd "$ROOT" && git ls-files 'sddm/ii-sddm-theme/Backgrounds/background.*')"
 [[ -z "$tracked" ]] || fail "generated backgrounds are tracked: $tracked"
 
+# 5. The update path also refreshes shell/python helpers, so local theme
+# patches (e.g. iiMatugen/sddm-theme-apply.sh) survive a reinstall.
+grep -q -- "-o -name '\*.sh'" "$ROOT/install.sh" ||
+    fail 'install.sh update filter does not copy *.sh helpers'
+grep -q -- "-o -name '\*.py'" "$ROOT/install.sh" ||
+    fail 'install.sh update filter does not copy *.py helpers'
+
 echo 'PASS: vendored theme and generated-state preservation contract'

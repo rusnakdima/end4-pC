@@ -26,6 +26,10 @@ Item {
     Layout.alignment: Qt.AlignBottom
     implicitWidth: inputRow.implicitWidth
 
+    function focusPassword(): void {
+        password.forceActiveFocus();
+    }
+
     ListModel {
         id: passwordCharsModel
     }
@@ -121,7 +125,7 @@ Item {
                     }
                     
                     onAccepted: {
-                        if (!loginContainer.isLoggingIn && (config.AllowEmptyPassword == "true" || password.text !== "")) {
+                        if (!loginContainer.isLoggingIn && (config.AllowEmptyPassword == "true" || (typedUser !== "" && password.text !== ""))) {
                             loginContainer.isLoggingIn = true;
                             const user = config.AllowUppercaseLettersInUsernames == "false" ? typedUser.toLowerCase() : typedUser;
                             sddm.login(user, password.text, inputContainer.selectedSession);

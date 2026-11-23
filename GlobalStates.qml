@@ -137,10 +137,11 @@ Singleton {
     // Do not defer them, or verification reloads while locked would silently
     // do nothing.
     function requestShellReload(): void {
-        if (root.screenLocked && !Config.options.lock.useHyprlock) {
+        // Mark every reload so lock() can detect a lock that arrives mid-reload
+        // (the reload was started while unlocked, so no bridge exists yet).
+        reloadMarkerFile.setText(root.lockStateSession)
+        if (root.screenLocked && !Config.options.lock.useHyprlock)
             root.startHyprlockBridge()
-            reloadMarkerFile.setText(root.lockStateSession)
-        }
         Quickshell.reload(true);
     }
 

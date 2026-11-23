@@ -48,4 +48,15 @@ if grep -q 'userModel.count' "$FIELD"; then
     fail 'UsernameField.qml gates the field on userModel.count'
 fi
 
+# 8. Enter in the username field moves focus to the password field instead of
+# being swallowed; both login entry points reject an empty username.
+grep -q 'signal accepted()' "$FIELD" || fail 'UsernameField.qml has no accepted signal'
+return_body="$(awk '/Keys.onReturnPressed/{found=1} found{print} found && /^        \}/{exit}' "$FIELD")"
+grep -q 'accepted()' <<<"$return_body" || fail 'Enter in the username field does not emit accepted()'
+grep -q 'onAccepted: loginContainer.focusPassword()' "$INPUT" ||
+    fail 'Input.qml does not forward username Enter to the password field'
+grep -q 'function focusPassword' "$LOGIN" || fail 'InputLogin.qml has no focusPassword()'
+empty_guards="$(grep -c 'typedUser !== "" && password.text !== ""' "$LOGIN" || true)"
+[[ "$empty_guards" -ge 2 ]] || fail "expected empty-username guard on both login paths, got $empty_guards"
+
 echo 'PASS: typed-username greeter contract'

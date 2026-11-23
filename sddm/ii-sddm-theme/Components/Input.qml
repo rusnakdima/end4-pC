@@ -56,6 +56,7 @@ RowLayout {
 
             UsernameField {
                 id: selectUser
+                onAccepted: loginContainer.focusPassword()
             }
 
             LayoutButton {

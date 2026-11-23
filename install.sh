@@ -744,8 +744,7 @@ install_sddm_theme() {
             $ELEVATE cp -f "$src" "$theme_dest/$rel"
         done < <(find "$theme_src" -type f \
             \( -name '*.qml' -o -name 'qmldir' -o -name '*.js' \
-               -o -name 'setup.sh' -o -name 'check.sh' \
-               -o -name 'uninstall.sh' -o -name 'change_avatar.sh' \
+               -o -name '*.sh' -o -name '*.py' \
                -o -name 'PATCHES.md' \) -print0)
     fi
 

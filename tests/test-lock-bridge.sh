@@ -35,6 +35,15 @@ start_pos="$(grep -bo 'startHyprlockBridge()' <<<"$reload_body" | head -1 | cut 
 reload_pos="$(grep -bo 'Quickshell.reload(true)' <<<"$reload_body" | head -1 | cut -d: -f1)"
 [[ "$start_pos" -lt "$reload_pos" ]] || fail 'hyprlock bridge starts after the reload'
 
+# 2b. The in-flight reload marker is written for EVERY reload, before the
+# screenLocked branch. Locking during a reload that was started while unlocked
+# must still be detectable by lock().
+marker_pos="$(grep -bo 'reloadMarkerFile.setText' <<<"$reload_body" | head -1 | cut -d: -f1)"
+locked_pos="$(grep -bo 'root.screenLocked' <<<"$reload_body" | head -1 | cut -d: -f1)"
+[[ -n "$marker_pos" ]] || fail 'requestShellReload() does not write the reload marker'
+[[ -n "$locked_pos" && "$marker_pos" -lt "$locked_pos" ]] ||
+    fail 'reload marker is only written when already locked (misses lock-during-reload)'
+
 # 3. Locking while a reload is in progress also starts the bridge.
 lock_body="$(body_of "$GS" lock)"
 [[ -n "$lock_body" ]] || fail 'lock() not found'

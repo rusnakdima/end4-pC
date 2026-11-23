@@ -12,6 +12,7 @@ FocusScope {
     property alias currentText: usernameField.text
     property int currentIndex: -1
     signal selectionChanged()
+    signal accepted()
 
     readonly property int baseHeight: 42
 
@@ -55,10 +56,12 @@ FocusScope {
             event.accepted = true;
         }
 
-        // Enter is deliberately not accepted: the greeter's password field
-        // keeps its normal onAccepted -> sddm.login path.
+        // Forward Enter to the password field; onAccepted only fires for the
+        // item that currently has focus, so swallowing it would block login.
         Keys.onReturnPressed: function(event) {
             suggestions.close();
+            usernameIsland.accepted();
+            event.accepted = true;
         }
     }
 
