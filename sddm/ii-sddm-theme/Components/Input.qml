@@ -54,7 +54,7 @@ RowLayout {
             spacing: 8
             clip: false
 
-            UserButton {
+            UsernameField {
                 id: selectUser
             }
 

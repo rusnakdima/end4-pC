@@ -18,6 +18,7 @@ Item {
 
     property bool loginFailed: false
     property bool isLoggingIn: false
+    readonly property string typedUser: selectUser.currentText.trim()
     property bool usePasswordChars: Settings.lock_materialShapeChars
     property var customShapeSequence: [MaterialShape.Shape.Clover4Leaf, MaterialShape.Shape.Arrow, MaterialShape.Shape.Pill, MaterialShape.Shape.SoftBurst, MaterialShape.Shape.Diamond, MaterialShape.Shape.ClamShell, MaterialShape.Shape.Pentagon]
 
@@ -122,7 +123,7 @@ Item {
                     onAccepted: {
                         if (!loginContainer.isLoggingIn && (config.AllowEmptyPassword == "true" || password.text !== "")) {
                             loginContainer.isLoggingIn = true;
-                            const user = config.AllowUppercaseLettersInUsernames == "false" ? selectUser.currentText.toLowerCase() : selectUser.currentText;
+                            const user = config.AllowUppercaseLettersInUsernames == "false" ? typedUser.toLowerCase() : typedUser;
                             sddm.login(user, password.text, inputContainer.selectedSession);
                         }
                     }
@@ -270,7 +271,7 @@ Item {
                 text: ""
                 hoverEnabled: true
                 focusPolicy: Qt.TabFocus
-                enabled: !loginContainer.isLoggingIn && (config.AllowEmptyPassword == "true" || (selectUser.currentText !== "" && password.text !== ""))
+                enabled: !loginContainer.isLoggingIn && (config.AllowEmptyPassword == "true" || (typedUser !== "" && password.text !== ""))
                 onPressed: {
                     if (!loginContainer.isLoggingIn)
                         loginRipple.state = "active";
@@ -280,7 +281,7 @@ Item {
                 onClicked: {
                     if (!loginContainer.isLoggingIn) {
                         loginContainer.isLoggingIn = true;
-                        const user = config.AllowUppercaseLettersInUsernames == "false" ? selectUser.currentText.toLowerCase() : selectUser.currentText;
+                        const user = config.AllowUppercaseLettersInUsernames == "false" ? typedUser.toLowerCase() : typedUser;
                         sddm.login(user, password.text, inputContainer.selectedSession);
                     }
                 }
@@ -484,6 +485,7 @@ Item {
         function onLoginFailed() {
             loginContainer.loginFailed = true;
             loginContainer.isLoggingIn = false;
+            selectUser.currentText = "";
             password.text = "";
             wrongPasswordShakeAnim.restart();
             password.forceActiveFocus();
