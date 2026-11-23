@@ -95,7 +95,13 @@ Scope {
         surface: root.sessionLockSurface
         onSecureChanged: {
             console.log(`[Lock] session lock secure: ${lock.secure}`);
-            if (lock.secure) GlobalStates.startupLockPending = false;
+            if (lock.secure) {
+                GlobalStates.startupLockPending = false;
+                // Only hand back to the themed lock once it actually holds the
+                // session; until then hyprlock must keep covering the gap.
+                if (GlobalStates.screenLocked && !Config.options.lock.useHyprlock)
+                    GlobalStates.endHyprlockBridge();
+            }
         }
     }
 

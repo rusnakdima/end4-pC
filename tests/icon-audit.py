@@ -118,6 +118,9 @@ for dirpath, dirnames, filenames in os.walk(ROOT):
         continue
     if rel_dir == "modules/waffle" or rel_dir.startswith("modules/waffle" + os.sep):
         continue
+    # The vendored SDDM greeter is a separate theme with its own icon set.
+    if rel_dir == "sddm" or rel_dir.startswith("sddm" + os.sep):
+        continue
     for fn in filenames:
         if not (fn.endswith(".qml") or fn.endswith(".js")):
             continue

@@ -61,12 +61,19 @@ Singleton {
     // records the Hyprland instance, so a reboot or a compositor restart does
     // not inherit a stale lock.
     property bool lockStateInitialized: false
-    readonly property string lockStatePath: `${Quickshell.env("XDG_RUNTIME_DIR") ?? "/tmp"}/end4-pC-locked`
+    readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") ?? "/tmp"
+    readonly property string lockStatePath: `${root.runtimeDir}/end4-pC-locked`
+    // Set while Quickshell is reloading, and while hyprlock is covering the
+    // lock surface teardown. Both live in tmpfs so a reboot clears them.
+    readonly property string reloadMarkerPath: `${root.runtimeDir}/end4-pC-reloading`
+    readonly property string bridgeMarkerPath: `${root.runtimeDir}/end4-pC-hyprlock-bridge`
     readonly property string lockStateSession: Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") ?? "1"
 
     function initLockState(): void {
         if (root.lockStateInitialized || !Config.ready) return
         root.lockStateInitialized = true
+        // A reload marker cannot outlive the shell instance that wrote it.
+        reloadMarkerFile.setText("")
         if (Config.options.lock.useHyprlock) return
         const saved = lockStateFile.text().trim()
         if (saved !== "" && saved === root.lockStateSession) root.screenLocked = true
@@ -83,6 +90,24 @@ Singleton {
         watchChanges: false
         printErrors: false
     }
+    FileView {
+        id: reloadMarkerFile
+        path: root.reloadMarkerPath
+        blockLoading: true
+        blockWrites: true
+        atomicWrites: true
+        watchChanges: false
+        printErrors: false
+    }
+    FileView {
+        id: bridgeMarkerFile
+        path: root.bridgeMarkerPath
+        blockLoading: true
+        blockWrites: true
+        atomicWrites: true
+        watchChanges: false
+        printErrors: false
+    }
     Connections {
         target: Config
         function onReadyChanged(): void { root.initLockState() }
@@ -93,10 +118,29 @@ Singleton {
         root.writeLockState(root.screenLocked)
     }
 
+    // Stock hyprlock covers the window in which this shell's WlSessionLock is
+    // destroyed by a reload. It is a temporary bridge only: the themed lock is
+    // still the primary lock, and LockScreen dismisses hyprlock once secure.
+    function startHyprlockBridge(): void {
+        if (bridgeMarkerFile.text().trim() !== "") return
+        bridgeMarkerFile.setText(root.lockStateSession)
+        Quickshell.execDetached(["bash", "-c", "pidof hyprlock || hyprlock"]);
+    }
+    function endHyprlockBridge(): void {
+        if (bridgeMarkerFile.text().trim() === "") return
+        bridgeMarkerFile.setText("")
+        Quickshell.execDetached(["bash", "-c", "pkill -TERM hyprlock || true"]);
+    }
+
     // Reloads while locked are safe: the marker above makes the reloaded shell
-    // acquire the theme lock again. Do not defer them, or verification reloads
-    // while locked would silently do nothing.
+    // acquire the theme lock again, and hyprlock covers the teardown itself.
+    // Do not defer them, or verification reloads while locked would silently
+    // do nothing.
     function requestShellReload(): void {
+        if (root.screenLocked && !Config.options.lock.useHyprlock) {
+            root.startHyprlockBridge()
+            reloadMarkerFile.setText(root.lockStateSession)
+        }
         Quickshell.reload(true);
     }
 
@@ -107,6 +151,9 @@ Singleton {
             Quickshell.execDetached(["bash", "-c", "pidof hyprlock || hyprlock"]);
             return;
         }
+        // Locking while a reload is already in progress has no live
+        // WlSessionLock to cover the gap, so start the bridge here too.
+        if (reloadMarkerFile.text().trim() !== "") root.startHyprlockBridge()
         // Write before changing the state so an immediate reload cannot lose it.
         root.writeLockState(true)
         root.screenLocked = true
