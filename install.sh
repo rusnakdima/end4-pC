@@ -2,6 +2,17 @@
 #
 # install.sh — end4-pC full setup installer
 #
+# Offline usage (no network access required):
+#   ./install.sh --offline
+#   OFFLINE=1 ./install.sh
+#     Never run pip install/upgrade or download the whisper model. Instead the
+#     Python deps are only checked for importability, and a clear warning is
+#     printed for any that are missing (the install never aborts).
+#   ./install.sh --offline --wheelhouse=/path/to/wheels
+#   OFFLINE=1 OFFLINE_WHEELHOUSE=/path/to/wheels ./install.sh
+#     Install the Python deps from a local wheel directory with
+#     pip --no-index --find-links, instead of the import-only check.
+#
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
@@ -112,6 +123,11 @@ deploy_atomic() {
     cat "$src" > "$tmp"
     chmod "$mode" "$tmp"
     mv -f "$tmp" "$dest"
+    # When install.sh runs under sudo, mktemp creates the file as root. Hand
+    # it back to the target user so the desktop can still edit it later.
+    if [[ $(id -u) -eq 0 && -n "${TARGET_USER:-}" ]]; then
+        chown "$TARGET_USER:" "$dest" 2>/dev/null || true
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -316,17 +332,34 @@ path = sys.argv[1]
 with open(path, encoding="utf-8") as handle:
     original = handle.read()
 
-pattern = re.compile(
+# Quickshell connects to org.bluez exactly once at startup. If bluetoothd is
+# still coming up at that instant, Bluetooth stays dead for the whole shell
+# session. Wait for the bus name before launching the shell.
+wait_script = "$HOME/.config/quickshell/end4-pC/scripts/bluetooth/wait-for-bluez.sh"
+
+def wrap(shell_path):
+    return (
+        'hl.exec_cmd("bash -c \'\\"' + wait_script + '\\" && exec qs -n -p '
+        + shell_path + '\'")'
+    )
+
+legacy = re.compile(
     r'hl\.exec_cmd\("sh -c \'sleep 5; pgrep -x qs >/dev/null \|\| exec qs -p ([^\']+)\'"\)'
 )
-patched, count = pattern.subn(lambda m: f'hl.exec_cmd("qs -n -p {m.group(1)}")', original)
+patched, count = legacy.subn(lambda m: wrap(m.group(1)), original)
 
-if count:
+# Also upgrade an already-patched qs -n line from an older install, so the
+# gate is applied on re-install instead of being silently skipped.
+current = re.compile(r'hl\.exec_cmd\("qs -n -p ([^"]+)"\)')
+patched, current_count = current.subn(lambda m: wrap(m.group(1)), patched)
+
+total = count + current_count
+if total:
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(patched)
-    print(f"[install] replaced {count} legacy shell-autostart line(s) in {path}")
+    print(f"[install] wrapped {total} shell-autostart line(s) with BlueZ wait in {path}")
 else:
-    print("[install] shell autostart already uses qs -n (no change)")
+    print("[install] shell autostart already waits for BlueZ (no change)")
 PY
 }
 
@@ -530,7 +563,12 @@ install_nvim_bootstrap() {
     local src="$DOTS_SOURCE/.config/nvim/lazy-lock.json"
     [[ -f "$src" ]] || { echo "[install] WARN: lazy-lock.json not found at $src"; return; }
     mkdir -p "$TARGET_HOME/.config/nvim"
-    [[ -f "$TARGET_HOME/.config/nvim/lazy-lock.json" ]] || cp "$src" "$TARGET_HOME/.config/nvim/lazy-lock.json"
+    if [[ ! -f "$TARGET_HOME/.config/nvim/lazy-lock.json" ]]; then
+        cp "$src" "$TARGET_HOME/.config/nvim/lazy-lock.json"
+        if [[ $(id -u) -eq 0 && -n "${TARGET_USER:-}" ]]; then
+            chown "$TARGET_USER:" "$TARGET_HOME/.config/nvim/lazy-lock.json" 2>/dev/null || true
+        fi
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -582,6 +620,11 @@ warm_stt_model() {
         echo "[install] SKIP_STT_MODEL_DOWNLOAD=1 set, skipping whisper model download."
         return 0
     fi
+    if [[ ${OFFLINE:-0} -eq 1 ]]; then
+        echo "[install] Offline mode: skipping whisper model download (no network access)."
+        echo "[install] The first speech-to-text use will need the model cached in ~/.cache/huggingface."
+        return 0
+    fi
     echo "[install] Pre-downloading the whisper 'base' model (needs network access)..."
     echo "[install] The model cache lives in ~/.cache/huggingface"
     if "$venv/bin/python" -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8')" >/dev/null 2>&1; then
@@ -603,8 +646,36 @@ install_python_venv() {
     if [[ ! -x "$venv/bin/python" ]]; then
         python3 -m venv "$venv"
     fi
-    "$venv/bin/pip" install --upgrade pip
-    "$venv/bin/pip" install pillow materialyoucolor loguru tqdm numpy opencv-python faster-whisper
+    if [[ ${OFFLINE:-0} -eq 1 ]]; then
+        # Never touch the network: no pip upgrade, no plain pip install.
+        if [[ -n "${OFFLINE_WHEELHOUSE:-}" && -d "$OFFLINE_WHEELHOUSE" ]]; then
+            echo "[install] Offline mode: installing Python deps from wheelhouse: $OFFLINE_WHEELHOUSE"
+            if ! "$venv/bin/pip" install --no-index --find-links="$OFFLINE_WHEELHOUSE" \
+                pillow materialyoucolor loguru tqdm numpy opencv-python faster-whisper; then
+                echo "[install] WARNING: wheelhouse install failed; some Python modules may be missing." >&2
+            fi
+        else
+            if [[ -n "${OFFLINE_WHEELHOUSE:-}" ]]; then
+                echo "[install] WARN: wheelhouse '$OFFLINE_WHEELHOUSE' does not exist; checking imports instead." >&2
+            fi
+            # Offline, no wheelhouse: only check that the required modules
+            # import. A missing module is reported but never aborts the install.
+            local module missing=""
+            for module in PIL materialyoucolor loguru tqdm numpy cv2 faster_whisper; do
+                if ! "$venv/bin/python" -c "import $module" >/dev/null 2>&1; then
+                    missing+="$module "
+                fi
+            done
+            if [[ -n "$missing" ]]; then
+                echo "[install] Offline mode: missing Python modules in $venv: ${missing% }" >&2
+                echo "[install]          Installed features that need them may not work until the" >&2
+                echo "[install]          packages are available (e.g. via a wheelhouse)." >&2
+            fi
+        fi
+    else
+        "$venv/bin/pip" install --upgrade pip
+        "$venv/bin/pip" install pillow materialyoucolor loguru tqdm numpy opencv-python faster-whisper
+    fi
     # Fail loudly when the speech to text backend cannot run, instead of only
     # finding out at the first recording.
     if ! "$venv/bin/python" -c "import faster_whisper" >/dev/null 2>&1; then
@@ -637,6 +708,9 @@ install_ii_config() {
   }
 }
 JSONEOF
+    if [[ $(id -u) -eq 0 && -n "${TARGET_USER:-}" ]]; then
+        chown "$TARGET_USER:" "$cfg" 2>/dev/null || true
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -826,6 +900,9 @@ install_fonts() {
     mkdir -p "$font_dir"
     if [[ -d "$SOURCE_DIR/assets/fonts" ]]; then
         find "$SOURCE_DIR/assets/fonts" -name '*.ttf' -exec cp {} "$font_dir/" \;
+        if [[ $(id -u) -eq 0 && -n "${TARGET_USER:-}" ]]; then
+            chown "$TARGET_USER:" "$font_dir"/*.ttf 2>/dev/null || true
+        fi
     fi
     fc-cache -f "$font_dir" 2>/dev/null || true
 }
@@ -916,8 +993,15 @@ APP_THEMING_QT_ENV="${APP_THEMING_QT_ENV:-1}"
 # Matugen post-hooks re-inject the guarded MD3 CSS block after matugen rewrites
 # gtk.css, so a failed applycolor.sh cannot erase the app-theming layer.
 APP_THEMING_MATUGEN_HOOK="${APP_THEMING_MATUGEN_HOOK:-1}"
+# Offline mode: never touch the network (pip upgrade/install, whisper model
+# download). Enabled with --offline or OFFLINE=1.
+OFFLINE="${OFFLINE:-0}"
+# Optional local wheel directory used by offline pip installs (no network).
+OFFLINE_WHEELHOUSE="${OFFLINE_WHEELHOUSE:-}"
 for arg in "$@"; do
     case "$arg" in
+        --offline) OFFLINE=1 ;;
+        --wheelhouse=*) OFFLINE_WHEELHOUSE="${arg#*=}" ;;
         --skip-checks) SKIP_CHECKS=1 ;;
         --with-waydroid) WITH_WAYDROID=1 ;;
         --with-vnc) WITH_VNC=1 ;;

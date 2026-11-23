@@ -20,13 +20,6 @@ Item {
     // field, in the service's own order (connected devices first).
     readonly property var visibleNetworks: StringUtils.filterByQuery(BluetoothStatus.friendlyDeviceList, searchField.text, ["name"])
 
-    Component.onCompleted: {
-        if (Bluetooth.defaultAdapter.enabled) Bluetooth.defaultAdapter.discovering = true;
-    }
-    Component.onDestruction: {
-        Bluetooth.defaultAdapter.discovering = false;
-    }
-
     WPanelPageColumn {
         anchors.fill: parent
 
@@ -54,24 +47,15 @@ Item {
                         WSwitch {
                             id: toggleSwitch
                             Layout.rightMargin: 12
-                            checked: Bluetooth.defaultAdapter?.enabled ?? false
-                            onCheckedChanged: {
-                                if (Bluetooth.defaultAdapter) {
-                                    Bluetooth.defaultAdapter.enabled = checked;
-                                    if (checked) {
-                                        Bluetooth.defaultAdapter.discovering = true;
-                                    } else {
-                                        Bluetooth.defaultAdapter.discovering = false;
-                                    }
-                                }
-                            }
+                            checked: BluetoothStatus.enabled
+                            onCheckedChanged: BluetoothStatus.setPowerAndDiscover(checked)
                         }
                     }
                     FadeLoader {
                         Layout.leftMargin: -4
                         Layout.rightMargin: -4
                         Layout.fillWidth: true
-                        shown: Bluetooth.defaultAdapter?.discovering ?? false
+                        shown: BluetoothStatus.discovering
                         visible: true
                         sourceComponent: WIndeterminateProgressBar {}
                     }
@@ -103,7 +87,7 @@ Item {
                             values: root.visibleNetworks
                         }
                         delegate: BluetoothDeviceItem {
-                            required property BluetoothDevice modelData
+                            required property var modelData
                             device: modelData
                             width: ListView.view.width
                         }
@@ -140,10 +124,10 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right
                 anchors.rightMargin: 12
-                enabled: !Bluetooth.defaultAdapter?.discovering && Bluetooth.defaultAdapter?.enabled
+                enabled: !BluetoothStatus.discovering && BluetoothStatus.enabled
 
                 onClicked: {
-                    Bluetooth.defaultAdapter.discovering = true;
+                    BluetoothStatus.startDiscovery();
                 }
 
                 contentItem: FluentIcon {

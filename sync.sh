@@ -258,6 +258,11 @@ root_owned_note=()
 collect_root_owned() {
     local dest="$1" prefix="$2" live rel
     local -n out="$3"
+    # Root can always chmod/chown, so there is no EPERM risk to avoid. The old
+    # `! -user $(id -u)` check flagged every target-user file when sync.sh ran
+    # as root, silently excluded the whole tree, and printed a misleading
+    # "owned by root" warning with a chown suggestion.
+    [[ $(id -u) -eq 0 ]] && return 0
     while IFS= read -r live; do
         [[ -n "$live" ]] || continue
         rel="${live#"$prefix"/}"
@@ -889,7 +894,7 @@ echo "  custom/, monitors.lua, profiles/           -- live-only, never in the re
 echo "  ${#qs_rsync_skip[@]} scripts unchanged since install.sh patched them"
 
 if [[ ${#root_owned_note[@]} -gt 0 ]]; then
-    echo "not synced -- owned by root (content is compared anyway):"
+    echo "not synced -- owned by another user (content is compared anyway):"
     printf '  %s\n' "${root_owned_note[@]}"
     echo "  To let this script update them in future:"
     echo "    sudo chown -R $TARGET_USER:$TARGET_USER \"$hypr_dest\" \"$qs_dest\""

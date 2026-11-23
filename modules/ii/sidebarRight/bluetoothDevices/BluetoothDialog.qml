@@ -30,10 +30,10 @@ WindowDialog {
     }
 
     WindowDialogSeparator {
-        visible: !(Bluetooth.defaultAdapter?.discovering ?? false)
+        visible: !BluetoothStatus.discovering
     }
     StyledIndeterminateProgressBar {
-        visible: Bluetooth.defaultAdapter?.discovering ?? false
+        visible: BluetoothStatus.discovering
         Layout.fillWidth: true
         Layout.topMargin: -8
         Layout.bottomMargin: -8
@@ -66,7 +66,7 @@ WindowDialog {
             TouchpadScrollArea { flickable: devicesView }
 
             delegate: BluetoothDeviceItem {
-                required property BluetoothDevice modelData
+                required property var modelData
                 device: modelData
                 width: ListView.view.width
             }
