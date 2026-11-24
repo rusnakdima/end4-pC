@@ -25,6 +25,7 @@ Singleton {
             { id: "tools",      name: Translation.tr("Tools"),      icon: "construction",   file: "ToolsConfig.qml" },
             { id: "advanced-paste", name: Translation.tr("Advanced Paste"), icon: "content_paste_go", file: "AdvancedPasteConfig.qml" },
             { id: "general",    name: Translation.tr("General"),    icon: "browse",         file: "GeneralConfig.qml" },
+            { id: "default-apps", name: Translation.tr("Default apps"), icon: "apps",        file: "DefaultAppsConfig.qml" },
             { id: "keyboard",   name: Translation.tr("Keyboard"),   icon: "keyboard",       file: "KeyboardConfig.qml" },
             { id: "services",   name: Translation.tr("Services"),   icon: "settings",       file: "ServicesConfig.qml" },
             { id: "vnc",        name: Translation.tr("VNC"),        icon: "screen_share",   file: "VncConfig.qml" },

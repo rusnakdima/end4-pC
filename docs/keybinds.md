@@ -146,6 +146,26 @@ overlay stays the only file Settings modifies for add/change/delete. The
 legacy `keybind_overrides.conf` and Lua comment markers are not part of this
 contract and are ignored by the generator.
 
+## Default apps
+
+The **Default apps** page (Settings → General) is a shortcut for choosing the
+app behind the bundled launch binds. It covers the eight roles whose catalog
+command is a fallback chain — terminal, file manager, browser, code editor,
+office, text editor, volume mixer and task manager — and never writes XDG or
+`mimeapps.list` files: the system's MIME defaults are untouched.
+
+For each role the page lists the apps matching that role (from installed
+`.desktop` entries, with a "Show all applications" switch), plus a combo editor
+and a reset button. Saving writes `overrides[id].dispatch.command` for every
+bind id of that role through `ManagedKeybinds.updateCatalogBind()`, then follows
+the same write → regenerate → reload chain as the Keybind page. Terminal's three
+binds (`apps`, `apps-2`, `apps-3`) move together. Resetting calls
+`clearOverride()` on those ids and restores the frozen fallback chain. Because
+the override is the only persisted state, a chosen app and its shortcut stay in
+one place: `~/.config/hypr/custom/keybind-overlay.json`. The catalog ids
+`apps-10` (Settings), `apps-12` (window resize) and `apps-13` (YouTube Music,
+a custom-sourced bind) are intentionally not part of the page.
+
 ## Command bridge
 
 Because `hl.dsp.exec_cmd()` does nothing on Hyprland 0.57.2, a `command` bind is
