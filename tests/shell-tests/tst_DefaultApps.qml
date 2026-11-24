@@ -33,4 +33,15 @@ TestCase {
     function test_an_unknown_role_is_null() {
         compare(DefaultApps.roleFor("not-a-role"), null);
     }
+
+    // The page is loaded dynamically by Settings. A bad property assignment
+    // only surfaces at runtime, which is why compiling the file is not enough.
+    function test_settings_page_component_loads() {
+        const component = Qt.createComponent("modules/ii/settings/pages/DefaultAppsConfig.qml");
+        compare(component.status, Component.Ready,
+            "settings page failed to load: " + component.errorString());
+        const page = component.createObject(null);
+        verify(page !== null, "settings page failed to instantiate");
+        page.destroy();
+    }
 }

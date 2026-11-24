@@ -154,7 +154,7 @@ ContentPage {
         ContentSection {
             icon: "apps"
             title: Translation.tr("Default apps")
-            description: Translation.tr("Choose the app each quick-launch shortcut opens. Changes are saved to your keybind overrides; the original shortcut keys are kept.")
+            hint: Translation.tr("Choose the app each quick-launch shortcut opens. Changes are saved to your keybind overrides; the original shortcut keys are kept.")
 
             ContentSubsection {
                 title: Translation.tr("Applications")
@@ -290,6 +290,9 @@ ContentPage {
     // else sees it.
     Rectangle {
         id: picker
+        // ContentPage drops its children into a ColumnLayout. Reparent to the
+        // page itself so the scrim can cover the whole viewport, not a cell.
+        parent: page
         visible: page.pickerRole !== ""
         anchors.fill: parent
         z: 10
