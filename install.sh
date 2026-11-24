@@ -721,13 +721,17 @@ install_sddm_theme() {
     local theme_src="$SOURCE_DIR/sddm/ii-sddm-theme"
     local theme_dest="/usr/share/sddm/themes/ii-sddm-theme"
     require_sudo "the SDDM greeter" || return 0
-    if [[ ! -d "$theme_src" ]]; then
-        echo "[install] WARN: vendored ii-sddm-theme source not found, skipping system install"
+    if [[ ! -f "$theme_src/Components/Input.qml" ]]; then
+        echo "[install] ERROR: sddm/ii-sddm-theme is an uninitialized git submodule." >&2
+        echo "[install]        Run: git submodule update --init --recursive" >&2
         return 0
     fi
 
     if [[ ! -d "$theme_dest" ]]; then
         $ELEVATE cp -r "$theme_src" "$theme_dest"
+        # A submodule keeps its .git as a *file* pointing at the parent repo's
+        # modules dir; never install that pointer into the system theme.
+        $ELEVATE rm -f "$theme_dest/.git"
     else
         # Update code in place, but keep each device's generated state.
         local PRESERVE_GENERATED=1

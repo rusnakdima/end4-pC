@@ -1,5 +1,14 @@
 # Design: SDDM user auth, archpc greeter, and lock/reload crash
 
+> **2026-11-24 update — UI decision reversed.** The user later asked for the
+> **opposite** of §2's chosen approach: the user list stays an always-visible
+> dropdown, with an appended **"Other user"** option. Selecting "Other user"
+> reveals a free-form username `TextField` stacked directly above the password
+> field; selecting a real user logs in with that user. The rejected "Dropdown
+> 'Other user' row" is now the implemented design. The greeter lives in the
+> `rusnakdima/ii-sddm-theme` fork, integrated into `end4-pC` as a git submodule
+> at `sddm/ii-sddm-theme`. Generated per-device config is not stored in the fork.
+
 Date: 2026-11-23
 Repo: `/mnt/Other/THEMES/end4-pC` (HEAD `14013cc`, clean, remote `git@github.com:rusnakdima/end4-pC.git`)
 

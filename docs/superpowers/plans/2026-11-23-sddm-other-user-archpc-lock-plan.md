@@ -1,5 +1,13 @@
 # SDDM User Auth, archpc Greeter, and Lock/Reload Bridge Implementation Plan
 
+> **2026-11-24 — Task 2 superseded.** The user reversed the UI decision: the
+> greeter keeps an always-visible dropdown with an appended **"Other user"**
+> option, and choosing it reveals a username field above the password field.
+> The theme is now the `rusnakdima/ii-sddm-theme` fork (commit `a476cea`),
+> integrated as a git submodule at `sddm/ii-sddm-theme`. The old
+> `UsernameField.qml` approach and its test have been removed/replaced. Tasks
+> 1, 3, 4 and 5 remain valid except that "vendor" now means "submodule".
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make SDDM authenticate arbitrary typed usernames, restore archpc's greeter user list, and eliminate the lock-during-reload crash by bridging with stock hyprlock while keeping the themed lock screen primary.

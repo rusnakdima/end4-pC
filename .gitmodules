@@ -1,0 +1,3 @@
+[submodule "sddm/ii-sddm-theme"]
+	path = sddm/ii-sddm-theme
+	url = git@github.com:rusnakdima/ii-sddm-theme.git

@@ -1,62 +1,72 @@
 #!/usr/bin/env bash
-# Contract test: the ii greeter accepts an arbitrary typed username and still
-# works when userModel is empty.
+# Contract test: the ii greeter keeps a user dropdown with an "Other user"
+# option, and selecting it reveals a username field above the password field.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TMPDIR_TEST="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_TEST"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
-FIELD="$ROOT/sddm/ii-sddm-theme/Components/UsernameField.qml"
-INPUT="$ROOT/sddm/ii-sddm-theme/Components/Input.qml"
-LOGIN="$ROOT/sddm/ii-sddm-theme/Components/InputLogin.qml"
+THEME="$ROOT/sddm/ii-sddm-theme/Components"
+BUTTON="$THEME/UserButton.qml"
+INPUT="$THEME/Input.qml"
+LOGIN="$THEME/InputLogin.qml"
 
-# 1. The component exists and exposes the selectUser-compatible API.
-[[ -f "$FIELD" ]] || fail 'UsernameField.qml does not exist'
-for token in 'currentText' 'currentIndex' 'selectionChanged' 'TextField'; do
-    grep -q -- "$token" "$FIELD" || fail "UsernameField.qml missing: $token"
+# 1. Dropdown exists and exposes the selectUser-compatible API plus the
+#    "Other user" sentinel.
+[[ -f "$BUTTON" ]] || fail 'UserButton.qml does not exist'
+for token in 'currentText' 'selectionChanged' 'signal accepted' 'otherUserIndex' 'isOtherUser'; do
+    grep -q -- "$token" "$BUTTON" || fail "UserButton.qml missing: $token"
 done
+grep -q 'qsTr("Other user")' "$BUTTON" || fail 'no "Other user" option in the dropdown'
+grep -q 'model: userModel.count + 1' "$BUTTON" || fail 'dropdown does not append a row past userModel'
+grep -q '257' "$BUTTON" || fail 'dropdown does not read name role 257'
+grep -q '260' "$BUTTON" || fail 'dropdown does not read icon role 260'
+grep -q 'ava-violet-2x.png' "$BUTTON" || fail 'device avatar patch lost'
 
-# 2. userModel roles: 257 = name, 260 = icon.
-grep -q '257' "$FIELD" || fail 'UsernameField.qml does not read userModel name role 257'
-grep -q '260' "$FIELD" || fail 'UsernameField.qml does not read userModel icon role 260'
-
-# 3. Input.qml uses it under the existing id, and the old dropdown is gone.
-grep -q 'UsernameField' "$INPUT" || fail 'Input.qml does not instantiate UsernameField'
+# 2. Input.qml still uses the dropdown under the existing id; the free-text
+#    replacement is gone.
+grep -q 'UserButton {' "$INPUT" || fail 'Input.qml does not instantiate UserButton'
 grep -q 'id: selectUser' "$INPUT" || fail 'Input.qml lost id: selectUser'
-if grep -q 'UserButton {' "$INPUT"; then fail 'Input.qml still instantiates UserButton'; fi
+if grep -q 'UsernameField' "$INPUT"; then fail 'Input.qml still uses UsernameField'; fi
+grep -q 'onSelectionChanged' "$INPUT" || fail 'selection does not update focus'
+grep -q 'focusActiveUserField' "$INPUT" || fail 'selection does not focus the active field'
 
-# 4. Every login path derives its first argument from selectUser.currentText.
-grep -q 'readonly property string typedUser: selectUser.currentText.trim()' "$LOGIN" ||
-    fail 'typed username is not trimmed in a single shared property'
+# 3. Username field lives above the password field and is gated on the
+#    "Other user" selection (not on userModel.count).
+grep -q 'id: usernameFieldWrap' "$LOGIN" || fail 'no username field wrapper in InputLogin.qml'
+grep -q 'visible: selectUser.isOtherUser' "$LOGIN" || fail 'username field is not gated on Other user'
+grep -q 'ColumnLayout' "$LOGIN" || fail 'password row is not stacked under a username field'
+grep -q 'id: usernameField' "$LOGIN" || fail 'no username TextField'
+if grep -q 'visible: userModel.count' "$LOGIN"; then
+    fail 'username field is gated on userModel.count'
+fi
+grep -q 'Keys.onReturnPressed' "$LOGIN" || fail 'Enter in username field is not handled'
+grep -q 'password.forceActiveFocus()' "$LOGIN" || fail 'Enter does not move focus to password'
+
+# 4. Login argument is derived from the dropdown selection OR the typed
+#    username, trimmed and lowercased when uppercase is disallowed.
+grep -q 'typedUsername: usernameField.text.trim()' "$LOGIN" ||
+    fail 'typed username is not trimmed'
+grep -q 'rawUsername: selectUser.isOtherUser ? typedUsername : selectUser.currentText.trim()' "$LOGIN" ||
+    fail 'login username is not chosen from Other user vs dropdown selection'
+grep -q 'AllowUppercaseLettersInUsernames == "false"' "$LOGIN" || fail 'uppercase rule removed'
+grep -q 'rawUsername.toLowerCase()' "$LOGIN" || fail 'username is not lowercased when required'
 login_calls="$(grep -c 'sddm.login(' "$LOGIN" || true)"
 [[ "$login_calls" -ge 2 ]] || fail "expected >=2 sddm.login calls, got $login_calls"
-if grep -n 'sddm.login(' "$LOGIN" | grep -v -E 'sddm\.login\((user|selectUser\.currentText),' >/dev/null; then
-    fail 'a sddm.login call does not pass the typed username as its first argument'
-fi
-grep -q 'const user = ' "$LOGIN" || fail 'login argument is not derived from typedUser'
-
-# 5. Username is trimmed on both login paths (count checked in 4).
-# 6. Lowercase rule is still applied when uppercase letters are disallowed.
-grep -q 'AllowUppercaseLettersInUsernames == "false"' "$LOGIN" || fail 'uppercase rule removed'
-grep -q 'typedUser.toLowerCase()' "$LOGIN" || fail 'typed username is not lowercased'
-# Login button must be enabled by the typed name, not by the model.
-grep -q 'typedUser !== ""' "$LOGIN" || fail 'login button does not enable on typed username'
-
-# 7. The field must stay usable with an empty userModel.
-if grep -q 'userModel.count' "$FIELD"; then
-    fail 'UsernameField.qml gates the field on userModel.count'
+if grep -n 'sddm.login(' "$LOGIN" | grep -v 'sddm.login(effectiveUsername,' >/dev/null; then
+    fail 'a sddm.login call does not pass effectiveUsername first'
 fi
 
-# 8. Enter in the username field moves focus to the password field instead of
-# being swallowed; both login entry points reject an empty username.
-grep -q 'signal accepted()' "$FIELD" || fail 'UsernameField.qml has no accepted signal'
-return_body="$(awk '/Keys.onReturnPressed/{found=1} found{print} found && /^        \}/{exit}' "$FIELD")"
-grep -q 'accepted()' <<<"$return_body" || fail 'Enter in the username field does not emit accepted()'
-grep -q 'onAccepted: loginContainer.focusPassword()' "$INPUT" ||
-    fail 'Input.qml does not forward username Enter to the password field'
-grep -q 'function focusPassword' "$LOGIN" || fail 'InputLogin.qml has no focusPassword()'
-empty_guards="$(grep -c 'typedUser !== "" && password.text !== ""' "$LOGIN" || true)"
+# 5. Both login paths reject an empty username, and failure clears the
+#    typed field so a stale name cannot be reused.
+empty_guards="$(grep -c 'effectiveUsername !== "" && password.text !== ""' "$LOGIN" || true)"
 [[ "$empty_guards" -ge 2 ]] || fail "expected empty-username guard on both login paths, got $empty_guards"
+grep -q 'usernameField.text = ""' "$LOGIN" || fail 'login failure does not clear the typed username'
 
-echo 'PASS: typed-username greeter contract'
+# 6. Syntax check.
+if command -v qmllint >/dev/null 2>&1; then
+    for f in "$BUTTON" "$INPUT" "$LOGIN"; do
+        out="$(qmllint "$f" 2>&1)" || fail "qmllint failed for $f: $out"
+    done
+fi
+
+echo 'PASS: Other-user dropdown and username-field contract'
