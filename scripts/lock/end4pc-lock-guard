@@ -1,0 +1,275 @@
+#!/usr/bin/env python3
+"""Watchdog for the end4-pC lock screen.
+
+The theme's WlSessionLock is always the default lock. If the shell disappears
+or its session-lock surface never becomes secure while the session is locked,
+the guard tries a full shell restart and then falls back to hyprlock. A crash
+of that fallback is restarted; a successful manual unlock clears the lock and
+restores the theme lock as the default for subsequent locks.
+"""
+
+import glob
+import os
+import subprocess
+import time
+from pathlib import Path
+
+RT = os.environ.get("XDG_RUNTIME_DIR", "/run/user/1000")
+LOCK_MARKER = Path(RT) / "end4-pC-locked"
+BRIDGE_MARKER = Path(RT) / "end4-pC-hyprlock-bridge"
+FALLBACK_MARKER = Path(RT) / "end4pc-lock-guard-fallback"
+LOG_PATH = Path("/tmp/end4pc-lock-guard.log")
+POLL_SECONDS = 2
+
+
+def log(message):
+    with LOG_PATH.open("a") as handle:
+        handle.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}\n")
+
+
+def session_signature():
+    directories = glob.glob(f"{RT}/hypr/*")
+    if not directories:
+        return "1"
+    return os.path.basename(max(directories, key=os.path.getmtime))
+
+
+def child_env():
+    env = os.environ.copy()
+    env.update(
+        XDG_RUNTIME_DIR=RT,
+        WAYLAND_DISPLAY=os.environ.get("WAYLAND_DISPLAY", "wayland-1"),
+        DBUS_SESSION_BUS_ADDRESS=f"unix:path={RT}/bus",
+        HYPRLAND_INSTANCE_SIGNATURE=session_signature(),
+    )
+    return env
+
+
+def marker_locked():
+    try:
+        value = LOCK_MARKER.read_text().strip()
+    except OSError:
+        value = ""
+    return bool(value) and value == session_signature()
+
+
+def ipc_status():
+    try:
+        result = subprocess.run(
+            ["qs", "-c", "end4-pC", "ipc", "call", "lock", "status"],
+            env=child_env(),
+            capture_output=True,
+            text=True,
+            timeout=4,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+def pgrep(pattern):
+    try:
+        result = subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True)
+        return [int(value) for value in result.stdout.split() if value.strip()]
+    except (OSError, ValueError):
+        return []
+
+
+def qs_pids():
+    # A systemd-run scope execs /usr/bin/qs, while a manual launch may use the
+    # bare name. Anchor the end so short-lived `qs -c end4-pC ipc ...` calls
+    # from ipc_status() are not mistaken for the running shell.
+    return pgrep(r"(^|/)qs -c end4-pC$")
+
+
+def hyprlock_pids():
+    try:
+        result = subprocess.run(["pgrep", "-x", "hyprlock"], capture_output=True, text=True)
+        return [int(value) for value in result.stdout.split() if value.strip()]
+    except (OSError, ValueError):
+        return []
+
+
+def bridge_active():
+    try:
+        return bool(BRIDGE_MARKER.read_text().strip())
+    except OSError:
+        return False
+
+
+def clear_crashed_lockscreen():
+    # Hyprland keeps showing its "lockscreen app died" screen (no password
+    # field) until this is called, even after a new lock client takes over.
+    try:
+        subprocess.run(
+            ["hyprctl", "--instance", "0", "eval", "hl.clear_crashed_lockscreen()"],
+            env=child_env(), capture_output=True, text=True, timeout=4,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def log_file():
+    return LOG_PATH.open("a")
+
+
+def start_shell():
+    if qs_pids():
+        return
+    log("starting shell")
+    # Run the shell in its own transient scope. A plain Popen would leave qs in
+    # this service's cgroup, so restarting the guard would kill the shell and
+    # recreate the very crash-lock screen this watchdog exists to prevent.
+    subprocess.run(
+        ["systemctl", "--user", "stop", "end4pc-shell.scope"],
+        env=child_env(), capture_output=True, timeout=5,
+    )
+    subprocess.Popen(
+        [
+            "systemd-run", "--user", "--scope", "--collect",
+            "--unit=end4pc-shell", "qs", "-c", "end4-pC",
+        ],
+        env=child_env(),
+        stdin=subprocess.DEVNULL,
+        stdout=log_file(),
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+
+
+def stop_shell():
+    for pid in qs_pids():
+        log(f"stopping shell pid {pid}")
+        try:
+            os.kill(pid, 15)
+        except ProcessLookupError:
+            pass
+
+
+def wait_for_secure(seconds):
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        status = ipc_status()
+        if status == "locked-secure":
+            return True
+        time.sleep(0.5)
+    return False
+
+
+fallback_proc = None
+
+
+def spawn_fallback():
+    global fallback_proc
+    log("starting hyprlock fallback")
+    fallback_proc = subprocess.Popen(
+        ["hyprlock"],
+        env=child_env(),
+        stdin=subprocess.DEVNULL,
+        stdout=log_file(),
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+
+
+def start_fallback():
+    stop_shell()
+    FALLBACK_MARKER.write_text("1")
+    spawn_fallback()
+
+
+def end_fallback():
+    global fallback_proc
+    # Only call this after hyprlock has exited on its own (clean unlock).
+    # Killing a live hyprlock creates Hyprland's dead-lock fallback screen,
+    # which has no password field and leaves the compositor locked.
+    if hyprlock_pids():
+        log("hyprlock still running; leaving it to finish its unlock")
+        return
+    fallback_proc = None
+    if FALLBACK_MARKER.exists():
+        FALLBACK_MARKER.unlink()
+    try:
+        LOCK_MARKER.write_text(" ")
+    except OSError:
+        pass
+    start_shell()
+    log("fallback ended; theme lock is default again")
+
+
+def main():
+    log("guard started")
+    previous_locked = False
+    restart_attempted = False
+    while True:
+        try:
+            locked = marker_locked()
+            status = ipc_status()
+
+            if locked and not previous_locked:
+                restart_attempted = False
+
+            if FALLBACK_MARKER.exists():
+                # The fallback owns the lock, whether or not the theme marker
+                # has been cleared. A clean exit means the user unlocked it;
+                # any other disappearance (crash, SIGKILL) must be respawned,
+                # or Hyprland shows its dead-lock screen with no password field.
+                exited = fallback_proc is not None and fallback_proc.poll() is not None
+                if exited and fallback_proc.returncode == 0:
+                    log("fallback unlocked cleanly; restoring theme lock")
+                    end_fallback()
+                elif not hyprlock_pids():
+                    log("hyprlock fallback died; restarting")
+                    spawn_fallback()
+            elif locked and bridge_active() and not hyprlock_pids():
+                # The bridge marker means hyprlock covered a theme-lock
+                # teardown. With no hyprlock left, Hyprland keeps painting its
+                # "lockscreen app died" screen even though the reloaded shell
+                # reports "locked-secure". Clear it and take the lock back.
+                log("stale hyprlock bridge; clearing crashed lock and restarting shell")
+                clear_crashed_lockscreen()
+                BRIDGE_MARKER.write_text(" ")
+                restart_attempted = True
+                stop_shell()
+                start_shell()
+                wait_for_secure(12)
+            elif locked:
+                if not qs_pids():
+                    start_shell()
+                    wait_for_secure(12)
+                    status = ipc_status()
+                if status != "locked-secure":
+                    if not restart_attempted:
+                        restart_attempted = True
+                        log("lock surface not secure; restarting shell")
+                        stop_shell()
+                        start_shell()
+                        wait_for_secure(10)
+                        status = ipc_status()
+                    if status != "locked-secure":
+                        log("theme lock unavailable; falling back to hyprlock")
+                        start_fallback()
+                elif hyprlock_pids() and not bridge_active():
+                    # A stray hyprlock (not a bridge, not our fallback) must
+                    # not cover the theme lock. Killing a bridge hyprlock is
+                    # what produced the dead-lock screen in the first place.
+                    log("stray hyprlock; clearing crashed lock")
+                    for pid in hyprlock_pids():
+                        try:
+                            os.kill(pid, 15)
+                        except ProcessLookupError:
+                            pass
+                    clear_crashed_lockscreen()
+            elif bridge_active():
+                BRIDGE_MARKER.write_text(" ")
+
+            previous_locked = locked
+        except Exception as error:  # keep the watchdog alive
+            log(f"guard error: {error!r}")
+        time.sleep(POLL_SECONDS)
+
+
+if __name__ == "__main__":
+    main()
