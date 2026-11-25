@@ -750,6 +750,8 @@ Singleton {
                 property real radius: 23
                 property bool followFrameColor: false
                 property bool showPreviews: true
+                property bool showTooltips: true // App name on hover; shown in the preview header when previews open
+                property bool scrollToCycleWindows: false // Scroll on an app icon to focus its next/previous window
                 property real iconSize: 33
                 property real iconSpacing: 0
                 property bool showPinButton: true
@@ -1001,6 +1003,13 @@ Singleton {
                 property JsonObject imageSearch: JsonObject {
                     property string imageSearchEngineBaseUrl: "https://lens.google.com/uploadbyurl?url="
                     property bool useCircleSelection: false
+                }
+                property JsonObject omni: JsonObject {
+                    property bool enableFileSearch: true
+                    property bool enableBrowserHistory: true
+                    property bool enableDirectUrl: true
+                    property bool enableAiShortcuts: false // Opt-in: gpt / chatgpt / claude / ai prefixes
+                    property bool enableSpotify: false // Opt-in: p <song> / q <song> prefixes + queue daemon
                 }
             }
 
