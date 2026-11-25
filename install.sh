@@ -2,16 +2,12 @@
 #
 # install.sh — end4-pC full setup installer
 #
-# Offline usage (no network access required):
-#   ./install.sh --offline
-#   OFFLINE=1 ./install.sh
-#     Never run pip install/upgrade or download the whisper model. Instead the
-#     Python deps are only checked for importability, and a clear warning is
-#     printed for any that are missing (the install never aborts).
-#   ./install.sh --offline --wheelhouse=/path/to/wheels
-#   OFFLINE=1 OFFLINE_WHEELHOUSE=/path/to/wheels ./install.sh
-#     Install the Python deps from a local wheel directory with
-#     pip --no-index --find-links, instead of the import-only check.
+# Full option and environment-variable list: ./install.sh --help
+#
+# Common examples:
+#   ./install.sh --offline                     # no network: check imports only
+#   ./install.sh --offline --wheelhouse=./wheels  # offline pip from local wheels
+#   sudo ./install.sh --target-user=NAME --with-vnc --vnc-mode=mirror
 #
 set -euo pipefail
 
@@ -23,10 +19,153 @@ SOURCE_DIR="$SCRIPT_DIR"          # end4-pC root
 DOTS_SOURCE="$SCRIPT_DIR/dots"                 # vendored dotfiles + Hyprland config
 
 # ---------------------------------------------------------------------------
+# Command line
+# ---------------------------------------------------------------------------
+# Parsing happens here, before any detection or writes, so --help and bad
+# arguments always exit without touching the system.
+PROG=${0##*/}
+VERSION=dev
+
+usage() {
+    cat <<'EOF'
+Usage: install.sh [OPTIONS]
+
+Deploy end4-pC into the target user's config and state directories.
+
+Options:
+  -h, --help                 Show this help and exit.
+  --version                  Print version and exit.
+  --offline                  Never touch the network: no pip install/upgrade and
+                             no whisper model download. Python deps are only
+                             checked for importability (or installed from a
+                             wheelhouse, see --wheelhouse).
+  --wheelhouse DIR           Offline only: install Python deps from a local wheel
+                             directory (pip --no-index --find-links=DIR). DIR
+                             must exist.
+  --wheelhouse=DIR           Same, single-token form.
+  --skip-checks              Deploy even if the QML compile check finds new
+                             errors in the checkout.
+  --target-user NAME         Deploy into NAME's home instead of detecting the
+                             target (SUDO_USER under sudo, else the invoking
+                             user, else the first /home user).
+  --with-waydroid            Also run optional/waydroid/install-waydroid.sh.
+  --with-vnc                 Also run optional/vnc/install-vnc.sh.
+  --vnc-mode MODE            VNC layout: full or mirror (default: full).
+  --vnc-audio BACKEND        VNC audio: sunshine or none (default: sunshine).
+  --vnc-autologin 0|1        Enable VNC autologin (default: 1).
+  --skip-stt-model           Do not pre-download the whisper base model.
+  --keep-window-buttons      Keep GTK/Qt titlebar buttons (default: disabled).
+  --no-app-theming           Do not apply external app theming.
+  --no-app-theming-qt-env    Do not set QT_STYLE_OVERRIDE=kvantum.
+  --no-app-theming-hook      Do not install matugen post-hooks.
+  --                         Stop option parsing.
+
+Environment (flags take precedence; binary variables must be 0 or 1):
+  OFFLINE=1                  Same as --offline.
+  OFFLINE_WHEELHOUSE=DIR     Same as --wheelhouse (DIR must exist).
+  SKIP_STT_MODEL_DOWNLOAD=1  Same as --skip-stt-model.
+  DISABLE_WINDOW_BUTTONS=0   Same as --keep-window-buttons.
+  APP_THEMING=0              Same as --no-app-theming.
+  APP_THEMING_QT_ENV=0       Same as --no-app-theming-qt-env.
+  APP_THEMING_MATUGEN_HOOK=0 Same as --no-app-theming-hook.
+  VNC_MODE / VNC_AUDIO / VNC_AUTOLOGIN  Same as the matching flags.
+
+Examples:
+  ./install.sh --offline --wheelhouse ./wheels
+  sudo ./install.sh --target-user dmitriy --with-vnc --vnc-mode mirror
+  ./install.sh --keep-window-buttons --skip-checks
+
+Exit status:
+  0  install finished and all smoke checks passed
+  1  install finished but some smoke checks failed
+  2  invalid command line or option value (nothing was changed)
+EOF
+}
+
+die() { printf '%s: error: %s\n' "$PROG" "$*" >&2; exit 2; }
+need_value() { [[ $# -ge 2 ]] || die "$1 needs a value"; }
+is_01() { [[ "$1" == 0 || "$1" == 1 ]]; }
+
+check_01() {
+    is_01 "$2" || die "$1 must be 0 or 1 (got '$2')"
+}
+
+# Defaults. Flags override the environment; both are validated below.
+SKIP_CHECKS=0
+WITH_WAYDROID=0
+WITH_VNC=0
+VNC_MODE="${VNC_MODE:-full}"
+VNC_AUDIO="${VNC_AUDIO:-sunshine}"
+VNC_AUTOLOGIN="${VNC_AUTOLOGIN:-1}"
+DISABLE_WINDOW_BUTTONS="${DISABLE_WINDOW_BUTTONS:-1}"
+APP_THEMING="${APP_THEMING:-1}"
+APP_THEMING_QT_ENV="${APP_THEMING_QT_ENV:-1}"
+APP_THEMING_MATUGEN_HOOK="${APP_THEMING_MATUGEN_HOOK:-1}"
+OFFLINE="${OFFLINE:-0}"
+OFFLINE_WHEELHOUSE="${OFFLINE_WHEELHOUSE:-}"
+SKIP_STT_MODEL_DOWNLOAD="${SKIP_STT_MODEL_DOWNLOAD:-0}"
+TARGET_USER_OVERRIDE=""
+
+while (($#)); do
+    case "$1" in
+        -h|--help) usage; exit 0 ;;
+        --version) printf 'end4-pC installer %s\n' "$VERSION"; exit 0 ;;
+        --offline) OFFLINE=1 ;;
+        --wheelhouse=*) OFFLINE_WHEELHOUSE="${1#*=}" ;;
+        --wheelhouse) need_value "$@"; OFFLINE_WHEELHOUSE="$2"; shift ;;
+        --skip-checks) SKIP_CHECKS=1 ;;
+        --target-user=*) TARGET_USER_OVERRIDE="${1#*=}" ;;
+        --target-user) need_value "$@"; TARGET_USER_OVERRIDE="$2"; shift ;;
+        --with-waydroid) WITH_WAYDROID=1 ;;
+        --with-vnc) WITH_VNC=1 ;;
+        --vnc-mode=*) VNC_MODE="${1#*=}" ;;
+        --vnc-mode) need_value "$@"; VNC_MODE="$2"; shift ;;
+        --vnc-audio=*) VNC_AUDIO="${1#*=}" ;;
+        --vnc-audio) need_value "$@"; VNC_AUDIO="$2"; shift ;;
+        --vnc-autologin=*) VNC_AUTOLOGIN="${1#*=}" ;;
+        --vnc-autologin) need_value "$@"; VNC_AUTOLOGIN="$2"; shift ;;
+        --skip-stt-model) SKIP_STT_MODEL_DOWNLOAD=1 ;;
+        --keep-window-buttons) DISABLE_WINDOW_BUTTONS=0 ;;
+        --no-app-theming) APP_THEMING=0 ;;
+        --no-app-theming-qt-env) APP_THEMING_QT_ENV=0 ;;
+        --no-app-theming-hook) APP_THEMING_MATUGEN_HOOK=0 ;;
+        --) shift; break ;;
+        -*) die "unknown option: $1 (try --help)" ;;
+        *) die "unexpected argument: $1 (try --help)" ;;
+    esac
+    shift
+done
+
+# Fail fast on bad values: nothing above this point has changed the system.
+check_01 OFFLINE "$OFFLINE"
+check_01 SKIP_STT_MODEL_DOWNLOAD "$SKIP_STT_MODEL_DOWNLOAD"
+check_01 DISABLE_WINDOW_BUTTONS "$DISABLE_WINDOW_BUTTONS"
+check_01 APP_THEMING "$APP_THEMING"
+check_01 APP_THEMING_QT_ENV "$APP_THEMING_QT_ENV"
+check_01 APP_THEMING_MATUGEN_HOOK "$APP_THEMING_MATUGEN_HOOK"
+check_01 VNC_AUTOLOGIN "$VNC_AUTOLOGIN"
+case "$VNC_MODE" in full|mirror) ;; *) die "invalid --vnc-mode '$VNC_MODE' (expected full or mirror)" ;; esac
+case "$VNC_AUDIO" in sunshine|none) ;; *) die "invalid --vnc-audio '$VNC_AUDIO' (expected sunshine or none)" ;; esac
+if [[ -n "$OFFLINE_WHEELHOUSE" && ! -d "$OFFLINE_WHEELHOUSE" ]]; then
+    die "wheelhouse directory does not exist: $OFFLINE_WHEELHOUSE"
+fi
+if [[ -n "$TARGET_USER_OVERRIDE" ]]; then
+    getent passwd "$TARGET_USER_OVERRIDE" >/dev/null 2>&1 \
+        || die "unknown user: $TARGET_USER_OVERRIDE"
+fi
+
+# ---------------------------------------------------------------------------
 # Root / target-user detection
 # ---------------------------------------------------------------------------
 resolve_target_home() {
-    if [[ $(id -u) -eq 0 ]]; then
+    if [[ -n "$TARGET_USER_OVERRIDE" ]]; then
+        TARGET_USER="$TARGET_USER_OVERRIDE"
+        TARGET_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
+        [[ -n "$TARGET_HOME" && -d "$TARGET_HOME" ]] || {
+            echo "[install] ERROR: no home directory for $TARGET_USER" >&2
+            exit 2
+        }
+    elif [[ $(id -u) -eq 0 ]]; then
         if [[ -n "${SUDO_USER:-}" ]]; then
             TARGET_HOME=$(eval echo "~$SUDO_USER")
             TARGET_USER="$SUDO_USER"
@@ -996,46 +1135,8 @@ verify() {
 # currently deployed: a new problem aborts the deploy, a problem that is
 # already deployed does not, so known work in progress does not block an
 # install.
-SKIP_CHECKS=0
-WITH_WAYDROID=0
-WITH_VNC=0
-VNC_MODE="${VNC_MODE:-full}"
-VNC_AUDIO="${VNC_AUDIO:-sunshine}"
-VNC_AUTOLOGIN="${VNC_AUTOLOGIN:-1}"
-# Window titlebar buttons (close/maximize/minimize) are toolkit-side, see
-# configure_window_decorations. On by default; DISABLE_WINDOW_BUTTONS=0 or
-# --keep-window-buttons leaves the apps alone.
-DISABLE_WINDOW_BUTTONS="${DISABLE_WINDOW_BUTTONS:-1}"
-# External app window theming (GTK/Qt follow the shell's light/dark mode).
-# On by default; APP_THEMING=0 or --no-app-theming opts out.
-APP_THEMING="${APP_THEMING:-1}"
-# Qt style env: force QT_STYLE_OVERRIDE=kvantum in hyprland/env.lua so Qt apps
-# stop defaulting to Breeze (which ignores the matugen palette). Needs re-login.
-APP_THEMING_QT_ENV="${APP_THEMING_QT_ENV:-1}"
-# Matugen post-hooks re-inject the guarded MD3 CSS block after matugen rewrites
-# gtk.css, so a failed applycolor.sh cannot erase the app-theming layer.
-APP_THEMING_MATUGEN_HOOK="${APP_THEMING_MATUGEN_HOOK:-1}"
-# Offline mode: never touch the network (pip upgrade/install, whisper model
-# download). Enabled with --offline or OFFLINE=1.
-OFFLINE="${OFFLINE:-0}"
-# Optional local wheel directory used by offline pip installs (no network).
-OFFLINE_WHEELHOUSE="${OFFLINE_WHEELHOUSE:-}"
-for arg in "$@"; do
-    case "$arg" in
-        --offline) OFFLINE=1 ;;
-        --wheelhouse=*) OFFLINE_WHEELHOUSE="${arg#*=}" ;;
-        --skip-checks) SKIP_CHECKS=1 ;;
-        --with-waydroid) WITH_WAYDROID=1 ;;
-        --with-vnc) WITH_VNC=1 ;;
-        --vnc-mode=*) VNC_MODE="${arg#*=}" ;;
-        --vnc-audio=*) VNC_AUDIO="${arg#*=}" ;;
-        --vnc-autologin=*) VNC_AUTOLOGIN="${arg#*=}" ;;
-        --keep-window-buttons) DISABLE_WINDOW_BUTTONS=0 ;;
-        --no-app-theming) APP_THEMING=0 ;;
-        --no-app-theming-qt-env) APP_THEMING_QT_ENV=0 ;;
-        --no-app-theming-hook) APP_THEMING_MATUGEN_HOOK=0 ;;
-    esac
-done
+# Options and their defaults are parsed and validated at the top of the script
+# (see "Command line"), before any deployment step runs.
 
 check_config_compiles() {
     local src="$1" dest="$2"
@@ -1096,6 +1197,15 @@ check_config_compiles() {
 main() {
     resolve_target_home
     banner
+
+    # Show the effective options before the first write, so a typo in an
+    # environment variable is visible even when it happens to be valid.
+    echo "[install] Options: offline=$OFFLINE skip-checks=$SKIP_CHECKS"
+    echo "[install]          window-buttons-kept=$((1 - DISABLE_WINDOW_BUTTONS)) app-theming=$APP_THEMING"
+    echo "[install]          waydroid=$WITH_WAYDROID vnc=$WITH_VNC"
+    if [[ $WITH_VNC -eq 1 ]]; then
+        echo "[install]          vnc-mode=$VNC_MODE vnc-audio=$VNC_AUDIO vnc-autologin=$VNC_AUTOLOGIN"
+    fi
 
     # Before anything is changed: a config that does not compile takes the
     # shell down, so it is checked first.

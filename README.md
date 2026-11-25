@@ -68,6 +68,48 @@ git clone https://github.com/pctrade/end4-pC.git
 killall qs 2>/dev/null; qs -c end4-pC > /dev/null 2>&1 & disown
 ```
 
+### 🛠️ Installer and sync CLI
+
+`install.sh` deploys the full theme (configs, keybinds, Python venv, optional
+components). Flags take precedence over environment variables; invalid options
+or values exit with status **2 before anything is changed**.
+
+```bash
+cd ~/.config/quickshell/end4-pC
+./install.sh --help                        # all options and exit codes
+./install.sh --offline                     # no network: check Python imports only
+./install.sh --offline --wheelhouse=./wheels
+sudo ./install.sh --target-user=NAME --with-vnc --vnc-mode=mirror
+./install.sh --keep-window-buttons --skip-checks
+```
+
+| Flag | Effect | Environment |
+| --- | --- | --- |
+| `--offline` | No pip/network, no whisper download | `OFFLINE=1` |
+| `--wheelhouse=DIR` | Offline pip from a local wheel directory | `OFFLINE_WHEELHOUSE=DIR` |
+| `--skip-checks` | Deploy even with new QML errors | — |
+| `--target-user=NAME` | Choose the deploy target user | — |
+| `--with-waydroid`, `--with-vnc` | Optional add-ons | — |
+| `--vnc-mode=full\|mirror`, `--vnc-audio=sunshine\|none`, `--vnc-autologin=0\|1` | VNC settings | `VNC_MODE`, `VNC_AUDIO`, `VNC_AUTOLOGIN` |
+| `--skip-stt-model` | Skip the whisper model download | `SKIP_STT_MODEL_DOWNLOAD=1` |
+| `--keep-window-buttons` | Keep GTK/Qt titlebar buttons | `DISABLE_WINDOW_BUTTONS=0` |
+| `--no-app-theming`, `--no-app-theming-qt-env`, `--no-app-theming-hook` | Opt out of app-theming layers | `APP_THEMING=0`, `APP_THEMING_QT_ENV=0`, `APP_THEMING_MATUGEN_HOOK=0` |
+
+To inspect packages without installing anything:
+`./install-system.sh --dry-run --extra-pkg PKG` (`--no-aur` skips AUR builds).
+
+For updating an existing checkout, use `sync.sh`:
+
+```bash
+./sync.sh --help
+./sync.sh --dry-run --check        # report changes, compile-check first
+./sync.sh --keybinds-only --no-reload
+./sync.sh --user NAME --no-reload
+```
+
+User edits in the live config are saved under `.sync/user/` and restored after
+each sync. See [`docs/keybinds.md`](docs/keybinds.md) for the keybind workflow.
+
 ### 📶 Hotspot (Wi-Fi AP)
 
 The bar/sidebar Hotspot toggle needs one-time system provisioning (root helper,

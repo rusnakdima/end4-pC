@@ -193,6 +193,9 @@ while the shell is running needs no restart.
   keybind Lua files and command bridge.
 - `./sync.sh --dry-run` (`-n`) — reports the catalog/overlay and the three would-be
   output paths and writes nothing. Safe while another lane is testing live binds.
+- `./sync.sh --user NAME` (or `--user=NAME`) — target another user. Both spellings
+  work; an unknown user or a missing value exits with status 2 before any writes.
+  Run `./sync.sh --help` for the full option list and exit codes.
 - The overlay is opt-in: it is passed to the generator only if the file exists,
   and is never modified. When sync runs as root, the generated files are chowned
   back to the target user.

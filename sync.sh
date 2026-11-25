@@ -9,16 +9,11 @@
 # install, and without touching the parts of the live config that belong to
 # the running system rather than to this checkout.
 #
-# Usage:
-#   ./sync.sh              sync both trees, reload Hyprland, verify
-#   ./sync.sh --dry-run    show what would change, change nothing
-#   ./sync.sh --no-reload  skip `hyprctl reload`
-#   ./sync.sh --check      run tests/qml-compile-check.sh first, abort on failure
-#   ./sync.sh --force      sync even while the session is locked (dangerous)
-#   ./sync.sh --keybinds-only
-#                          only regenerate the keybind Lua files and the
-#                          command bridge from the catalog/overlay, then reload
-#   ./sync.sh --user NAME  target NAME's config instead of the detected user
+# Full option list and exit codes: ./sync.sh --help
+# Common examples:
+#   ./sync.sh --dry-run --check
+#   ./sync.sh --keybinds-only --no-reload
+#   ./sync.sh --user NAME --no-reload
 #
 # User edits win: files the user changed in the live tree are saved into
 # <qs_dest>/.sync/user/ and restored on top of a fresh deploy. A timestamped
@@ -34,28 +29,71 @@ src="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # --no-times keeps rsync from rewriting timestamps for the same reason.
 rsync_flags=(-a -c --no-times --delete --itemize-changes)
 
+PROG=${0##*/}
+VERSION=dev
+
+usage() {
+    cat <<'EOF'
+Usage: sync.sh [OPTIONS]
+
+Push this checkout into the live config of the current (or selected) user.
+Run install.sh first; the deployed trees must already exist.
+
+Options:
+  -h, --help           Show this help and exit.
+  --version            Print version and exit.
+  -n, --dry-run        Show what would change, write nothing, reload nothing.
+  --no-reload          Skip `hyprctl reload`.
+  --check              Run tests/qml-compile-check.sh first; abort on failure.
+  --force              Sync even while the session is locked (dangerous: a
+                       hot-reload can kill the lock screen).
+  --keybinds-only      Skip the tree sync; only regenerate the keybind Lua
+                       files and the command bridge, then reload.
+  --user NAME          Target NAME's config instead of the detected user.
+  --user=NAME          Same, single-token form.
+  --                   Stop option parsing.
+
+User edits in the live tree are saved to <qs_dest>/.sync/user/ and restored
+after each deploy; timestamped copies live in <qs_dest>/.sync/backups/.
+
+Exit status:
+  0  sync complete (also used when a locked session stopped the sync)
+  1  sync finished with problems, or --check found compile errors
+  2  invalid command line, unknown user, or missing deployment directory
+EOF
+}
+
+die() { printf '%s: error: %s\n' "$PROG" "$*" >&2; exit 2; }
+need_value() { [[ $# -ge 2 ]] || die "$1 needs a value"; }
+
 dry_run=0
 do_reload=1
 do_check=0
 force=0
 keybinds_only=0
 target_user_override=""
-for arg in "$@"; do
-    case "$arg" in
+while (($#)); do
+    case "$1" in
+        -h|--help) usage; exit 0 ;;
+        --version) printf 'end4-pC sync %s\n' "$VERSION"; exit 0 ;;
         --dry-run|-n) dry_run=1 ;;
         --no-reload)  do_reload=0 ;;
         --check)      do_check=1 ;;
         --force)      force=1 ;;
         --keybinds-only) keybinds_only=1 ;;
-        --user)
-            echo "sync.sh: --user needs a name (use --user=NAME)" >&2
-            exit 2
-            ;;
-        --user=*) target_user_override="${arg#--user=}" ;;
-        -h|--help) awk 'NR>1 && /^set -/{exit} NR>1{print}' "${BASH_SOURCE[0]}"; exit 0 ;;
-        *) echo "sync.sh: unknown option: $arg" >&2; exit 2 ;;
+        --user=*) target_user_override="${1#*=}" ;;
+        --user) need_value "$@"; target_user_override="$2"; shift ;;
+        --) shift; break ;;
+        -*) die "unknown option: $1 (try --help)" ;;
+        *) die "unexpected argument: $1 (try --help)" ;;
     esac
+    shift
 done
+
+if [[ -n "$target_user_override" ]] \
+   && ! getent passwd "$target_user_override" >/dev/null 2>&1; then
+    die "unknown user: $target_user_override"
+fi
 
 # Resolve the target the same way install.sh does, so a sync started under
 # sudo still updates the invoking user's config instead of /root.
