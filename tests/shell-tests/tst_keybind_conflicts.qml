@@ -160,7 +160,8 @@ TestCase {
 
         const service = Conflicts.fixHolder(managedHolder, "SUPER + B", lookup, managed, overrides);
 
-        compare(service, "managed");
+        compare(service.kind, "managed");
+        verify(service.ok, "a successful managed write must report ok");
         verify(lookupArg === bind, "the lookup must receive the holder's bind");
         verify(managedCall !== null, "managed.update was not called for a managed bind");
         compare(managedCall.id, "entry-42");
@@ -199,7 +200,9 @@ TestCase {
         const overrides = { setOverride: (id, c) => { overrideCall = { id: id, combo: c }; } };
         const managed = { update: () => { throw new Error("a plain bind is not managed"); } };
 
-        compare(Conflicts.fixHolder(holder, "SUPER + B", () => null, managed, overrides), "override");
+        const service = Conflicts.fixHolder(holder, "SUPER + B", () => null, managed, overrides);
+        compare(service.kind, "override");
+        verify(service.ok, "a successful override write must report ok");
         verify(overrideCall !== null, "setOverride was not called");
         compare(overrideCall.id, holder.overrideId);
         compare(overrideCall.id, "bind_" + combo.replace(/[^A-Za-z0-9_]/g, "_"));
@@ -238,7 +241,7 @@ TestCase {
                 "each keeper must leave exactly one other holder to move");
             const original = originals.find(h => Conflicts.identityOf(h) === Conflicts.identityOf(chosen.others[0]));
             verify(original !== undefined, "the projected holder must map back to its real holder");
-            compare(Conflicts.fixHolder(original, "SUPER + B", () => null, managed, overrides), "override");
+            compare(Conflicts.fixHolder(original, "SUPER + B", () => null, managed, overrides).kind, "override");
         }
 
         compare(moves.length, 2, "two keepers mean two Move actions, not an empty list");
@@ -261,10 +264,52 @@ TestCase {
 
         const service = Conflicts.fixHolder(plainHolder, "SUPER + C", lookup, managed, overrides);
 
-        compare(service, "override");
+        compare(service.kind, "override");
+        verify(service.ok, "a successful override write must report ok");
         verify(overrideCall !== null, "setOverride was not called for a non-managed bind");
         compare(overrideCall.id, "terminal");
         compare(overrideCall.combo, "SUPER + C");
         verify(managedCall === null, "managed.update must not be called for a non-managed bind");
+    }
+
+    function test_alias_index_builds_an_alias_group() {
+        const aliasIndex = new Map();
+        aliasIndex.set("sidebarLeftToggle", {
+            action: "sidebarLeftToggle",
+            label: "Toggle left sidebar",
+            combos: [
+                { combo: "SUPER + A", bind: { id: "bind-6" } },
+                { combo: "SUPER + B", bind: { id: "bind-8" } },
+                { combo: "SUPER + O", bind: { id: "bind-9" } }
+            ]
+        });
+        const groups = Conflicts.groupsFrom(new Map(), aliasIndex);
+        compare(groups.length, 1);
+        compare(groups[0].kind, "alias");
+        compare(groups[0].holders.length, 3);
+        compare(groups[0].holders[1].combo, "SUPER + B");
+        compare(groups[0].holders[1].uid, "sidebarLeftToggle\u0000SUPER + B");
+    }
+
+    function test_removal_plan_keeps_one_alias() {
+        const aliasGroup = {
+            kind: "alias", combo: "SUPER + A", action: "sidebarLeftToggle",
+            holders: [
+                { id: "sidebarLeftToggle", uid: "sidebarLeftToggle\u0000SUPER + A", combo: "SUPER + A" },
+                { id: "sidebarLeftToggle", uid: "sidebarLeftToggle\u0000SUPER + B", combo: "SUPER + B" }
+            ]
+        };
+        const plan = Conflicts.removalPlan(aliasGroup, "sidebarLeftToggle\u0000SUPER + B");
+        compare(plan.keeper.combo, "SUPER + B");
+        compare(plan.remove.length, 1);
+        compare(plan.remove[0].combo, "SUPER + A");
+    }
+
+    function test_fix_holder_reports_service_failure() {
+        const holder = { id: "a", overrideId: "bind_x" };
+        const managed = { update: () => ({ ok: false, error: "write-failed" }) };
+        const result = Conflicts.fixHolder(holder, "SUPER + B", () => ({ id: "a" }), managed, {});
+        compare(result.ok, false);
+        compare(result.error, "write-failed");
     }
 }

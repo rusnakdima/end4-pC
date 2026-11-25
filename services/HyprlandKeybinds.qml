@@ -216,6 +216,27 @@ Singleton {
         return Array.from(out.values());
     }
 
+    // The shell actions bound to more than one combination. One action with
+    // several combos is a conflict too: only one of them can be the one the
+    // user means, and the settings panel offers to keep one and remove the
+    // rest. The combo entries point at the catalog bind that owns each combo,
+    // so a per-combo delete has an id to disable.
+    readonly property var aliasIndex: {
+        const index = new Map();
+        for (const entry of root.shellActions) {
+            if ((entry.combos ?? []).length < 2) continue;
+            index.set(entry.action, {
+                action: entry.action,
+                label: entry.description !== "" ? entry.description : entry.action,
+                combos: entry.combos.map(combo => ({
+                    combo: combo,
+                    bind: entry.binds.find(bind => root.comboOf(bind) === combo) ?? null
+                }))
+            });
+        }
+        return index;
+    }
+
     // Everything that is not a shell action, grouped by category. The `file`
     // tag comes from the catalog's own `source` field ("main" / "custom") so
     // a repeat warning can say where the other holder lives.

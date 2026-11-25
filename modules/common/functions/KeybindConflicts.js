@@ -40,6 +40,7 @@ function project(holder) {
         id: holder?.id ?? "",
         uid: holder?.uid ?? "",
         overrideId: holder?.overrideId ?? "",
+        combo: holder?.combo ?? "",
         label: holder?.label ?? "",
         file: holder?.file ?? ""
     };
@@ -55,24 +56,62 @@ function identityOf(holder) {
 // The combos with two or more holders, as {combo, holders} groups sorted by
 // combo. A combo with a single holder is not a conflict and is left out.
 // Accepts a Map (the shape of repeatIndex) and, defensively, a plain object.
-function groupsFrom(repeatIndex) {
+function groupsFrom(repeatIndex, aliasIndex) {
     const groups = [];
-    if (repeatIndex === null || repeatIndex === undefined) return groups;
+    if (repeatIndex !== null && repeatIndex !== undefined) {
+        const visit = (combo, holders) => {
+            const list = Array.from(holders ?? []);
+            if (list.length < 2) return;
+            groups.push({ kind: "combo", combo: String(combo ?? ""), holders: list.map(project) });
+        };
 
-    const visit = (combo, holders) => {
-        const list = Array.from(holders ?? []);
-        if (list.length < 2) return;
-        groups.push({ combo: String(combo ?? ""), holders: list.map(project) });
-    };
-
-    if (typeof repeatIndex.forEach === "function") {
-        repeatIndex.forEach((holders, combo) => visit(combo, holders));
-    } else {
-        for (const combo of Object.keys(repeatIndex)) visit(combo, repeatIndex[combo]);
+        if (typeof repeatIndex.forEach === "function") {
+            repeatIndex.forEach((holders, combo) => visit(combo, holders));
+        } else {
+            for (const combo of Object.keys(repeatIndex)) visit(combo, repeatIndex[combo]);
+        }
     }
 
     groups.sort((a, b) => a.combo < b.combo ? -1 : (a.combo > b.combo ? 1 : 0));
-    return groups;
+
+    // One action bound to several combinations is the second kind of
+    // conflict: only one of its combos can be the one the user means. Each
+    // alias holder is identified by action + NUL + combo, so every combo of
+    // the action can be kept or removed independently.
+    if (aliasIndex === null || aliasIndex === undefined) return groups;
+
+    const aliasGroups = [];
+    const addAlias = (key, entry) => {
+        const action = String(entry?.action ?? key ?? "");
+        const combos = Array.from(entry?.combos ?? []);
+        if (action === "" || combos.length < 2) return;
+        aliasGroups.push({
+            kind: "alias",
+            combo: String(combos[0]?.combo ?? ""),
+            action: action,
+            label: String(entry?.label ?? ""),
+            holders: combos.map(comboEntry => {
+                const combo = String(comboEntry?.combo ?? "");
+                return {
+                    id: action,
+                    uid: action + "\u0000" + combo,
+                    combo: combo,
+                    label: String(comboEntry?.bind?.comment ?? entry?.label ?? action),
+                    file: "shell",
+                    catalogIds: comboEntry?.bind?.id ? [comboEntry.bind.id] : []
+                };
+            })
+        });
+    };
+
+    if (typeof aliasIndex.forEach === "function") {
+        aliasIndex.forEach((entry, key) => addAlias(key, entry));
+    } else {
+        for (const key of Object.keys(aliasIndex)) addAlias(key, aliasIndex[key]);
+    }
+
+    aliasGroups.sort((a, b) => a.action < b.action ? -1 : (a.action > b.action ? 1 : 0));
+    return groups.concat(aliasGroups);
 }
 
 // Split a group around the holder the user chose to keep: keeper is that
@@ -138,16 +177,33 @@ function freeCombos(usedCombos, count, seedCombo) {
 // other holders makes one of these calls per holder, one write per click.
 //
 // Returns "managed" or "override" so the caller can confirm a write happened.
+// Returns {kind, ok, error}: a failed write must never be reported as a
+// resolved conflict. Services that return nothing (older stubs) count as ok.
 function fixHolder(holder, combo, entryForSource, managed, overrides) {
     const entry = entryForSource(holder?.bind) ?? null;
     if (entry !== null) {
-        managed.update(entry.id, { combo: combo });
-        return "managed";
+        const result = managed.update(entry.id, { combo: combo });
+        return {
+            kind: "managed",
+            ok: !(result && result.ok === false),
+            error: String(result?.error ?? "")
+        };
     }
     // A plain bind's `id` is "file\0bind_<combo>" — a self-exclusion token,
     // not an overrides key. Writing it would put a NUL in the config and the
     // row would never see the new combo. The bare overrideId is the key
     // OtherBindRow/clearOverride use; legacy callers without one keep id.
-    overrides.setOverride(String(holder?.overrideId || holder?.id || ""), combo);
-    return "override";
+    const result = overrides.setOverride(String(holder?.overrideId || holder?.id || ""), combo);
+    return {
+        kind: "override",
+        ok: !(result && result.ok === false),
+        error: String(result?.error ?? "")
+    };
+}
+
+// Split a group into the holder to keep and the holders to remove, in the
+// shape the Settings panel consumes. Works for both conflict kinds.
+function removalPlan(group, keeperId) {
+    const chosen = chooseKeeper(group, keeperId);
+    return { kind: String(group?.kind ?? "combo"), keeper: chosen.keeper, remove: chosen.others };
 }
