@@ -1,5 +1,19 @@
 # SDDM User Auth, archpc Greeter, and Lock/Reload Bridge Implementation Plan
 
+> **2026-11-25 — Lock bridge superseded by theme-only restart.** The user chose
+> no second lock client. The hyprlock bridge (§ steps 4-6, markers, and any
+> `pkill hyprlock`) is removed. Replacement: `scripts/lock/end4pc-lock-guard`
+> watches the lock marker plus `lock.status` IPC, restarts the themed shell in
+> its own `end4pc-shell.scope`, retries after a cooldown, and calls
+> `hyprctl --instance <live signature> eval hl.clear_crashed_lockscreen()` only
+> once the themed lock is secure. `install.sh` and `sync.sh` deploy the script
+> and enable `end4pc-lock-guard.service` through `default.target.wants`; unit
+> `ExecStart` is `%h/.local/bin/end4pc-lock-guard`. Tests:
+> `tests/test-lock-guard.py` (offline behavioral shims) and
+> `tests/test-lock-guard-install.sh` (static deploy contract) replace
+> `tests/test-lock-bridge.sh`. The `lock.useHyprlock` opt-in stays for users who
+> explicitly enable it. Live verification on a real session is still pending.
+
 > **2026-11-24 — Task 2 superseded.** The user reversed the UI decision: the
 > greeter keeps an always-visible dropdown with an appended **"Other user"**
 > option, and choosing it reveals a username field above the password field.

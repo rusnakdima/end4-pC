@@ -18,8 +18,15 @@ desktop windows, `.desktop` entries exist, Play Store included.
 
 Root steps use `sudo`; on machines with the standard end4 sudoers NOPASSWD
 subset (`tee`, `mkdir`, `install`, `pacman`, `systemctl`), cfg edits and
-package installs run passwordless — `waydroid init` and `waydroid-nvidia-setup`
-still prompt, so run it from a terminal.
+package installs run passwordless. The setup also installs passwordless rules
+for a small root-only wrapper (`/usr/local/bin/waydroid-root`, allowing only
+`init|upgrade|container|shell|logcat`) and for the NVIDIA helpers, so **no
+Waydroid command ever needs to run the session as root**.
+
+Everything a user launches goes through `~/.local/bin/waydroid-user-start`,
+which runs as the desktop user, starts the Venus render server as a
+`systemd --user` service, forces the user's runtime dir/bus, and waits for
+both Session and Container to be RUNNING.
 
 ## What it does
 
@@ -43,14 +50,20 @@ still prompt, so run it from a terminal.
    the package). See `config/waydroid.cfg.ref` for the annotated reference.
 5. **Hyprland integration** — appends three marker-guarded snippets into the
    user-owned `~/.config/hypr/custom/` (never overwritten by theme updates):
-   - `execs.lua` → `waydroid session start` on Hyprland login
+   - `execs.lua` → autostart intentionally disabled (the Venus user unit is
+     the proper login-time startup; Waydroid starts on first use)
    - `rules.lua` → Android app windows float phone-shaped (`class = ^waydroid\.`)
    - `keybinds.lua` → `SUPER+CTRL+A` full UI, `SUPER+CTRL+SHIFT+A` regen desktops
      (both combos verified conflict-free against the theme's own binds)
-6. **Session** — starts Waydroid on the detected Wayland socket, enables
-   `persist.waydroid.multi_windows` (fork: one desktop window per app), and
-   regenerates `.desktop` entries via `scripts/waydroid-desktop-gen.sh`.
-7. **Verify** — session RUNNING, apps listed, Play Store present.
+6. **User privileges** — enables/starts `wd-venus.service` as a user unit,
+   installs the `waydroid-root` whitelist wrapper, NOPASSWD sudoers rules, and
+   `~/.local/bin/waydroid-user-start`.
+7. **Session** — starts Waydroid as the desktop user on the detected Wayland
+   socket via the helper, enables `persist.waydroid.multi_windows` (fork: one
+   desktop window per app), and regenerates `.desktop` entries via
+   `scripts/waydroid-desktop-gen.sh` (which uses the user-level
+   `waydroid app list`, never root-only `waydroid shell`).
+8. **Verify** — session/container RUNNING, apps listed, Play Store present.
 
 ## Known gotchas this module encodes
 
@@ -61,7 +74,9 @@ still prompt, so run it from a terminal.
 | fork's `vendor_ota` GitHub release gets pruned → 404 breaks `waydroid upgrade` | auto-switch to packaged `file://…json` |
 | EROFS system.img on a kernel without the erofs module | installs `erofsfuse` fallback |
 | `waydroid session start` needs `WAYLAND_DISPLAY` | detects `/run/user/<uid>/wayland-*` |
-| Waydroid log/`shell`/`upgrade` need root; sudo NOPASSWD subset only | root work via sudo, root-owned cfg via `tee` |
+| Waydroid log/`shell`/`upgrade` are root-gated; sessions refuse `sudo` | root work only via the `waydroid-root` whitelist + NOPASSWD; sessions/launchers run as the user through `waydroid-user-start` |
+| `nvidia_driver_mode=venus` needs `/run/waydroid-venus/venus.sock` | `wd-venus.service` is enabled as a user unit and started by the helper |
+| A17 system + MAINLINE vendor image are ABI-incompatible (missing HIDL symbols): guest never finishes booting, so apps cannot be listed/launched even though Session/Container are RUNNING | known limitation — host user-mode works; the QML panel reports this honestly; needs a matching vendor image (and a supported NVIDIA driver, e.g. 615.78.08) to fix |
 | old `dots/hyprland/*.lua` snippets used nonexistent APIs (`hl.keybind`, 2-table `window_rule`) and conflicting binds | superseded by these snippets (real `hl.bind` / single-table `hl.window_rule`, free combos) |
 
 ## Disable / remove

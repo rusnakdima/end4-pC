@@ -1,13 +1,12 @@
 [Unit]
-Description=end4-pC lock screen watchdog (theme lock default, hyprlock fallback)
+Description=end4-pC lock screen watchdog (theme-only recovery)
 After=graphical-session.target
 Wants=graphical-session.target
 
 [Service]
 Type=simple
-Environment=XDG_RUNTIME_DIR=/run/user/1000
-Environment=WAYLAND_DISPLAY=wayland-1
-ExecStart=/home/dmitriy/.local/bin/end4pc-lock-guard
+Environment=XDG_RUNTIME_DIR=%t
+ExecStart=%h/.local/bin/end4pc-lock-guard
 Restart=always
 RestartSec=2
 

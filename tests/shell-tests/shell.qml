@@ -66,6 +66,7 @@ ShellRoot {
         "tst_cast.qml",
         "tst_wallpaper_video.qml",
         "tst_hotspot_clients.qml",
+        "tst_waydroid_service.qml",
         "tst_settings_escape.qml",
         "tst_navigation_rail.qml"
     ]

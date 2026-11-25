@@ -72,19 +72,29 @@ The bind mode is selected in **Settings → VNC → Network & Security**:
 | Automatic (default) | `127.0.0.1`, every physical Ethernet/Wi-Fi IPv4, and the Tailscale IPv4 | Local SSH tunnel, same LAN, and the private tailnet at the same time. |
 | Custom | One address you type | A single interface or `0.0.0.0` when you deliberately want all interfaces. |
 
-Examples with port `5901`:
+Examples (replace `<port>` with the port shown in **Settings → VNC**; the
+default is `5900`):
 
 ```bash
 # SSH tunnel from anywhere
-ssh -L 5901:127.0.0.1:5901 user@host
-# then connect the VNC client to localhost:5901
+ssh -L <port>:127.0.0.1:<port> user@host
+# then connect the VNC client to localhost:<port>
 
 # Same Ethernet/Wi-Fi network
-vncviewer <ethernet-ip>:5901
-vncviewer <wifi-ip>:5901
+vncviewer <ethernet-ip>:<port>
+vncviewer <wifi-ip>:<port>
 
 # Tailscale / VPN
-vncviewer <tailscale-ip>:5901
+vncviewer <tailscale-ip>:<port>
+```
+
+X11 viewers need `DISPLAY`. Shells started inside the graphical session
+inherit it automatically; if you launch a viewer from a TTY or a script,
+source the helper shipped with end4-pC first (it picks the X socket owned
+by your user, falling back to `:1`):
+
+```bash
+. /path/to/end4-pC/scripts/gui-env.sh
 ```
 
 In every case, accept the self-signed certificate fingerprint shown in
@@ -100,7 +110,7 @@ Settings → VNC → Network & Security on first connect.
 - If authentication is disabled, only a loopback bind is allowed.
 - UFW must allow the port on each exposed interface. Run once as root:
   ```bash
-  sudo ~/.local/bin/end4pc-vnc-firewall 5901
+  sudo ~/.local/bin/end4pc-vnc-firewall <port>
   ```
   This allows `lo`, `tailscale0`, and every physical `en*`/`eth*`/`wl*`/
   `wlan*` interface. It deliberately does not open docker, libvirt, or the
@@ -209,7 +219,7 @@ is preserved as `README-legacy.md`; do not use it for new installs.
 - `systemctl --user status wayvnc.service`
 - `journalctl --user -u wayvnc.service -n 200 --no-pager`
 - `~/.local/bin/end4pc-vnc validate`
-- `ss -ltnp | grep 5900`
+- `ss -ltnp | grep 5900` (or your configured port)
 - If the input is view-only, check **Allow remote input** and that the
   compositor accepted virtual keyboard/pointer devices.
 - If the screen is locked and the remote is black, the compositor may block

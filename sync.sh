@@ -854,6 +854,26 @@ if [[ $keybinds_only -eq 0 ]]; then
     if [[ $dry_run -eq 0 ]]; then
         install -Dm644 "$src/systemd/user/end4pc-keep-awake.service" \
             "$config_home/systemd/user/end4pc-keep-awake.service"
+    fi
+
+    # Lock screen watchdog: the themed lock is the only lock client, and this
+    # guard restarts the shell after a crash until the theme lock is secure.
+    # Enable through default.target.wants so it also works when sync runs for
+    # another user (no `systemctl --user` session required to enable it).
+    if [[ $dry_run -eq 0 ]]; then
+        guard_bin="$TARGET_HOME/.local/bin/end4pc-lock-guard"
+        guard_unit="$config_home/systemd/user/end4pc-lock-guard.service"
+        guard_want="$config_home/systemd/user/default.target.wants/end4pc-lock-guard.service"
+        install -Dm755 "$src/scripts/lock/end4pc-lock-guard" "$guard_bin"
+        install -Dm644 "$src/systemd/user/end4pc-lock-guard.service" "$guard_unit"
+        mkdir -p "$(dirname "$guard_want")"
+        ln -sfn ../end4pc-lock-guard.service "$guard_want"
+        if [[ $(id -u) -eq 0 ]]; then
+            chown "$TARGET_USER:" "$guard_bin" "$guard_unit" "$guard_want" 2>/dev/null || true
+        fi
+    fi
+
+    if [[ $dry_run -eq 0 ]]; then
         systemctl --user daemon-reload 2>/dev/null || true
     fi
 

@@ -429,6 +429,15 @@ def ensure_tls(cfg: dict) -> None:
         raise RuntimeError("openssl is required to generate the TLS certificate")
     address = str((cfg.get("network") or {}).get("address") or "127.0.0.1")
     san = ["DNS:localhost", "IP:127.0.0.1", "IP:::1"]
+    # Auto bind listens on every detected address, so the certificate has to
+    # cover all of them - not just the one stored in network.address.
+    for entry in detected_addresses():
+        detected = str(entry.get("address") or "")
+        if detected:
+            san.append(f"IP:{detected}")
+    for host in (socket.gethostname(), socket.getfqdn()):
+        if host and NAME_RE.match(host) and not re.match(r"^\d{1,3}(\.\d{1,3}){3}$", host):
+            san.append(f"DNS:{host}")
     if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", address):
         san.append(f"IP:{address}")
     elif NAME_RE.match(address):

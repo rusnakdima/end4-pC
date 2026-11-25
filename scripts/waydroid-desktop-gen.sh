@@ -1,43 +1,53 @@
 #!/bin/bash
-# Generate .desktop files for all installed Android apps
+# Generate .desktop files for installed Android apps (user mode, no sudo).
+#
+# `waydroid shell pm ...` is root-gated. `waydroid app list` talks to the
+# user's session over D-Bus and returns "Name:" / "packageName:" rows instead.
 
-OUTPUT_DIR="${1:-$HOME/.local/share/applications/waydroid}"
+OUTPUT_DIR="${1:-$HOME/.local/share/applications}"
 mkdir -p "$OUTPUT_DIR"
 
-# Ensure waydroid is running
-if ! waydroid status | grep -q "RUNNING"; then
-    waydroid session start &
-    sleep 3
+# Make sure the session is up without sudo; fail fast instead of hanging in
+# `waydroid app list` with "Failed to get service waydroidplatform".
+helper=$(command -v waydroid-user-start 2>/dev/null || true)
+if [ -z "$helper" ] || [ ! -x "$helper" ]; then
+    helper="$HOME/.local/bin/waydroid-user-start"
+fi
+if [ ! -x "$helper" ]; then
+    helper="$(cd "$(dirname "$0")" && pwd)/waydroid-user-start"
+fi
+if [ -x "$helper" ]; then
+    "$helper" || exit 1
 fi
 
-# Get list of installed packages
-waydroid shell pm list packages -3 | sed 's/^package://' | while read -r pkg; do
-    # Get launchable activities
-    activities=$(waydroid shell pm query-intents --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER "$pkg" 2>/dev/null | grep -E '^[[:space:]]+' | sed 's/^[[:space:]]*//' | head -1)
+list=$(timeout 40 waydroid app list 2>/dev/null || true)
 
-    if [ -n "$activities" ]; then
-        # Get app label
-        label=$(waydroid shell pm list packages -3 -f | grep "$pkg=" | sed 's/.*=//')
-        label=${label:-$pkg}
+printf '%s\n' "$list" | awk '
+    /^Name:/ { name = substr($0, 6); sub(/^[[:space:]]*/, "", name); next }
+    /^packageName:/ {
+        pkg = substr($0, 13); sub(/^[[:space:]]*/, "", pkg)
+        if (pkg != "") printf "%s\t%s\n", pkg, (name == "" ? pkg : name)
+        name = ""
+    }
+' | while IFS=$'\t' read -r pkg label; do
+    desktop="$OUTPUT_DIR/waydroid.$pkg.desktop"
+    icon="$HOME/.local/share/waydroid/data/icons/$pkg.png"
+    [ -f "$icon" ] || icon="waydroid"
+    launcher="$(cd "$(dirname "$0")" && pwd)/waydroid-app-launcher.sh"
 
-        # Get icon path
-        icon_path="$OUTPUT_DIR/$pkg.png"
-
-        cat > "$OUTPUT_DIR/$pkg.desktop" << EOF
+    cat > "$desktop" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=$label
 Comment=Android app via Waydroid
-Exec=waydroid-app-launcher.sh $pkg
-Icon=$icon_path
+Exec=$launcher $pkg
+Icon=$icon
 Terminal=false
 Categories=Android;
 StartupNotify=true
 StartupWMClass=waydroid-$pkg
 EOF
-    fi
 done
 
-# Update desktop database
 update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true

@@ -1083,7 +1083,8 @@ Singleton {
                             { "size": 1, "type": "mic" },
                             { "size": 2, "type": "audio" },
                             { "size": 2, "type": "nightLight" },
-                            { "size": 1, "type": "liveWallpaper" }
+                            { "size": 1, "type": "liveWallpaper" },
+                            { "size": 1, "type": "waydroid" }
                         ]
                     }
                 }

@@ -1,5 +1,19 @@
 # Design: SDDM user auth, archpc greeter, and lock/reload crash
 
+> **2026-11-25 update — lock recovery decision reversed.** The user chose
+> **theme-only restart**: there must be no second lock client. When the themed
+> shell dies while locked, a systemd user watchdog (`end4pc-lock-guard.service`)
+> restarts `qs -c end4-pC` itself and clears Hyprland's crash screen **only
+> after** the themed `WlSessionLock` reports `lock.secure` over IPC. Goal 4 and
+> the hyprlock-bridge sections below are superseded: `startHyprlockBridge()`,
+> `endHyprlockBridge()`, the `end4-pC-hyprlock-bridge` marker and all hyprlock
+> fallback/stray-process logic were removed. The explicit
+> `lock.useHyprlock: true` user opt-in remains supported, but the watchdog
+> deliberately ignores it. The unit is installed and enabled by `install.sh`
+> and `sync.sh` (`%h/.local/bin` + `default.target.wants`), with a cooldown
+> between failed restarts. Live verification on a graphical session is still
+> outstanding; only static contracts and an offline shim harness were run.
+
 > **2026-11-24 update — UI decision reversed.** The user later asked for the
 > **opposite** of §2's chosen approach: the user list stays an always-visible
 > dropdown, with an appended **"Other user"** option. Selecting "Other user"

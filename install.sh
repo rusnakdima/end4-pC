@@ -293,6 +293,43 @@ install_qs_config() {
 }
 
 # ---------------------------------------------------------------------------
+# Lock screen watchdog
+# ---------------------------------------------------------------------------
+# The guard is the only recovery path for a shell that dies while the session
+# is locked. It must be installed AND enabled: a unit sitting in ~/.config is
+# useless if no target wants it. Enabling via default.target.wants works even
+# when the installer runs as root for another user (no `systemctl --user`
+# session needed here).
+install_lock_guard() {
+    echo "[install] Deploying lock screen watchdog..."
+    local bin_dir="$TARGET_HOME/.local/bin"
+    local unit_dir="$TARGET_HOME/.config/systemd/user"
+    local wants_dir="$unit_dir/default.target.wants"
+
+    install -Dm755 "$SOURCE_DIR/scripts/lock/end4pc-lock-guard" \
+        "$bin_dir/end4pc-lock-guard"
+    install -Dm644 "$SOURCE_DIR/systemd/user/end4pc-lock-guard.service" \
+        "$unit_dir/end4pc-lock-guard.service"
+    mkdir -p "$wants_dir"
+    ln -sfn ../end4pc-lock-guard.service \
+        "$wants_dir/end4pc-lock-guard.service"
+
+    if [[ $(id -u) -eq 0 && -n "${TARGET_USER:-}" ]]; then
+        chown "$TARGET_USER:" \
+            "$bin_dir/end4pc-lock-guard" \
+            "$unit_dir/end4pc-lock-guard.service" \
+            "$wants_dir/end4pc-lock-guard.service" 2>/dev/null || true
+    fi
+
+    # Pick the unit up in the current session when we are running as the
+    # target user; otherwise it starts with that user's next session.
+    if [[ "${TARGET_USER:-}" == "$(id -un)" ]]; then
+        systemctl --user daemon-reload 2>/dev/null || true
+        systemctl --user enable --now end4pc-lock-guard.service 2>/dev/null || true
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Hyprland config
 # ---------------------------------------------------------------------------
 # The theme owns the Hyprland config: it ships the managed files under
@@ -1177,6 +1214,7 @@ main() {
 
     install_packages
     install_qs_config
+    install_lock_guard
     install_hyprland_config
     install_keybind_defaults
     patch_hyprland_env

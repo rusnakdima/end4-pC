@@ -1,15 +1,20 @@
 #!/bin/bash
-# Launch Android app by package name or activity
+# Launch an Android app through the user's Waydroid session (no sudo).
 # Usage: waydroid-app-launcher.sh <package/activity> [args...]
 
 PKG_ACTIVITY="$1"
 shift
 
-# Ensure waydroid is running
-if ! waydroid status | grep -q "RUNNING"; then
-    waydroid session start &
-    sleep 3
+# Ensure the session/container are up before touching the platform service.
+helper=$(command -v waydroid-user-start 2>/dev/null || true)
+if [ -z "$helper" ] || [ ! -x "$helper" ]; then
+    helper="$HOME/.local/bin/waydroid-user-start"
+fi
+if [ ! -x "$helper" ]; then
+    helper="$(cd "$(dirname "$0")" && pwd)/waydroid-user-start"
+fi
+if [ -x "$helper" ]; then
+    "$helper" || exit 1
 fi
 
-# Launch the app
-waydroid app launch "$PKG_ACTIVITY" "$@"
+exec waydroid app launch "$PKG_ACTIVITY" "$@"

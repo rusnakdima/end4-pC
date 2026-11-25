@@ -26,11 +26,15 @@
 #      (points it at the JSON shipped inside the package via file://).
 #   5. Injects the Hyprland snippets (autostart / window rules / keybinds)
 #      into ~/.config/hypr/custom/*.lua — marker-guarded, appended once.
-#   6. Starts the Waydroid session (needs a Wayland socket) and, on the fork,
-#      enables per-app windows (persist.waydroid.multi_windows).
-#   7. Regenerates .desktop entries for installed Android apps (fallback:
+#   6. Sets up user-mode privileges: user Venus service, a root-only helper
+#      wrapper for the gated Waydroid subcommands, NOPASSWD sudoers rules, and
+#      the ~/.local/bin/waydroid-user-start helper. No root Waydroid session.
+#   7. Starts the Waydroid session as the desktop user (needs a Wayland
+#      socket) and, on the fork, enables per-app windows
+#      (persist.waydroid.multi_windows).
+#   8. Regenerates .desktop entries for installed Android apps (fallback:
 #      scripts/waydroid-desktop-gen.sh in the quickshell tree).
-#   8. Verifies: session RUNNING, apps listed, Play Store present on GAPPS.
+#   9. Verifies: session RUNNING, apps listed, Play Store present on GAPPS.
 #
 # Root usage: uses `sudo` when not root. On this machine sudo is NOPASSWD for
 # tee/mkdir/install/chmod/pacman/systemctl — the cfg edits and package installs
@@ -274,7 +278,60 @@ install_hyprland_snippets() {
 }
 
 # ---------------------------------------------------------------------------
-# 5. Session + props + desktop entries
+# 5. User-mode privileges (no root Waydroid session)
+# ---------------------------------------------------------------------------
+setup_user_privileges() {
+    # The NVIDIA fork's Venus render server is a systemd --user unit.
+    if grep -q '^nvidia_driver_mode *= *venus' /var/lib/waydroid/waydroid.cfg 2>/dev/null; then
+        if run_as_target env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$TARGET_UID/bus" \
+                systemctl --user enable --now wd-venus.service >/dev/null 2>&1; then
+            log "wd-venus.service enabled and started for $TARGET_USER"
+        else
+            warn "could not enable wd-venus.service (Waydroid GUI needs it)"
+        fi
+    fi
+
+    # Root-only Waydroid subcommands go through a whitelist wrapper.
+    if ! grep -q 'exec /usr/bin/waydroid' /usr/local/bin/waydroid-root 2>/dev/null; then
+        $ROOT tee /usr/local/bin/waydroid-root >/dev/null <<'EOF'
+#!/bin/bash
+# waydroid-root - whitelist of the root-gated Waydroid subcommands.
+case "${1:-}" in
+    init|upgrade|container|shell|logcat) exec /usr/bin/waydroid "$@" ;;
+    *)
+        echo "waydroid-root: refusing '$*' (allowed: init upgrade container shell logcat)" >&2
+        exit 2
+        ;;
+esac
+EOF
+        $ROOT chmod 755 /usr/local/bin/waydroid-root
+        log "installed /usr/local/bin/waydroid-root"
+    else
+        log "waydroid-root wrapper already present"
+    fi
+
+    if ! grep -q 'waydroid-root' /etc/sudoers.d/zz-waydroid 2>/dev/null; then
+        $ROOT tee -a /etc/sudoers.d/zz-waydroid >/dev/null <<EOF
+$TARGET_USER ALL=(root) NOPASSWD: /usr/local/bin/waydroid-root
+$TARGET_USER ALL=(root) NOPASSWD: /usr/lib/waydroid-nvidia/wd-native
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/waydroid-nvidia-setup
+EOF
+        $ROOT chmod 440 /etc/sudoers.d/zz-waydroid
+        log "installed /etc/sudoers.d/zz-waydroid for $TARGET_USER"
+    else
+        log "waydroid sudoers rules already present"
+    fi
+
+    # User-space launcher: fixes runtime dirs / bus, starts Venus, waits for
+    # both Session and Container to be RUNNING, then returns.
+    local helper="$TARGET_HOME/.local/bin"
+    $ROOT mkdir -p "$helper"
+    $ROOT install -m 755 "$REPO_ROOT/scripts/waydroid-user-start" "$helper/waydroid-user-start"
+    log "installed waydroid-user-start helper"
+}
+
+# ---------------------------------------------------------------------------
+# 6. Session + props + desktop entries
 # ---------------------------------------------------------------------------
 waydroid_running() { waydroid status 2>/dev/null | grep -q "Session:.*RUNNING"; }
 
@@ -283,13 +340,23 @@ start_session() {
         log "session already running"
         return 0
     fi
+    local helper="$TARGET_HOME/.local/bin/waydroid-user-start"
+    if [[ -x "$helper" ]]; then
+        log "starting session as $TARGET_USER via waydroid-user-start"
+        if run_as_target "$helper"; then
+            log "session running"
+            return 0
+        fi
+        warn "user-start helper could not bring the session up — check: waydroid status"
+        return 1
+    fi
     local wl="${WAYLAND_DISPLAY:-}"
     if [[ -z "$wl" ]]; then
         wl=$(ls "/run/user/$TARGET_UID" 2>/dev/null | grep -m1 '^wayland-[0-9]*$' || true)
     fi
     if [[ -z "$wl" ]]; then
         warn "no Wayland socket found — start it from a graphical session:"
-        warn "  waydroid session start"
+        warn "  waydroid-user-start"
         return 1
     fi
     log "starting session on WAYLAND_DISPLAY=$wl"
@@ -299,7 +366,7 @@ start_session() {
         waydroid_running && { log "session running"; return 0; }
         sleep 2
     done
-    warn "session did not reach RUNNING — check: waydroid log"
+    warn "session did not reach RUNNING — check: waydroid status"
     return 1
 }
 
@@ -335,7 +402,7 @@ gen_desktop_entries() {
 }
 
 # ---------------------------------------------------------------------------
-# 6. Verify
+# 7. Verify
 # ---------------------------------------------------------------------------
 verify() {
     local fail=0
@@ -367,6 +434,7 @@ main() {
     init_waydroid     || { warn "init step failed";    exit 1; }
     reconcile_cfg     || { warn "cfg step failed";     exit 1; }
     install_hyprland_snippets
+    setup_user_privileges
     start_session     || true       # warn only: no Wayland in headless runs
     enable_multi_windows
     gen_desktop_entries

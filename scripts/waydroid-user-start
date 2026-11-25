@@ -1,0 +1,63 @@
+#!/bin/bash
+# waydroid-user-start - make Waydroid usable from the desktop user.
+# Everything here runs as the normal user: no sudo, no root shell.
+set -uo pipefail
+
+# Force the real user's bus/runtime dirs (never root's /run/user/0).
+uid=$(id -u)
+export XDG_RUNTIME_DIR="/run/user/$uid"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+
+venus_socket=/run/waydroid-venus/venus.sock
+
+# nvidia_driver_mode=venus: the render server is a systemd --user unit.
+if [ ! -S "$venus_socket" ]; then
+    systemctl --user start wd-venus.service >/dev/null 2>&1 || true
+    for _ in $(seq 1 20); do
+        [ -S "$venus_socket" ] && break
+        sleep 0.5
+    done
+fi
+if [ ! -S "$venus_socket" ]; then
+    echo "waydroid-user-start: $venus_socket missing (is wd-venus.service running?)" >&2
+    exit 1
+fi
+
+# Pick a Wayland socket if the caller's environment did not provide one.
+if [ -z "${WAYLAND_DISPLAY:-}" ]; then
+    WAYLAND_DISPLAY=$(ls "$XDG_RUNTIME_DIR" 2>/dev/null | grep -m1 '^wayland-[0-9]*$' || true)
+    [ -n "$WAYLAND_DISPLAY" ] && export WAYLAND_DISPLAY
+fi
+
+wait_running() {
+    for _ in $(seq 1 30); do
+        st=$(waydroid status 2>/dev/null || true)
+        echo "$st" | grep -q 'Session:.*RUNNING' && \
+        echo "$st" | grep -q 'Container:.*RUNNING' && return 0
+        sleep 1
+    done
+    return 1
+}
+
+st=$(waydroid status 2>/dev/null || true)
+if echo "$st" | grep -q 'Session:.*RUNNING' && ! echo "$st" | grep -q 'Container:.*RUNNING'; then
+    # A stale session can survive a dead guest; recycle it once.
+    waydroid session stop >/dev/null 2>&1 || true
+    for _ in $(seq 1 15); do
+        waydroid status 2>/dev/null | grep -q 'Session:.*STOPPED' && break
+        sleep 1
+    done
+fi
+
+if ! wait_running; then
+    nohup waydroid session start >/dev/null 2>&1 &
+    wait_running || true
+fi
+
+st=$(waydroid status 2>/dev/null || true)
+if echo "$st" | grep -q 'Session:.*RUNNING' && echo "$st" | grep -q 'Container:.*RUNNING'; then
+    exit 0
+fi
+echo "waydroid-user-start: session/container did not start; last status:" >&2
+echo "$st" >&2
+exit 1
