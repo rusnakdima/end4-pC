@@ -223,6 +223,23 @@ TestCase {
     }
 
     /**
+     * The keybind search accepts a typed combination ("super+i") as well as
+     * ordinary text, and a pressed combination is written with "+" separators.
+     */
+    function test_filter_by_query_with_combos_matches_pressed_and_typed_combos() {
+        const items = [
+            { name: "Terminal", combo: "SUPER + Return" },
+            { name: "Sidebar", combo: "SUPER + B" },
+            { name: "Settings", combo: "SUPER + I" }
+        ];
+        compare(StringUtils.filterByQueryWithCombos(items, "super+i", ["name"], ["combo"]).length, 1);
+        compare(StringUtils.filterByQueryWithCombos(items, "SUPER + I", ["name"], ["combo"])[0].name, "Settings");
+        compare(StringUtils.filterByQueryWithCombos(items, "super", ["name"], ["combo"]).length, 3);
+        compare(StringUtils.filterByQueryWithCombos(items, "terminal", ["name"], ["combo"]).length, 1);
+        compare(StringUtils.filterByQueryWithCombos(items, "", ["name"], ["combo"]).length, 3);
+    }
+
+    /**
      * The second-precision switch adds or removes the seconds field of the
      * clock format, so the helpers have to keep the chosen base format and
      * the am/pm marker intact.

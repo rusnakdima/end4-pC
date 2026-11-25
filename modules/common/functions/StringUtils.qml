@@ -327,6 +327,63 @@ Singleton {
     }
 
     /**
+     * Turns typed text into the spelling the config files use, or "" when
+     * the text is not a combination ("SUPER + I" for "super+i").
+     * @param { string | null } text
+     * @returns { string }
+     */
+    function comboFromText(text) {
+        return KeyCombos.comboFromText(text);
+    }
+
+    /**
+     * Like filterByQuery, but a query that is itself a combination is
+     * compared against the combination fields instead of being split into
+     * text tokens. "super+i" and "SUPER + I" therefore find the same row.
+     * Array valued fields (an action's aliases) are joined before comparing.
+     * @param { Array<any> | null } items
+     * @param { string | null } query
+     * @param { string[] } keys
+     * @param { string[] } comboKeys
+     * @returns { Array<any> }
+     */
+    function filterByQueryWithCombos(items, query, keys, comboKeys) {
+        if (items === null || items === undefined)
+            return [];
+        const text = String(query ?? "").trim();
+        if (text === "")
+            return items;
+
+        const valuesOf = (item, key) => {
+            const value = item[key];
+            if (Array.isArray(value))
+                return value.map(part => String(part ?? ""));
+            return [String(value ?? "")];
+        };
+
+        if (KeyCombos.comboFromText(text) !== "") {
+            const wanted = KeyCombos.canonicalCombo(text);
+            return Array.from(items).filter(item => {
+                if (item === null || item === undefined)
+                    return false;
+                return comboKeys.some(key => valuesOf(item, key).some(value => KeyCombos.canonicalCombo(value) === wanted));
+            });
+        }
+
+        const tokens = text.toLowerCase().split(/\s+/);
+        return Array.from(items).filter(item => {
+            if (item === null || item === undefined)
+                return false;
+            return tokens.every(token => {
+                if (keys.some(key => String(item[key] ?? "").toLowerCase().includes(token)))
+                    return true;
+                const canonicalToken = KeyCombos.canonicalCombo(token);
+                return comboKeys.some(key => valuesOf(item, key).some(value => KeyCombos.canonicalCombo(value).includes(canonicalToken)));
+            });
+        });
+    }
+
+    /**
      * Removes the given prefix from the string if present.
      * @param { string } str
      * @param { string } prefix

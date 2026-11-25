@@ -117,6 +117,117 @@ function displayParts(combo) {
     return text.split(" + ").map(displayLabel);
 }
 
+// The words a person may type for a modifier, mapped to the Hyprland token.
+var modifierTokens = {
+    "super": "SUPER",
+    "meta": "SUPER",
+    "ctrl": "CTRL",
+    "control": "CTRL",
+    "shift": "SHIFT",
+    "alt": "ALT"
+};
+
+var modifierOrder = ["CTRL", "SUPER", "SHIFT", "ALT"];
+
+// The names of keys that are not a single character, lowercased so a typed
+// combination may spell them like words ("enter", "pgdown").
+var keyNameTokens = null;
+
+function keyNameByToken() {
+    if (keyNameTokens !== null) return keyNameTokens;
+
+    const names = {};
+    const known = keyNames();
+    for (const code in known) names[String(known[code]).toLowerCase()] = known[code];
+    names["enter"] = "Return";
+    names["return"] = "Return";
+    names["esc"] = "Escape";
+    names["escape"] = "Escape";
+    names["backspace"] = "BackSpace";
+    names["del"] = "Delete";
+    names["delete"] = "Delete";
+    names["ins"] = "Insert";
+    names["insert"] = "Insert";
+    names["pageup"] = "Page_Up";
+    names["pgup"] = "Page_Up";
+    names["pagedown"] = "Page_Down";
+    names["pgdown"] = "Page_Down";
+    names["prtsc"] = "Print";
+    names["print"] = "Print";
+    names["capslock"] = "Caps_Lock";
+    names["numlock"] = "Num_Lock";
+    names["scrolllock"] = "Scroll_Lock";
+    // The punctuation keys, as the characters they type.
+    const punctuation = {
+        "/": "Slash", "\\": "Backslash", ";": "Semicolon", "'": "Apostrophe",
+        ",": "Comma", ".": "Period", "-": "Minus", "=": "Equal",
+        "[": "BracketLeft", "]": "BracketRight"
+    };
+    for (const character in punctuation) names[character] = punctuation[character];
+
+    keyNameTokens = names;
+    return names;
+}
+
+// Splits a combination into its tokens, accepting "+" or whitespace as the
+// separator and any mixture of case.
+function comboTokens(text) {
+    return String(text ?? "").trim().split(/[+\s]+/).filter(token => token !== "");
+}
+
+// A comparable form of a combination: lowercase, modifiers in the canonical
+// order, joined by "+". "i + super" and "SUPER + I" both become "super+i".
+function canonicalCombo(text) {
+    const mods = [];
+    const keys = [];
+    for (const token of comboTokens(text)) {
+        const lower = token.toLowerCase();
+        const modifier = modifierTokens[lower];
+        if (modifier) {
+            if (!mods.includes(modifier)) mods.push(modifier);
+        } else {
+            keys.push(lower);
+        }
+    }
+    mods.sort((a, b) => modifierOrder.indexOf(a) - modifierOrder.indexOf(b));
+    return mods.concat(keys).join("+").toLowerCase();
+}
+
+// True when two spellings name the same combination.
+function comboMatches(query, combo) {
+    const left = canonicalCombo(query);
+    return left !== "" && left === canonicalCombo(combo);
+}
+
+// Turns typed text ("super+i", "i super", "ctrl shift k") into the spelling
+// the config files use ("SUPER + I"). Returns "" unless exactly one
+// non-modifier key is present, so a partial modifier press is ignored.
+function comboFromText(text) {
+    const mods = [];
+    const keys = [];
+    for (const token of comboTokens(text)) {
+        const lower = token.toLowerCase();
+        const modifier = modifierTokens[lower];
+        if (modifier) {
+            if (!mods.includes(modifier)) mods.push(modifier);
+            continue;
+        }
+        const known = keyNameByToken()[lower];
+        if (known) {
+            keys.push(known);
+        } else if (token.length === 1) {
+            keys.push(token.toUpperCase());
+        } else {
+            // Not a key name we know: the text is a search phrase, not a
+            // combination someone typed.
+            return "";
+        }
+    }
+    if (keys.length !== 1) return "";
+    mods.sort((a, b) => modifierOrder.indexOf(a) - modifierOrder.indexOf(b));
+    return mods.concat(keys).join(" + ");
+}
+
 // Converts a key event into a Hyprland key combination ("SUPER + ALT + V").
 // Returns "" when the key has no name Hyprland would understand, so the
 // caller can ignore the press.

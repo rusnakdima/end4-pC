@@ -103,4 +103,20 @@ TestCase {
         compare(KeyCombos.displayParts("").length, 0);
         compare(KeyCombos.displayParts(undefined).length, 0);
     }
+
+    function test_combo_from_text_accepts_any_spelling() {
+        compare(KeyCombos.comboFromText("super+i"), "SUPER + I");
+        compare(KeyCombos.comboFromText("Super + I"), "SUPER + I");
+        compare(KeyCombos.comboFromText("i super"), "SUPER + I");
+        compare(KeyCombos.comboFromText("ctrl shift k"), "CTRL + SHIFT + K");
+        compare(KeyCombos.comboFromText(""), "");
+        compare(KeyCombos.comboFromText("shift"), "");
+    }
+
+    function test_canonical_combo_ignores_order_case_and_separators() {
+        compare(KeyCombos.canonicalCombo("SUPER + I"), "super+i");
+        compare(KeyCombos.canonicalCombo("i + super"), "super+i");
+        verify(KeyCombos.comboMatches("super i", "SUPER + I"));
+        verify(!KeyCombos.comboMatches("super o", "SUPER + I"));
+    }
 }
