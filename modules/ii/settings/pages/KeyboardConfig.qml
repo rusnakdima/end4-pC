@@ -128,7 +128,8 @@ ContentPage {
     // to {id, label, file}. One fix moves exactly one holder to a free combo,
     // through one service — a group with several others gets one Move action
     // per holder, so each click is one write and one reload.
-    readonly property var conflictGroups: KeybindConflicts.groupsFrom(HyprlandKeybinds.repeatIndex)
+    readonly property var conflictGroups: KeybindConflicts.groupsFrom(
+        HyprlandKeybinds.repeatIndex, HyprlandKeybinds.aliasIndex)
 
     // A short confirmation after a fix. The group itself usually disappears
     // on the reload that follows, so the flag keeps the message visible.
@@ -151,29 +152,146 @@ ContentPage {
     }
 
     function moveConflictHolder(group, holder, combo) {
-        if (String(combo ?? "") === "") return;
+        if (String(combo ?? "") === "") return false;
         const original = page.originalConflictHolder(group, holder);
         const catalogId = String(original?.bind?.id ?? "");
         // Without a catalog id there is no key the generator can write an
         // override for; refusing is better than writing a dead override file.
-        if (catalogId === "") return;
+        if (catalogId === "") {
+            page.captureError = page.formErrorMessage("unknown-path");
+            return false;
+        }
         if (ManagedKeybinds.isRawBind(catalogId)) {
             page.captureError = page.formErrorMessage("raw-combo");
-            return;
+            return false;
         }
 
         // A conflict fix is a rebind like any other, so it goes through the
         // same overlay service. `fixHolder` uses `overrideId` for a plain
         // bind, which is why it is set to the catalog id here.
-        const service = KeybindConflicts.fixHolder(
+        const fix = KeybindConflicts.fixHolder(
             Object.assign({}, original, { overrideId: catalogId }), combo,
             bind => ManagedKeybinds.entryForSource(bind),
             ManagedKeybinds,
             ManagedKeybinds);
-        if (service === "managed" || service === "override") {
+        if (!fix.ok) {
+            page.captureError = page.formErrorMessage(fix.error);
+            return false;
+        }
+        page.conflictResolved = true;
+        conflictResolvedTimer.restart();
+        return true;
+    }
+
+    // Remove one combination from a shell action without touching its other
+    // combos. The delete id is per combo, so Deleted keybinds can restore
+    // exactly this one.
+    function deleteAliasCombo(actionData, combo) {
+        const action = String(actionData?.action ?? "");
+        const binds = (actionData?.binds ?? []).filter(
+            bind => HyprlandKeybinds.comboOf(bind) === combo);
+        if (action === "" || binds.length === 0) {
+            page.captureError = page.formErrorMessage("unknown-path");
+            return false;
+        }
+        if (binds.some(bind => bind?.raw === true)) {
+            page.captureError = page.formErrorMessage("raw-combo");
+            return false;
+        }
+        const label = String(actionData?.description ?? "") !== ""
+            ? actionData.description
+            : action;
+        const result = DisabledKeybinds.disableBinds(
+            "shell:" + action + ":" + combo, label, binds);
+        if (!result.ok) {
+            page.captureError = page.formErrorMessage(result.error);
+            return false;
+        }
+        return true;
+    }
+
+    // "Use only this one": every other holder on this group is removed, the
+    // keeper stays. Alias groups remove a single action combo; duplicate
+    // combos remove whichever service owns each other holder.
+    function removeConflictOthers(group, keeperId) {
+        const plan = KeybindConflicts.removalPlan(group, keeperId);
+        if (plan.keeper === null || plan.keeper === undefined) {
+            page.captureError = page.formErrorMessage("unknown-path");
+            return false;
+        }
+
+        let ok = true;
+        for (const holder of plan.remove) {
+            if (group?.kind === "alias") {
+                const actionData = HyprlandKeybinds.shellActions.find(
+                    entry => entry.action === group.action);
+                if (!page.deleteAliasCombo(actionData, holder.combo)) ok = false;
+                continue;
+            }
+
+            const original = page.originalConflictHolder(group, holder);
+            const bind = original?.bind ?? null;
+            const managedEntry = ManagedKeybinds.entryForSource(bind);
+            if (managedEntry !== null && managedEntry !== undefined) {
+                const result = ManagedKeybinds.remove(managedEntry.id);
+                if (!result.ok) {
+                    page.captureError = page.formErrorMessage(result.error);
+                    ok = false;
+                }
+                continue;
+            }
+
+            const action = String(bind?.action ?? "");
+            if (action !== "") {
+                const actionData = HyprlandKeybinds.shellActions.find(entry => entry.action === action);
+                if (!page.deleteAliasCombo(actionData, HyprlandKeybinds.comboOf(bind))) ok = false;
+                continue;
+            }
+
+            const catalogId = String(bind?.id ?? "");
+            if (catalogId === "" || ManagedKeybinds.isRawBind(catalogId)) {
+                page.captureError = page.formErrorMessage("raw-combo");
+                ok = false;
+                continue;
+            }
+
+            const result = DisabledKeybinds.disableBinds(
+                "bind:" + String(original?.file ?? "") + ":" + String(bind?.line ?? 0),
+                holder.label, [bind]);
+            if (!result.ok) {
+                page.captureError = page.formErrorMessage(result.error);
+                ok = false;
+            }
+        }
+
+        if (ok) {
             page.conflictResolved = true;
             conflictResolvedTimer.restart();
         }
+        return ok;
+    }
+
+    // Move every non-keeper holder onto one of the suggested free combos.
+    // Unlike pressing Move once per row, this is one action for the group;
+    // it still reports success only when every write succeeded.
+    function applyConflictOffers(group, keeperId) {
+        if (group?.kind === "alias") return false;
+        const choice = KeybindConflicts.chooseKeeper(
+            group, keeperId ?? KeybindConflicts.identityOf(group?.holders?.[0]));
+        const suggestions = KeybindConflicts.freeCombos(
+            HyprlandKeybinds.allUsedCombos, choice.others.length, group?.combo ?? "");
+        if (suggestions.length < choice.others.length) {
+            page.captureError = Translation.tr("No free combination found for every binding.");
+            return false;
+        }
+
+        page.conflictResolved = false;
+        let ok = true;
+        for (let i = 0; i < choice.others.length; ++i) {
+            if (!page.moveConflictHolder(group, choice.others[i], suggestions[i])) ok = false;
+        }
+        if (!ok) page.conflictResolved = false;
+        return ok;
     }
 
     // ------------------------------------------------------
@@ -1252,7 +1370,9 @@ ContentPage {
 
                 StyledText {
                     Layout.fillWidth: true
-                    text: Translation.tr("Used by %1 bindings").arg(panel.modelData?.holders?.length ?? 0)
+                    text: panel.modelData?.kind === "alias"
+                        ? Translation.tr("Bound to %1 combinations").arg(panel.modelData?.holders?.length ?? 0)
+                        : Translation.tr("Used by %1 bindings").arg(panel.modelData?.holders?.length ?? 0)
                     font.pixelSize: Appearance.font.pixelSize.small
                     color: Appearance.colors.colSubtext
                 }
@@ -1325,15 +1445,17 @@ ContentPage {
 
             StyledText {
                 Layout.fillWidth: true
-                visible: panel.choice.others.length > 0
+                visible: panel.modelData?.kind !== "alias" && panel.choice.others.length > 0
                 text: Translation.tr("Move other bindings to")
                 font.pixelSize: Appearance.font.pixelSize.normal
                 color: Appearance.colors.colOnLayer1
             }
 
             // One row per non-keeper holder: pick a free combo, then Move.
+            // An alias group has no free combo to move to here: its combos
+            // are removed per combo instead.
             Repeater {
-                model: panel.choice.others
+                model: panel.modelData?.kind === "alias" ? [] : panel.choice.others
                 delegate: Rectangle {
                     id: moveRow
                     required property var modelData
@@ -1414,6 +1536,25 @@ ContentPage {
                                 panel.modelData, moveRow.modelData, moveRow.selectedCombo)
                         }
                     }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                visible: panel.choice.others.length > 0
+
+                RippleButton {
+                    buttonText: Translation.tr("Use only this one")
+                    buttonRadius: Appearance.rounding.full
+                    onClicked: page.removeConflictOthers(panel.modelData, panel.keeperId)
+                }
+
+                RippleButton {
+                    visible: panel.modelData?.kind !== "alias"
+                    buttonText: Translation.tr("Apply suggested keys to all others")
+                    buttonRadius: Appearance.rounding.full
+                    onClicked: page.applyConflictOffers(panel.modelData, panel.keeperId)
                 }
             }
         }
