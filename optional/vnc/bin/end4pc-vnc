@@ -1155,6 +1155,32 @@ def live_session(hint: Path) -> tuple[Path, str] | None:
     return None
 
 
+def wayland_display(runtime: Path) -> str:
+    """Pick the newest Wayland socket owned by us in the active runtime dir.
+
+    A stale session can leave an older ``wayland-1`` socket behind. Attaching
+    to it makes wayvnc fail with "Virtual Pointer protocol not supported",
+    so always use the newest live socket of the selected session instead.
+    """
+    candidates: list[tuple[float, str]] = []
+    try:
+        sockets = list(runtime.glob("wayland-*"))
+    except OSError:
+        sockets = []
+    for sock in sockets:
+        try:
+            if not sock.is_socket():
+                continue
+            info = sock.stat()
+        except OSError:
+            continue
+        if info.st_uid == os.getuid():
+            candidates.append((info.st_mtime, sock.name))
+    if candidates:
+        return max(candidates)[1]
+    return "wayland-1"
+
+
 def select_session(timeout: float = 30.0) -> tuple[Path, str] | None:
     """Prefer the physical session; fall back to the always-on headless one."""
     deadline = time.monotonic() + timeout
@@ -1193,7 +1219,7 @@ def cmd_run(_args: argparse.Namespace) -> int:
     global ACTIVE_RUNTIME
     ACTIVE_RUNTIME = runtime
     os.environ["XDG_RUNTIME_DIR"] = str(runtime)
-    os.environ["WAYLAND_DISPLAY"] = "wayland-1"
+    os.environ["WAYLAND_DISPLAY"] = wayland_display(runtime)
     os.environ["HYPRLAND_INSTANCE_SIGNATURE"] = signature
     print(f"{APP}: attached to session {signature} in {runtime}", file=sys.stderr)
     if str((cfg.get("network") or {}).get("bindMode") or "auto") == "auto" and shutil.which("tailscale"):
