@@ -1608,13 +1608,17 @@ ContentPage {
         // across the theme's and the user's keybind file; the row's own
         // action is left out.
         readonly property var repeats: HyprlandKeybinds.repeatUsers(shortcutRow.combo, shortcutRow.actionData?.action ?? "")
+        readonly property bool aliasConflict: shortcutRow.aliases.length > 0
+        readonly property bool conflicted: shortcutRow.repeats.length > 0
+            || shortcutRow.aliasConflict
 
         Layout.fillWidth: true
         implicitHeight: shortcutRowLayout.implicitHeight + 24
         color: Appearance.colors.colLayer1
         radius: Appearance.rounding.normal
-        border.width: shortcutRow.capturing ? 1 : 0
-        border.color: Appearance.colors.colPrimary
+        border.width: shortcutRow.capturing || shortcutRow.conflicted ? 1 : 0
+        border.color: shortcutRow.capturing
+            ? Appearance.colors.colPrimary : page.conflictColor
 
         RowLayout {
             id: shortcutRowLayout
@@ -1626,14 +1630,26 @@ ContentPage {
                 Layout.fillWidth: true
                 spacing: 2
 
-                StyledText {
+                RowLayout {
                     Layout.fillWidth: true
-                    text: (shortcutRow.actionData?.description ?? "") !== ""
-                        ? shortcutRow.actionData.description
-                        : (shortcutRow.actionData?.action ?? "")
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                    color: Appearance.colors.colOnLayer1
-                    elide: Text.ElideRight
+                    spacing: 4
+
+                    MaterialSymbol {
+                        visible: shortcutRow.conflicted
+                        text: "warning"
+                        iconSize: Appearance.font.pixelSize.normal
+                        color: page.conflictColor
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: (shortcutRow.actionData?.description ?? "") !== ""
+                            ? shortcutRow.actionData.description
+                            : (shortcutRow.actionData?.action ?? "")
+                        font.pixelSize: Appearance.font.pixelSize.normal
+                        color: Appearance.colors.colOnLayer1
+                        elide: Text.ElideRight
+                    }
                 }
 
                 Repeater {
@@ -2075,13 +2091,15 @@ ContentPage {
         readonly property var repeats: HyprlandKeybinds.repeatUsers(
             otherBindRow.combo,
             (otherBindRow.bindData?.file ?? "main") + "\u0000" + otherBindRow.overrideId)
+        readonly property bool conflicted: otherBindRow.repeats.length > 0
 
         Layout.fillWidth: true
         implicitHeight: otherBindRowLayout.implicitHeight + 24
         color: Appearance.colors.colLayer1
         radius: Appearance.rounding.normal
-        border.width: otherBindRow.capturing ? 1 : 0
-        border.color: Appearance.colors.colPrimary
+        border.width: otherBindRow.capturing || otherBindRow.conflicted ? 1 : 0
+        border.color: otherBindRow.capturing
+            ? Appearance.colors.colPrimary : page.conflictColor
 
         RowLayout {
             id: otherBindRowLayout
@@ -2093,14 +2111,26 @@ ContentPage {
                 Layout.fillWidth: true
                 spacing: 2
 
-                StyledText {
+                RowLayout {
                     Layout.fillWidth: true
-                    text: (otherBindRow.bindData.comment ?? "") !== ""
-                        ? otherBindRow.bindData.comment
-                        : otherBindRow.originalCombo
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                    color: Appearance.colors.colOnLayer1
-                    elide: Text.ElideRight
+                    spacing: 4
+
+                    MaterialSymbol {
+                        visible: otherBindRow.conflicted
+                        text: "warning"
+                        iconSize: Appearance.font.pixelSize.normal
+                        color: page.conflictColor
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: (otherBindRow.bindData.comment ?? "") !== ""
+                            ? otherBindRow.bindData.comment
+                            : otherBindRow.originalCombo
+                        font.pixelSize: Appearance.font.pixelSize.normal
+                        color: Appearance.colors.colOnLayer1
+                        elide: Text.ElideRight
+                    }
                 }
 
                 // Yellow under the row: who else is on this combination.
@@ -2267,11 +2297,14 @@ ContentPage {
         // so the row never reports itself as a conflict.
         readonly property var repeats: HyprlandKeybinds.repeatUsers(
             managedRow.combo, "custom\u0000" + managedRow.overrideId)
+        readonly property bool conflicted: managedRow.repeats.length > 0
 
         Layout.fillWidth: true
         implicitHeight: managedRowLayout.implicitHeight + 24
         color: Appearance.colors.colLayer1
         radius: Appearance.rounding.normal
+        border.width: managedRow.conflicted ? 1 : 0
+        border.color: page.conflictColor
 
         RowLayout {
             id: managedRowLayout
@@ -2283,12 +2316,24 @@ ContentPage {
                 Layout.fillWidth: true
                 spacing: 2
 
-                StyledText {
+                RowLayout {
                     Layout.fillWidth: true
-                    text: managedRow.entry.name
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                    color: Appearance.colors.colOnLayer1
-                    elide: Text.ElideRight
+                    spacing: 4
+
+                    MaterialSymbol {
+                        visible: managedRow.conflicted
+                        text: "warning"
+                        iconSize: Appearance.font.pixelSize.normal
+                        color: page.conflictColor
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: managedRow.entry.name
+                        font.pixelSize: Appearance.font.pixelSize.normal
+                        color: Appearance.colors.colOnLayer1
+                        elide: Text.ElideRight
+                    }
                 }
 
                 StyledText {
@@ -2593,14 +2638,25 @@ ContentPage {
                         }
 
                         // Yellow: the same combination is bound elsewhere.
-                        StyledText {
+                        RowLayout {
                             Layout.fillWidth: true
                             visible: page.formCombo !== "" && page.capturing !== "form"
                                 && form.repeats.length > 0
-                            text: page.repeatSentence(form.repeats)
-                            font.pixelSize: Appearance.font.pixelSize.smaller
-                            color: page.conflictColor
-                            wrapMode: Text.Wrap
+                            spacing: 4
+
+                            MaterialSymbol {
+                                text: "warning"
+                                iconSize: Appearance.font.pixelSize.smaller
+                                color: page.conflictColor
+                            }
+
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: page.repeatSentence(form.repeats)
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                color: page.conflictColor
+                                wrapMode: Text.Wrap
+                            }
                         }
                     }
 
