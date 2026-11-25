@@ -19,6 +19,9 @@ Singleton {
     // debounce so typing does not recompute every keystroke.
     property string resultQuery: ""
     property int resultsLimit: 15
+    // Diagnostics kept in a plain JS object: writing QML properties from the
+    // results binding creates a binding loop.
+    property var resultStats: ({ objectsCreated: 0, computations: 0, lastQuery: null })
 
     Timer {
         id: resultQueryTimer
@@ -201,13 +204,18 @@ Singleton {
         id: nonAppResultsTimer
         interval: Config.options.search.nonAppResultDelay
         onTriggered: {
-            let expr = root.query;
+            let expr = root.resultQuery;
             if (expr.startsWith(Config.options.search.prefix.math)) {
                 expr = expr.slice(Config.options.search.prefix.math.length);
             }
             mathProc.calculateExpression(expr);
         }
     }
+
+    // Recomputing results must not restart the math calculation: qalc writes
+    // mathResult, which the results binding reads, so restarting from inside
+    // computeAllResults creates an endless recompute/calculate loop.
+    onResultQueryChanged: nonAppResultsTimer.restart()
 
     Process {
         id: mathProc
@@ -225,6 +233,12 @@ Singleton {
     }
 
     function computeAllResults(): list<var> {
+        // Count only recomputes caused by a new query. A mathResult update also
+        // re-evaluates the binding, but that is not a new search.
+        if (root.resultStats.lastQuery !== root.resultQuery) {
+            root.resultStats.computations++;
+            root.resultStats.lastQuery = root.resultQuery;
+        }
         // Search results are handled here
         ////////////////// Skip? //////////////////
         if (root.resultQuery == "")
@@ -242,7 +256,7 @@ Singleton {
                 }
                 const type = `#${entry.match(/^\s*(\S+)/)?.[1] || ""}`;
                 const pinned = Cliphist.isPinned(entry);
-                return resultComp.createObject(null, {
+                const factory = () => resultComp.createObject(null, {
                     rawValue: entry,
                     name: StringUtils.cleanCliphistEntry(entry),
                     verb: "",
@@ -269,8 +283,10 @@ Singleton {
                         })],
                     blurImage: shouldBlurImage
                 });
+                factory.pinned = pinned;
+                return factory;
             }).filter(Boolean);
-            const lostPins = Cliphist.missingPins(searchString).map(pin => resultComp.createObject(null, {
+            const lostPins = Cliphist.missingPins(searchString).map(pin => () => resultComp.createObject(null, {
                 rawValue: `${pin.id}\t${pin.text}`,
                 name: pin.text,
                 verb: "",
@@ -295,7 +311,7 @@ Singleton {
             const searchString = StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.emojis);
             return Emojis.fuzzyQuery(searchString).map(entry => {
                 const emoji = entry.match(/^\s*(\S+)/)?.[1] || "";
-                return resultComp.createObject(null, {
+                return () => resultComp.createObject(null, {
                     rawValue: entry,
                     name: entry.replace(/^\s*\S+\s+/, ""),
                     iconName: emoji,
@@ -326,7 +342,7 @@ Singleton {
             }).map(bind => {
                 const modsStr = bind.mods.join(" + ");
                 const keyStr  = modsStr.length > 0 ? `${modsStr} + ${bind.key}` : bind.key;
-                return resultComp.createObject(null, {
+                return () => resultComp.createObject(null, {
                     name: bind.comment,
                     iconName: "keyboard",
                     iconType: LauncherSearchResult.IconType.Material,
@@ -345,7 +361,7 @@ Singleton {
                 const tabIdx = entry.indexOf("\t");
                 const symName = tabIdx >= 0 ? entry.slice(0, tabIdx) : entry;
                 const symTags = tabIdx >= 0 ? entry.slice(tabIdx + 1) : "";
-                return resultComp.createObject(null, {
+                return () => resultComp.createObject(null, {
                     rawValue: entry,
                     name: symName,
                     iconName: symName,
@@ -361,8 +377,7 @@ Singleton {
         }
 
         ////////////////// Init ///////////////////
-        nonAppResultsTimer.restart();
-        const mathResultObject = resultComp.createObject(null, {
+        const mathFactory = () => resultComp.createObject(null, {
             name: root.mathResult,
             verb: Translation.tr("Copy"),
             type: Translation.tr("Math result"),
@@ -373,8 +388,8 @@ Singleton {
                 Quickshell.clipboardText = root.mathResult;
             }
         });
-        const appResultObjects = AppSearch.fuzzyQuery(StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.app)).map(entry => {
-            return resultComp.createObject(null, {
+        const appResultFactories = AppSearch.fuzzyQuery(StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.app)).map(entry => {
+            return () => resultComp.createObject(null, {
                 type: Translation.tr("App"),
                 id: entry.id,
                 name: entry.name,
@@ -411,9 +426,9 @@ Singleton {
         });
         ////////////////// Settings search //////////////////
         const settingsEntries = Config.options.settings.style === "dashboard" ? [] : SettingsSearchIndex.search(root.resultQuery, 8);
-        const settingsResults = settingsEntries.map(entry => {
+        const settingsFactories = settingsEntries.map(entry => {
             const breadcrumb = entry.kind === "page" ? Translation.tr("Settings") : [entry.pageName, entry.kind === "option" ? entry.section : "", entry.kind === "option" ? entry.subsection : ""].filter(part => part).join(" › ");
-            return resultComp.createObject(null, {
+            return () => resultComp.createObject(null, {
                 control: entry.kind === "option" ? SettingsQuickControls.find(entry.pageId, entry.rawSection, entry.rawSubsection, entry.rawLabel) : null,
                 name: entry.label,
                 comment: breadcrumb,
@@ -428,7 +443,7 @@ Singleton {
                 }
             });
         });
-        const commandResultObject = resultComp.createObject(null, {
+        const commandFactory = () => resultComp.createObject(null, {
             name: StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.shellCommand).replace("file://", ""),
             verb: Translation.tr("Run"),
             type: Translation.tr("Command"),
@@ -444,7 +459,7 @@ Singleton {
                 Quickshell.execDetached(["bash", "-c", root.resultQuery.startsWith('sudo') ? `${Config.options.apps.terminal} fish -C '${cleanedCommand}'` : cleanedCommand]);
             }
         });
-        const webSearchResultObject = resultComp.createObject(null, {
+        const webSearchFactory = () => resultComp.createObject(null, {
             name: StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.webSearch),
             verb: Translation.tr("Search"),
             type: Translation.tr("Web search"),
@@ -462,7 +477,7 @@ Singleton {
         const launcherActionObjects = root.allActions.map(action => {
             const actionString = `${Config.options.search.prefix.action}${action.action}`;
             if (actionString.startsWith(root.resultQuery) || root.resultQuery.startsWith(actionString)) {
-                return resultComp.createObject(null, {
+                return () => resultComp.createObject(null, {
                     name: root.resultQuery.startsWith(actionString) ? root.resultQuery : actionString,
                     verb: Translation.tr("Run"),
                     type: Translation.tr("Action"),
@@ -483,34 +498,43 @@ Singleton {
         const startsWithShellCommandPrefix = root.resultQuery.startsWith(Config.options.search.prefix.shellCommand);
         const startsWithWebSearchPrefix = root.resultQuery.startsWith(Config.options.search.prefix.webSearch);
         if (startsWithNumber || startsWithMathPrefix) {
-            result.push(mathResultObject);
+            result.push(mathFactory);
         } else if (startsWithShellCommandPrefix) {
-            result.push(commandResultObject);
+            result.push(commandFactory);
         } else if (startsWithWebSearchPrefix) {
-            result.push(webSearchResultObject);
+            result.push(webSearchFactory);
         }
 
         //////////////// Apps //////////////////
-        result = result.concat(appResultObjects);
+        result = result.concat(appResultFactories);
         ////////////// Settings ////////////////
-        result = result.concat(settingsResults);
+        result = result.concat(settingsFactories);
         ////////// Launcher actions ////////////
         result = result.concat(launcherActionObjects);
 
         /// Math result, command, web search ///
         if (Config.options.search.prefix.showDefaultActionsWithoutPrefix) {
             if (!startsWithShellCommandPrefix)
-                result.push(commandResultObject);
+                result.push(commandFactory);
             if (!startsWithNumber && !startsWithMathPrefix)
-                result.push(mathResultObject);
+                result.push(mathFactory);
             if (!startsWithWebSearchPrefix)
-                result.push(webSearchResultObject);
+                result.push(webSearchFactory);
         }
         
         return result;
     }
 
-    property list<var> results: computeAllResults().slice(0, root.resultsLimit)
+    // Only instantiate result objects for the visible slice. computeAllResults
+    // returns factories so a large result set does not create hundreds of QML
+    // objects that are immediately discarded.
+    function buildResults(): list<var> {
+        const factories = computeAllResults().slice(0, root.resultsLimit);
+        root.resultStats.objectsCreated = factories.length;
+        return factories.map(factory => factory());
+    }
+
+    property list<var> results: buildResults()
 
     Component {
         id: resultComp
