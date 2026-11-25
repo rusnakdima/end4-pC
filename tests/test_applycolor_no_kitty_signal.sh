@@ -19,6 +19,7 @@ EOF
 
 cat > "$tmp/bin/kitten" <<'EOF'
 #!/bin/sh
+echo "$*" >> "$KITTEN_LOG"
 [ "${KITTEN_FAIL:-0}" = 1 ] && exit 1
 exit 0
 EOF
@@ -33,6 +34,10 @@ chmod +x "$tmp/bin/pgrep" "$tmp/bin/kitten" "$tmp/bin/kill"
 printf '# theme template\n' > "$tmp/scripts/terminal/kitty-theme.conf"
 
 sed -n '/^apply_kitty() {/,/^}/p' "$root/scripts/colors/applycolor.sh" > "$tmp/apply_kitty.sh"
+if [[ ! -s "$tmp/apply_kitty.sh" ]]; then
+    echo "FAIL: could not extract apply_kitty() from applycolor.sh" >&2
+    exit 1
+fi
 
 passed=0
 failed=0
@@ -48,25 +53,36 @@ expect() {
 }
 
 run_kitty_theme() {
-    local fail="$1" log="$2"
-    STATE_DIR="$tmp/state" SCRIPT_DIR="$tmp/scripts" \
-    KILL_LOG="$log" KITTEN_FAIL="$fail" PATH="$tmp/bin:$PATH" \
+    local fail="$1" log="$2" kitten_log
+    kitten_log="$tmp/kitten-$fail.log"
+    : > "$log"
+    : > "$kitten_log"
+    if ! STATE_DIR="$tmp/state" SCRIPT_DIR="$tmp/scripts" \
+        KILL_LOG="$log" KITTEN_LOG="$kitten_log" KITTEN_FAIL="$fail" \
+        PATH="$tmp/bin:$PATH" \
         bash -c '
             kill() { echo "$*" >> "$KILL_LOG"; }
             source "$1"
             colorlist=()
             colorvalues=()
             apply_kitty
-        ' _ "$tmp/apply_kitty.sh"
+        ' _ "$tmp/apply_kitty.sh"; then
+        echo "FAIL apply_kitty execution (fail=$fail)" >&2
+        failed=$((failed + 1))
+    fi
 }
 
 run_kitty_theme 1 "$tmp/kill-fallback.log"
 expect "no kill when remote control is unavailable" "" \
     "$(cat "$tmp/kill-fallback.log" 2>/dev/null || true)"
+expect "remote-control set-colors attempted (fail case)" 1 \
+    "$(grep -c 'set-colors --all --configured' "$tmp/kitten-1.log")"
 
 run_kitty_theme 0 "$tmp/kill-remote.log"
 expect "no kill when remote control succeeds" "" \
     "$(cat "$tmp/kill-remote.log" 2>/dev/null || true)"
+expect "remote-control set-colors attempted (success case)" 1 \
+    "$(grep -c 'set-colors --all --configured' "$tmp/kitten-0.log")"
 
 echo
 echo "$passed passed, $failed failed"
