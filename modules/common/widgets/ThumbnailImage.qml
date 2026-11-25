@@ -27,10 +27,15 @@ StyledImage {
     // users can request a specific size instead of the computed one.
     property string thumbnailSizeName: Images.thumbnailSizeNameForDimensions(sourceSize.width, sourceSize.height)
     readonly property string effectiveSizeName: root.isVideoSource ? "large" : root.thumbnailSizeName
+    // Videos first try the frame switchwall.sh already decoded. It is a real
+    // picture of the clip and costs no ffmpeg process in the picker. The
+    // freedesktop cache remains the fallback for clips without such a frame.
+    readonly property string mpvpaperStillPath: root.sourcePath.length === 0 ? ""
+        : `${Directories.mpvpaperThumbnailsPath}/${FileUtils.trimFileProtocol(root.sourcePath).split("/").pop()}.jpg`
     // Every cache bucket, the requested one first, then the bigger ones and
     // finally the smaller ones.
     readonly property var sizeCandidates: root.isVideoSource
-        ? ["large"]
+        ? ["mpvpaper-still", "large"]
         : (function() {
             const order = ["normal", "large", "x-large", "xx-large"];
             const index = order.indexOf(root.thumbnailSizeName);
@@ -53,6 +58,7 @@ StyledImage {
 
     function thumbnailPathFor(sizeName) {
         if (sourcePath.length === 0) return "";
+        if (sizeName === "mpvpaper-still") return root.mpvpaperStillPath;
         const resolvedUrlWithoutFileProtocol = FileUtils.trimFileProtocol(`${Qt.resolvedUrl(sourcePath)}`);
         const encodedUrlWithoutFileProtocol = resolvedUrlWithoutFileProtocol.split("/").map(part => encodeURIComponent(part)).join("/");
         const md5Hash = Qt.md5(`file://${encodedUrlWithoutFileProtocol}`);
@@ -135,10 +141,16 @@ StyledImage {
             if (isVideo) {
                 // The first frame of a clip is usually black (fade in) and would
                 // look like a broken preview, so a frame a few seconds in is
-                // used. When no frame can be rendered at all, a flat
-                // placeholder is written: the cell is never blank.
+                // used. A previous failed render may have left a flat gray
+                // placeholder in the cache; Image treats that as Ready, so the
+                // placeholder has to be dropped here before a real frame can be
+                // generated. On failure nothing is written to the cache: a flat
+                // placeholder would be loaded as a valid thumbnail forever.
                 return ["bash", "-c", `
                     thumb="$1"; src="$2"; max="$3"
+                    if [ -f "$thumb" ] && [ "$(magick identify -format '%[colorspace]' "$thumb" 2>/dev/null)" = "Gray" ]; then
+                        rm -f "$thumb"
+                    fi
                     [ -f "$thumb" ] && exit 0
                     mkdir -p "$(dirname "$thumb")" || exit 2
                     tmp="$thumb.$$.tmp.png"
@@ -146,7 +158,6 @@ StyledImage {
                     for seek in 00:00:03 00:00:01 00:00:00; do
                         ffmpeg -y -ss "$seek" -i "$src" -frames:v 1 -vf "scale=$max:$max:force_original_aspect_ratio=decrease" "$tmp" >/dev/null 2>&1 && mv "$tmp" "$thumb" && exit 1
                     done
-                    magick -size "$max"x"$max" xc:'#202020' "$thumb" >/dev/null 2>&1 && exit 1
                     exit 2
                 `, "_", thumbPath, source, `${maxSize}`];
             }
