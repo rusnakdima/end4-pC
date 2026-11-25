@@ -63,6 +63,7 @@ declare -A EXPLICIT_MAP=(
     [ManagedKeybinds]="tst_managed_keybinds.qml"
     [DisabledKeybinds]="tst_disabled_keybinds.qml"
     [WallpaperVideo]="tst_wallpaper_video.qml"
+    [LauncherSearch]="tst_launcher_search.qml"
     [ProjectionUtils]="tst_projection.qml"
     [ProjectionConfig]="tst_projection.qml"
     [Cast]="tst_cast.qml"

@@ -15,6 +15,19 @@ Singleton {
     id: root
 
     property string query: ""
+    // The expensive result computation follows the query after a short
+    // debounce so typing does not recompute every keystroke.
+    property string resultQuery: ""
+    property int resultsLimit: 15
+
+    Timer {
+        id: resultQueryTimer
+        interval: 200
+        repeat: false
+        onTriggered: root.resultQuery = root.query
+    }
+
+    onQueryChanged: resultQueryTimer.restart()
 
     function ensurePrefix(prefix) {
         if ([Config.options.search.prefix.action, Config.options.search.prefix.app, Config.options.search.prefix.clipboard, Config.options.search.prefix.emojis, Config.options.search.prefix.symbols, Config.options.search.prefix.math, Config.options.search.prefix.shellCommand, Config.options.search.prefix.webSearch,].some(i => root.query.startsWith(i))) {
@@ -211,16 +224,16 @@ Singleton {
         }
     }
 
-    property list<var> results: {
+    function computeAllResults(): list<var> {
         // Search results are handled here
         ////////////////// Skip? //////////////////
-        if (root.query == "")
+        if (root.resultQuery == "")
             return [];
 
         ///////////// Special cases ///////////////
-        if (root.query.startsWith(Config.options.search.prefix.clipboard)) {
+        if (root.resultQuery.startsWith(Config.options.search.prefix.clipboard)) {
             // Clipboard
-            const searchString = StringUtils.cleanPrefix(root.query, Config.options.search.prefix.clipboard);
+            const searchString = StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.clipboard);
             const clipboardResults = Cliphist.fuzzyQuery(searchString).map((entry, index, array) => {
                 const mightBlurImage = Cliphist.entryIsImage(entry) && root.clipboardWorkSafetyActive;
                 let shouldBlurImage = mightBlurImage;
@@ -277,9 +290,9 @@ Singleton {
                 })]
             }));
             return [...lostPins, ...clipboardResults.filter(result => result.pinned), ...clipboardResults.filter(result => !result.pinned)];
-        } else if (root.query.startsWith(Config.options.search.prefix.emojis)) {
+        } else if (root.resultQuery.startsWith(Config.options.search.prefix.emojis)) {
             // Emojis
-            const searchString = StringUtils.cleanPrefix(root.query, Config.options.search.prefix.emojis);
+            const searchString = StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.emojis);
             return Emojis.fuzzyQuery(searchString).map(entry => {
                 const emoji = entry.match(/^\s*(\S+)/)?.[1] || "";
                 return resultComp.createObject(null, {
@@ -294,9 +307,9 @@ Singleton {
                     }
                 });
             }).filter(Boolean);
-        } else if (root.query.startsWith(Config.options.search.prefix.keybinds ?? "<")) {
+        } else if (root.resultQuery.startsWith(Config.options.search.prefix.keybinds ?? "<")) {
             // Keybinds
-            const searchString = StringUtils.cleanPrefix(root.query, Config.options.search.prefix.keybinds ?? "<");
+            const searchString = StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.keybinds ?? "<");
             const flatBinds = (function flatten(node) {
                 let result = [...(node.keybinds ?? [])];
                 for (const child of (node.children ?? [])) {
@@ -325,9 +338,9 @@ Singleton {
                     }
                 });
             }).filter(Boolean);
-        } else if (root.query.startsWith(Config.options.search.prefix.symbols)) {
+        } else if (root.resultQuery.startsWith(Config.options.search.prefix.symbols)) {
             // Material Symbols
-            const searchString = StringUtils.cleanPrefix(root.query, Config.options.search.prefix.symbols);
+            const searchString = StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.symbols);
             return MaterialSymbolsSearch.fuzzyQuery(searchString).map(entry => {
                 const tabIdx = entry.indexOf("\t");
                 const symName = tabIdx >= 0 ? entry.slice(0, tabIdx) : entry;
@@ -360,7 +373,7 @@ Singleton {
                 Quickshell.clipboardText = root.mathResult;
             }
         });
-        const appResultObjects = AppSearch.fuzzyQuery(StringUtils.cleanPrefix(root.query, Config.options.search.prefix.app)).map(entry => {
+        const appResultObjects = AppSearch.fuzzyQuery(StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.app)).map(entry => {
             return resultComp.createObject(null, {
                 type: Translation.tr("App"),
                 id: entry.id,
@@ -397,7 +410,7 @@ Singleton {
             });
         });
         ////////////////// Settings search //////////////////
-        const settingsEntries = Config.options.settings.style === "dashboard" ? [] : SettingsSearchIndex.search(root.query, 8);
+        const settingsEntries = Config.options.settings.style === "dashboard" ? [] : SettingsSearchIndex.search(root.resultQuery, 8);
         const settingsResults = settingsEntries.map(entry => {
             const breadcrumb = entry.kind === "page" ? Translation.tr("Settings") : [entry.pageName, entry.kind === "option" ? entry.section : "", entry.kind === "option" ? entry.subsection : ""].filter(part => part).join(" › ");
             return resultComp.createObject(null, {
@@ -410,34 +423,35 @@ Singleton {
                 iconType: LauncherSearchResult.IconType.Material,
                 execute: () => {
                     root.query = "";
+                    root.resultQuery = "";
                     GlobalStates.openSettingsAt(entry.pageId, entry.kind === "page" ? "" : entry.label, entry.section, entry.subsection);
                 }
             });
         });
         const commandResultObject = resultComp.createObject(null, {
-            name: StringUtils.cleanPrefix(root.query, Config.options.search.prefix.shellCommand).replace("file://", ""),
+            name: StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.shellCommand).replace("file://", ""),
             verb: Translation.tr("Run"),
             type: Translation.tr("Command"),
             fontType: LauncherSearchResult.FontType.Monospace,
             iconName: 'terminal',
             iconType: LauncherSearchResult.IconType.Material,
             execute: () => {
-                let cleanedCommand = root.query.replace("file://", "");
+                let cleanedCommand = root.resultQuery.replace("file://", "");
                 cleanedCommand = StringUtils.cleanPrefix(cleanedCommand, Config.options.search.prefix.shellCommand);
                 if (cleanedCommand.startsWith(Config.options.search.prefix.shellCommand)) {
                     cleanedCommand = cleanedCommand.slice(Config.options.search.prefix.shellCommand.length);
                 }
-                Quickshell.execDetached(["bash", "-c", root.query.startsWith('sudo') ? `${Config.options.apps.terminal} fish -C '${cleanedCommand}'` : cleanedCommand]);
+                Quickshell.execDetached(["bash", "-c", root.resultQuery.startsWith('sudo') ? `${Config.options.apps.terminal} fish -C '${cleanedCommand}'` : cleanedCommand]);
             }
         });
         const webSearchResultObject = resultComp.createObject(null, {
-            name: StringUtils.cleanPrefix(root.query, Config.options.search.prefix.webSearch),
+            name: StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.webSearch),
             verb: Translation.tr("Search"),
             type: Translation.tr("Web search"),
             iconName: 'travel_explore',
             iconType: LauncherSearchResult.IconType.Material,
             execute: () => {
-                let query = StringUtils.cleanPrefix(root.query, Config.options.search.prefix.webSearch);
+                let query = StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.webSearch);
                 let url = Config.options.search.engineBaseUrl + query;
                 for (let site of Config.options.search.excludedSites) {
                     url += ` -site:${site}`;
@@ -447,15 +461,15 @@ Singleton {
         });
         const launcherActionObjects = root.allActions.map(action => {
             const actionString = `${Config.options.search.prefix.action}${action.action}`;
-            if (actionString.startsWith(root.query) || root.query.startsWith(actionString)) {
+            if (actionString.startsWith(root.resultQuery) || root.resultQuery.startsWith(actionString)) {
                 return resultComp.createObject(null, {
-                    name: root.query.startsWith(actionString) ? root.query : actionString,
+                    name: root.resultQuery.startsWith(actionString) ? root.resultQuery : actionString,
                     verb: Translation.tr("Run"),
                     type: Translation.tr("Action"),
                     iconName: 'settings_suggest',
                     iconType: LauncherSearchResult.IconType.Material,
                     execute: () => {
-                        action.execute(root.query.split(" ").slice(1).join(" "));
+                        action.execute(root.resultQuery.split(" ").slice(1).join(" "));
                     }
                 });
             }
@@ -464,10 +478,10 @@ Singleton {
 
         //////// Prioritized by prefix /////////
         let result = [];
-        const startsWithNumber = /^\d/.test(root.query);
-        const startsWithMathPrefix = root.query.startsWith(Config.options.search.prefix.math);
-        const startsWithShellCommandPrefix = root.query.startsWith(Config.options.search.prefix.shellCommand);
-        const startsWithWebSearchPrefix = root.query.startsWith(Config.options.search.prefix.webSearch);
+        const startsWithNumber = /^\d/.test(root.resultQuery);
+        const startsWithMathPrefix = root.resultQuery.startsWith(Config.options.search.prefix.math);
+        const startsWithShellCommandPrefix = root.resultQuery.startsWith(Config.options.search.prefix.shellCommand);
+        const startsWithWebSearchPrefix = root.resultQuery.startsWith(Config.options.search.prefix.webSearch);
         if (startsWithNumber || startsWithMathPrefix) {
             result.push(mathResultObject);
         } else if (startsWithShellCommandPrefix) {
@@ -495,6 +509,8 @@ Singleton {
         
         return result;
     }
+
+    property list<var> results: computeAllResults().slice(0, root.resultsLimit)
 
     Component {
         id: resultComp
