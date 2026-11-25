@@ -123,7 +123,8 @@ Scope {
         // the session-lock surface and Hyprland shows its "lockscreen app
         // died" screen with no way back but a relogin.
         function status(): string {
-            return GlobalStates.screenLocked ? "locked" : "unlocked";
+            if (!GlobalStates.screenLocked) return "unlocked";
+            return lock.secure ? "locked-secure" : "locked-insecure";
         }
     }
 
