@@ -15,6 +15,22 @@ Singleton {
     id: root
 
     property string query: ""
+    // The expensive result computation follows the query after a short
+    // debounce so typing does not recompute every keystroke.
+    property string resultQuery: ""
+    property int resultsLimit: 15
+    // Diagnostics kept in a plain JS object: writing QML properties from the
+    // results binding creates a binding loop.
+    property var resultStats: ({ objectsCreated: 0, computations: 0, lastQuery: null })
+
+    Timer {
+        id: resultQueryTimer
+        interval: 200
+        repeat: false
+        onTriggered: root.resultQuery = root.query
+    }
+
+    onQueryChanged: resultQueryTimer.restart()
 
     function ensurePrefix(prefix) {
         if ([Config.options.search.prefix.action, Config.options.search.prefix.app, Config.options.search.prefix.clipboard, Config.options.search.prefix.emojis, Config.options.search.prefix.symbols, Config.options.search.prefix.math, Config.options.search.prefix.shellCommand, Config.options.search.prefix.webSearch,].some(i => root.query.startsWith(i))) {
@@ -188,13 +204,18 @@ Singleton {
         id: nonAppResultsTimer
         interval: Config.options.search.nonAppResultDelay
         onTriggered: {
-            let expr = root.query;
+            let expr = root.resultQuery;
             if (expr.startsWith(Config.options.search.prefix.math)) {
                 expr = expr.slice(Config.options.search.prefix.math.length);
             }
             mathProc.calculateExpression(expr);
         }
     }
+
+    // Recomputing results must not restart the math calculation: qalc writes
+    // mathResult, which the results binding reads, so restarting from inside
+    // computeAllResults creates an endless recompute/calculate loop.
+    onResultQueryChanged: nonAppResultsTimer.restart()
 
     Process {
         id: mathProc
@@ -211,16 +232,22 @@ Singleton {
         }
     }
 
-    property list<var> results: {
+    function computeAllResults(): list<var> {
+        // Count only recomputes caused by a new query. A mathResult update also
+        // re-evaluates the binding, but that is not a new search.
+        if (root.resultStats.lastQuery !== root.resultQuery) {
+            root.resultStats.computations++;
+            root.resultStats.lastQuery = root.resultQuery;
+        }
         // Search results are handled here
         ////////////////// Skip? //////////////////
-        if (root.query == "")
+        if (root.resultQuery == "")
             return [];
 
         ///////////// Special cases ///////////////
-        if (root.query.startsWith(Config.options.search.prefix.clipboard)) {
+        if (root.resultQuery.startsWith(Config.options.search.prefix.clipboard)) {
             // Clipboard
-            const searchString = StringUtils.cleanPrefix(root.query, Config.options.search.prefix.clipboard);
+            const searchString = StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.clipboard);
             const clipboardResults = Cliphist.fuzzyQuery(searchString).map((entry, index, array) => {
                 const mightBlurImage = Cliphist.entryIsImage(entry) && root.clipboardWorkSafetyActive;
                 let shouldBlurImage = mightBlurImage;
@@ -229,7 +256,7 @@ Singleton {
                 }
                 const type = `#${entry.match(/^\s*(\S+)/)?.[1] || ""}`;
                 const pinned = Cliphist.isPinned(entry);
-                return resultComp.createObject(null, {
+                const factory = () => resultComp.createObject(null, {
                     rawValue: entry,
                     name: StringUtils.cleanCliphistEntry(entry),
                     verb: "",
@@ -256,8 +283,10 @@ Singleton {
                         })],
                     blurImage: shouldBlurImage
                 });
+                factory.pinned = pinned;
+                return factory;
             }).filter(Boolean);
-            const lostPins = Cliphist.missingPins(searchString).map(pin => resultComp.createObject(null, {
+            const lostPins = Cliphist.missingPins(searchString).map(pin => () => resultComp.createObject(null, {
                 rawValue: `${pin.id}\t${pin.text}`,
                 name: pin.text,
                 verb: "",
@@ -277,12 +306,12 @@ Singleton {
                 })]
             }));
             return [...lostPins, ...clipboardResults.filter(result => result.pinned), ...clipboardResults.filter(result => !result.pinned)];
-        } else if (root.query.startsWith(Config.options.search.prefix.emojis)) {
+        } else if (root.resultQuery.startsWith(Config.options.search.prefix.emojis)) {
             // Emojis
-            const searchString = StringUtils.cleanPrefix(root.query, Config.options.search.prefix.emojis);
+            const searchString = StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.emojis);
             return Emojis.fuzzyQuery(searchString).map(entry => {
                 const emoji = entry.match(/^\s*(\S+)/)?.[1] || "";
-                return resultComp.createObject(null, {
+                return () => resultComp.createObject(null, {
                     rawValue: entry,
                     name: entry.replace(/^\s*\S+\s+/, ""),
                     iconName: emoji,
@@ -294,9 +323,9 @@ Singleton {
                     }
                 });
             }).filter(Boolean);
-        } else if (root.query.startsWith(Config.options.search.prefix.keybinds ?? "<")) {
+        } else if (root.resultQuery.startsWith(Config.options.search.prefix.keybinds ?? "<")) {
             // Keybinds
-            const searchString = StringUtils.cleanPrefix(root.query, Config.options.search.prefix.keybinds ?? "<");
+            const searchString = StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.keybinds ?? "<");
             const flatBinds = (function flatten(node) {
                 let result = [...(node.keybinds ?? [])];
                 for (const child of (node.children ?? [])) {
@@ -313,7 +342,7 @@ Singleton {
             }).map(bind => {
                 const modsStr = bind.mods.join(" + ");
                 const keyStr  = modsStr.length > 0 ? `${modsStr} + ${bind.key}` : bind.key;
-                return resultComp.createObject(null, {
+                return () => resultComp.createObject(null, {
                     name: bind.comment,
                     iconName: "keyboard",
                     iconType: LauncherSearchResult.IconType.Material,
@@ -325,14 +354,14 @@ Singleton {
                     }
                 });
             }).filter(Boolean);
-        } else if (root.query.startsWith(Config.options.search.prefix.symbols)) {
+        } else if (root.resultQuery.startsWith(Config.options.search.prefix.symbols)) {
             // Material Symbols
-            const searchString = StringUtils.cleanPrefix(root.query, Config.options.search.prefix.symbols);
+            const searchString = StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.symbols);
             return MaterialSymbolsSearch.fuzzyQuery(searchString).map(entry => {
                 const tabIdx = entry.indexOf("\t");
                 const symName = tabIdx >= 0 ? entry.slice(0, tabIdx) : entry;
                 const symTags = tabIdx >= 0 ? entry.slice(tabIdx + 1) : "";
-                return resultComp.createObject(null, {
+                return () => resultComp.createObject(null, {
                     rawValue: entry,
                     name: symName,
                     iconName: symName,
@@ -348,8 +377,7 @@ Singleton {
         }
 
         ////////////////// Init ///////////////////
-        nonAppResultsTimer.restart();
-        const mathResultObject = resultComp.createObject(null, {
+        const mathFactory = () => resultComp.createObject(null, {
             name: root.mathResult,
             verb: Translation.tr("Copy"),
             type: Translation.tr("Math result"),
@@ -360,8 +388,8 @@ Singleton {
                 Quickshell.clipboardText = root.mathResult;
             }
         });
-        const appResultObjects = AppSearch.fuzzyQuery(StringUtils.cleanPrefix(root.query, Config.options.search.prefix.app)).map(entry => {
-            return resultComp.createObject(null, {
+        const appResultFactories = AppSearch.fuzzyQuery(StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.app)).map(entry => {
+            return () => resultComp.createObject(null, {
                 type: Translation.tr("App"),
                 id: entry.id,
                 name: entry.name,
@@ -397,10 +425,10 @@ Singleton {
             });
         });
         ////////////////// Settings search //////////////////
-        const settingsEntries = Config.options.settings.style === "dashboard" ? [] : SettingsSearchIndex.search(root.query, 8);
-        const settingsResults = settingsEntries.map(entry => {
+        const settingsEntries = Config.options.settings.style === "dashboard" ? [] : SettingsSearchIndex.search(root.resultQuery, 8);
+        const settingsFactories = settingsEntries.map(entry => {
             const breadcrumb = entry.kind === "page" ? Translation.tr("Settings") : [entry.pageName, entry.kind === "option" ? entry.section : "", entry.kind === "option" ? entry.subsection : ""].filter(part => part).join(" › ");
-            return resultComp.createObject(null, {
+            return () => resultComp.createObject(null, {
                 control: entry.kind === "option" ? SettingsQuickControls.find(entry.pageId, entry.rawSection, entry.rawSubsection, entry.rawLabel) : null,
                 name: entry.label,
                 comment: breadcrumb,
@@ -410,34 +438,35 @@ Singleton {
                 iconType: LauncherSearchResult.IconType.Material,
                 execute: () => {
                     root.query = "";
+                    root.resultQuery = "";
                     GlobalStates.openSettingsAt(entry.pageId, entry.kind === "page" ? "" : entry.label, entry.section, entry.subsection);
                 }
             });
         });
-        const commandResultObject = resultComp.createObject(null, {
-            name: StringUtils.cleanPrefix(root.query, Config.options.search.prefix.shellCommand).replace("file://", ""),
+        const commandFactory = () => resultComp.createObject(null, {
+            name: StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.shellCommand).replace("file://", ""),
             verb: Translation.tr("Run"),
             type: Translation.tr("Command"),
             fontType: LauncherSearchResult.FontType.Monospace,
             iconName: 'terminal',
             iconType: LauncherSearchResult.IconType.Material,
             execute: () => {
-                let cleanedCommand = root.query.replace("file://", "");
+                let cleanedCommand = root.resultQuery.replace("file://", "");
                 cleanedCommand = StringUtils.cleanPrefix(cleanedCommand, Config.options.search.prefix.shellCommand);
                 if (cleanedCommand.startsWith(Config.options.search.prefix.shellCommand)) {
                     cleanedCommand = cleanedCommand.slice(Config.options.search.prefix.shellCommand.length);
                 }
-                Quickshell.execDetached(["bash", "-c", root.query.startsWith('sudo') ? `${Config.options.apps.terminal} fish -C '${cleanedCommand}'` : cleanedCommand]);
+                Quickshell.execDetached(["bash", "-c", root.resultQuery.startsWith('sudo') ? `${Config.options.apps.terminal} fish -C '${cleanedCommand}'` : cleanedCommand]);
             }
         });
-        const webSearchResultObject = resultComp.createObject(null, {
-            name: StringUtils.cleanPrefix(root.query, Config.options.search.prefix.webSearch),
+        const webSearchFactory = () => resultComp.createObject(null, {
+            name: StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.webSearch),
             verb: Translation.tr("Search"),
             type: Translation.tr("Web search"),
             iconName: 'travel_explore',
             iconType: LauncherSearchResult.IconType.Material,
             execute: () => {
-                let query = StringUtils.cleanPrefix(root.query, Config.options.search.prefix.webSearch);
+                let query = StringUtils.cleanPrefix(root.resultQuery, Config.options.search.prefix.webSearch);
                 let url = Config.options.search.engineBaseUrl + query;
                 for (let site of Config.options.search.excludedSites) {
                     url += ` -site:${site}`;
@@ -447,15 +476,15 @@ Singleton {
         });
         const launcherActionObjects = root.allActions.map(action => {
             const actionString = `${Config.options.search.prefix.action}${action.action}`;
-            if (actionString.startsWith(root.query) || root.query.startsWith(actionString)) {
-                return resultComp.createObject(null, {
-                    name: root.query.startsWith(actionString) ? root.query : actionString,
+            if (actionString.startsWith(root.resultQuery) || root.resultQuery.startsWith(actionString)) {
+                return () => resultComp.createObject(null, {
+                    name: root.resultQuery.startsWith(actionString) ? root.resultQuery : actionString,
                     verb: Translation.tr("Run"),
                     type: Translation.tr("Action"),
                     iconName: 'settings_suggest',
                     iconType: LauncherSearchResult.IconType.Material,
                     execute: () => {
-                        action.execute(root.query.split(" ").slice(1).join(" "));
+                        action.execute(root.resultQuery.split(" ").slice(1).join(" "));
                     }
                 });
             }
@@ -464,37 +493,48 @@ Singleton {
 
         //////// Prioritized by prefix /////////
         let result = [];
-        const startsWithNumber = /^\d/.test(root.query);
-        const startsWithMathPrefix = root.query.startsWith(Config.options.search.prefix.math);
-        const startsWithShellCommandPrefix = root.query.startsWith(Config.options.search.prefix.shellCommand);
-        const startsWithWebSearchPrefix = root.query.startsWith(Config.options.search.prefix.webSearch);
+        const startsWithNumber = /^\d/.test(root.resultQuery);
+        const startsWithMathPrefix = root.resultQuery.startsWith(Config.options.search.prefix.math);
+        const startsWithShellCommandPrefix = root.resultQuery.startsWith(Config.options.search.prefix.shellCommand);
+        const startsWithWebSearchPrefix = root.resultQuery.startsWith(Config.options.search.prefix.webSearch);
         if (startsWithNumber || startsWithMathPrefix) {
-            result.push(mathResultObject);
+            result.push(mathFactory);
         } else if (startsWithShellCommandPrefix) {
-            result.push(commandResultObject);
+            result.push(commandFactory);
         } else if (startsWithWebSearchPrefix) {
-            result.push(webSearchResultObject);
+            result.push(webSearchFactory);
         }
 
         //////////////// Apps //////////////////
-        result = result.concat(appResultObjects);
+        result = result.concat(appResultFactories);
         ////////////// Settings ////////////////
-        result = result.concat(settingsResults);
+        result = result.concat(settingsFactories);
         ////////// Launcher actions ////////////
         result = result.concat(launcherActionObjects);
 
         /// Math result, command, web search ///
         if (Config.options.search.prefix.showDefaultActionsWithoutPrefix) {
             if (!startsWithShellCommandPrefix)
-                result.push(commandResultObject);
+                result.push(commandFactory);
             if (!startsWithNumber && !startsWithMathPrefix)
-                result.push(mathResultObject);
+                result.push(mathFactory);
             if (!startsWithWebSearchPrefix)
-                result.push(webSearchResultObject);
+                result.push(webSearchFactory);
         }
         
         return result;
     }
+
+    // Only instantiate result objects for the visible slice. computeAllResults
+    // returns factories so a large result set does not create hundreds of QML
+    // objects that are immediately discarded.
+    function buildResults(): list<var> {
+        const factories = computeAllResults().slice(0, root.resultsLimit);
+        root.resultStats.objectsCreated = factories.length;
+        return factories.map(factory => factory());
+    }
+
+    property list<var> results: buildResults()
 
     Component {
         id: resultComp

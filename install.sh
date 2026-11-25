@@ -463,43 +463,7 @@ patch_hyprland_autostart() {
     local luafile="$TARGET_HOME/.config/hypr/hyprland.lua"
     [[ -f "$luafile" ]] || return 0
 
-    python3 - "$luafile" <<'PY'
-import re
-import sys
-
-path = sys.argv[1]
-with open(path, encoding="utf-8") as handle:
-    original = handle.read()
-
-# Quickshell connects to org.bluez exactly once at startup. If bluetoothd is
-# still coming up at that instant, Bluetooth stays dead for the whole shell
-# session. Wait for the bus name before launching the shell.
-wait_script = "$HOME/.config/quickshell/end4-pC/scripts/bluetooth/wait-for-bluez.sh"
-
-def wrap(shell_path):
-    return (
-        'hl.exec_cmd("bash -c \'\\"' + wait_script + '\\" && exec qs -n -p '
-        + shell_path + '\'")'
-    )
-
-legacy = re.compile(
-    r'hl\.exec_cmd\("sh -c \'sleep 5; pgrep -x qs >/dev/null \|\| exec qs -p ([^\']+)\'"\)'
-)
-patched, count = legacy.subn(lambda m: wrap(m.group(1)), original)
-
-# Also upgrade an already-patched qs -n line from an older install, so the
-# gate is applied on re-install instead of being silently skipped.
-current = re.compile(r'hl\.exec_cmd\("qs -n -p ([^"]+)"\)')
-patched, current_count = current.subn(lambda m: wrap(m.group(1)), patched)
-
-total = count + current_count
-if total:
-    with open(path, "w", encoding="utf-8") as handle:
-        handle.write(patched)
-    print(f"[install] wrapped {total} shell-autostart line(s) with BlueZ wait in {path}")
-else:
-    print("[install] shell autostart already waits for BlueZ (no change)")
-PY
+    python3 "$SCRIPT_DIR/scripts/hyprland/patch-autostart.py" --file "$luafile"
 }
 
 # ---------------------------------------------------------------------------
