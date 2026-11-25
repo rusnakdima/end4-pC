@@ -1570,7 +1570,8 @@ ContentPage {
         // binds (possibly in both files), and one recoverable deletion must
         // own all of them. The action name is already unique per group.
         readonly property string deleteId: "shell:" + (shortcutRow.actionData?.action ?? "")
-        readonly property bool deleteEnabled: !DisabledKeybinds.isDisabled(shortcutRow.deleteId)
+        readonly property bool deleteEnabled: !shortcutRow.raw
+            && !DisabledKeybinds.isDisabled(shortcutRow.deleteId)
             && page.canDeleteBinds(shortcutRow.actionData?.binds ?? [])
 
         // The search index builds this exact string; ContentPage.goTo() uses
@@ -1582,6 +1583,20 @@ ContentPage {
         readonly property string defaultCombo: actionData?.combos?.[0] ?? ""
         readonly property string combo: shortcutRow.defaultCombo
         readonly property var aliases: (actionData?.combos ?? []).slice(1)
+        // One entry per extra combination, so a single alias can be deleted
+        // without touching the action's primary keybind.
+        readonly property var aliasBinds: {
+            const seen = new Set();
+            const result = [];
+            for (const bind of (shortcutRow.actionData?.binds ?? [])) {
+                const combo = HyprlandKeybinds.comboOf(bind);
+                if (combo === "" || combo === shortcutRow.combo || seen.has(combo))
+                    continue;
+                seen.add(combo);
+                result.push({ combo: combo, bind: bind });
+            }
+            return result;
+        }
         readonly property var catalogIds: (actionData?.binds ?? [])
             .map(bind => String(bind?.id ?? "")).filter(id => id !== "")
         readonly property string catalogId: shortcutRow.catalogIds[0] ?? ""
@@ -1621,13 +1636,51 @@ ContentPage {
                     elide: Text.ElideRight
                 }
 
-                StyledText {
-                    Layout.fillWidth: true
-                    visible: shortcutRow.aliases.length > 0
-                    text: Translation.tr("Also bound to %1").arg(shortcutRow.aliases.join(", "))
-                    font.pixelSize: Appearance.font.pixelSize.smaller
-                    color: Appearance.colors.colSubtext
-                    elide: Text.ElideRight
+                Repeater {
+                    model: shortcutRow.aliasBinds
+                    delegate: RowLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 4
+
+                        MaterialSymbol {
+                            text: "warning"
+                            iconSize: Appearance.font.pixelSize.smaller
+                            color: page.conflictColor
+                        }
+
+                        StyledText {
+                            Layout.fillWidth: true
+                            text: Translation.tr("Also bound to %1").arg(modelData.combo)
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            color: page.conflictColor
+                            elide: Text.ElideRight
+                        }
+
+                        Item {
+                            visible: !shortcutRow.raw && !DisabledKeybinds.isDisabled(
+                                "shell:" + (shortcutRow.actionData?.action ?? "")
+                                + ":" + modelData.combo)
+                            implicitWidth: 16
+                            implicitHeight: 16
+                            Accessible.name: Translation.tr("Delete this combination")
+                            Accessible.role: Accessible.Button
+
+                            MaterialSymbol {
+                                anchors.centerIn: parent
+                                text: "delete"
+                                iconSize: Appearance.font.pixelSize.smaller
+                                color: Appearance.colors.colError
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                anchors.margins: -4
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: page.deleteAliasCombo(shortcutRow.actionData, modelData.combo)
+                            }
+                        }
+                    }
                 }
 
                 // Yellow under the option: who else is on this combination.
@@ -1994,7 +2047,8 @@ ContentPage {
         readonly property string deleteId: "bind:"
             + (otherBindRow.bindData?.file ?? "") + ":"
             + (otherBindRow.bindData?.line ?? "")
-        readonly property bool deleteEnabled: !DisabledKeybinds.isDisabled(otherBindRow.deleteId)
+        readonly property bool deleteEnabled: !otherBindRow.raw
+            && !DisabledKeybinds.isDisabled(otherBindRow.deleteId)
             && page.canDeleteBinds([otherBindRow.bindData])
 
         // Deep-link target; the index uses KeybindLabels.other() with the
@@ -2321,7 +2375,11 @@ ContentPage {
                     anchors.fill: parent
                     anchors.margins: -6
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: ManagedKeybinds.remove(managedRow.entry.id)
+                    onClicked: {
+                        const result = ManagedKeybinds.remove(managedRow.entry.id);
+                        if (!result.ok)
+                            page.captureError = page.formErrorMessage(result.error);
+                    }
                 }
             }
         }
