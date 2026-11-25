@@ -38,6 +38,10 @@ Item {
     // so a hovered clip starts immediately instead of waiting for an encode.
     property bool useProxy: true
     property string playbackPath: ""
+    // Source that the current playbackPath was prepared for. It lets a
+    // reactivated surface keep a ready proxy instead of blanking the path
+    // while a new encode is started.
+    property string resolvedSource: ""
     // Pause keeps the still on screen and stops the decoder.
     property bool playing: true
     // Set false where the caller already paints the still (picker cells).
@@ -115,6 +119,7 @@ Item {
         stdout: StdioCollector {
             onStreamFinished: {
                 if (proxyProc.sourcePath !== media.source) return;
+                media.resolvedSource = media.source;
                 media.playbackPath = text.trim();
             }
         }
@@ -124,9 +129,13 @@ Item {
     // sidebar or an unfocused settings card used to spawn its own prefetch
     // process, so a single clipboard could queue five encodes of the same clip.
     function updateProxy(): void {
-        proxyProc.running = false;
-        media.playbackPath = "";
+        if (media.source !== media.resolvedSource) {
+            proxyProc.running = false;
+            media.playbackPath = "";
+            media.resolvedSource = "";
+        }
         if (!media.wantsVideo || !media.useProxy || media.source.length === 0 || !media.active) return;
+        if (media.playbackPath.length > 0 && media.resolvedSource === media.source) return;
         proxyProc.sourcePath = media.source;
         proxyProc.command = ["bash", Directories.videoWallpaperScriptPath, "--prefetch", media.source];
         proxyProc.running = true;
