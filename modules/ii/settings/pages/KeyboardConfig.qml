@@ -54,13 +54,13 @@ ContentPage {
     readonly property bool keybindFiltering:
         String(GlobalStates.keybindFilter ?? "").trim() !== ""
 
-    readonly property var visibleManaged: CF.StringUtils.filterByQuery(
+    readonly property var visibleManaged: CF.StringUtils.filterByQueryWithCombos(
         ManagedKeybinds.editableEntries, GlobalStates.keybindFilter,
-        ["name", "category", "combo", "command"])
+        ["name", "category", "command"], ["combo"])
 
-    readonly property var visibleShell: CF.StringUtils.filterByQuery(
+    readonly property var visibleShell: CF.StringUtils.filterByQueryWithCombos(
         HyprlandKeybinds.shellActions, GlobalStates.keybindFilter,
-        ["description", "action", "combos"])
+        ["description", "action"], ["combos"])
 
     // Series members get one grouped row below, so they are left out of the
     // flat "Other keybinds" list. Every other bind renders exactly as before.
@@ -74,12 +74,13 @@ ContentPage {
                 bind => String(bind?.seriesId ?? "") === "");
             const binds = categoryMatches
                 ? plain
-                : CF.StringUtils.filterByQuery(
+                : CF.StringUtils.filterByQueryWithCombos(
                     plain.map(bind => Object.assign({}, bind, {
                         searchCombo: HyprlandKeybinds.comboOf(bind)
                     })),
                     query,
-                    ["comment", "searchCombo", "action", "key", "mods"]);
+                    ["comment", "action", "key", "mods"],
+                    ["searchCombo"]);
             if (binds.length > 0) out.push({ name: section?.name ?? "", binds: binds });
         }
         return out;
@@ -471,6 +472,14 @@ ContentPage {
             // It is deliberately not accepted: swallowing it would eat the
             // modifier of the combination that follows.
             return false;
+        }
+
+        if (page.capturing === "search") {
+            // A pressed combination becomes the filter text, in the same
+            // spelling the rows show.
+            GlobalStates.keybindFilter = combo;
+            page.stopCapture();
+            return true;
         }
 
         if (page.capturing === "form") {
@@ -866,6 +875,27 @@ ContentPage {
                                         text = "";
                                         event.accepted = true;
                                     }
+                                }
+                            }
+
+                            // Search by pressing the combination instead of
+                            // typing it: the window inhibitor lets a chord
+                            // the compositor owns reach this button.
+                            IconToolbarButton {
+                                visible: page.capturing !== "search"
+                                text: "keyboard"
+                                onClicked: page.startCapture("search")
+                                StyledToolTip {
+                                    text: Translation.tr("Search by key combination")
+                                }
+                            }
+
+                            IconToolbarButton {
+                                visible: page.capturing === "search"
+                                text: "close"
+                                onClicked: page.stopCapture()
+                                StyledToolTip {
+                                    text: Translation.tr("Stop searching by key combination")
                                 }
                             }
 
