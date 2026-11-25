@@ -7,6 +7,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Wayland
 import qs
 import qs.services
 import qs.modules.common
@@ -48,6 +49,19 @@ Scope {
             implicitWidth: 980 * sizeScale
             implicitHeight: 665 * sizeScale
             minimumSize: Qt.size(480, 320)
+
+            // While a keybind capture is armed, take the compositor's
+            // shortcuts away from it so the window sees the chord. Without
+            // this, a chord Hyprland already binds (SUPER+I closes Settings)
+            // never reaches the capture listener.
+            Loader {
+                active: WM.compositor === "hyprland"
+                sourceComponent: ShortcutInhibitor {
+                    window: window
+                    enabled: GlobalStates.keybindCaptureArmed
+                    onActiveChanged: GlobalStates.keybindCaptureInhibited = active
+                }
+            }
 
             property bool settled: false
 

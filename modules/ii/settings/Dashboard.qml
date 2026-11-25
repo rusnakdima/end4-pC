@@ -1,7 +1,9 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Wayland
 import qs
+import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
 
@@ -26,6 +28,17 @@ Scope {
             implicitWidth: 1100
             implicitHeight: 680
             minimumSize: Qt.size(900, 600)
+
+            // The dashboard is the other settings window: the capture
+            // inhibitor has to be attached here too.
+            Loader {
+                active: WM.compositor === "hyprland"
+                sourceComponent: ShortcutInhibitor {
+                    window: window
+                    enabled: GlobalStates.keybindCaptureArmed
+                    onActiveChanged: GlobalStates.keybindCaptureInhibited = active
+                }
+            }
 
             property bool settled: false
 

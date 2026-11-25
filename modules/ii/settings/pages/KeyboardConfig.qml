@@ -380,6 +380,10 @@ ContentPage {
         page.captureError = "";
         page.captureCatalogIds = (catalogIds ?? []).map(id => String(id ?? "")).filter(id => id !== "");
         page.capturing = captureKey;
+        // The window inhibitor reports `active` back; until then the hint
+        // tells the user the compositor may still own the chord.
+        GlobalStates.keybindCaptureArmed = true;
+        GlobalStates.keybindCaptureInhibited = false;
         captureTimeout.restart();
         Qt.callLater(() => page.forceActiveFocus());
     }
@@ -388,11 +392,27 @@ ContentPage {
     // key: a capture that stays alive keeps every key press inside the
     // settings panel, so Escape and plain letters never reach the app.
     function stopCapture() {
+        GlobalStates.keybindCaptureArmed = false;
+        GlobalStates.keybindCaptureInhibited = false;
         if (page.capturing === "") return;
         page.capturing = "";
         page.captureCatalogIds = [];
         captureTimeout.stop();
     }
+
+    // The typed fallback: parse "super+i" into the spelling the store uses
+    // and take it as the draft, exactly as a captured press would.
+    function applyTypedCombo() {
+        const combo = CF.StringUtils.comboFromText(comboTextField.text);
+        if (combo === "") return;
+        page.formCombo = combo;
+        page.formError = "";
+        page.stopCapture();
+    }
+
+    // Leaving the page (or the window) must release the inhibitor, otherwise
+    // the compositor stays without its shortcuts.
+    Component.onDestruction: page.stopCapture()
 
     onEnabledChanged: {
         if (enabled) {
@@ -2360,6 +2380,35 @@ ContentPage {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: page.startCapture("form")
                     }
+                }
+
+                // A chord the compositor owns may never reach the capture
+                // listener even with the inhibitor armed. Typing it is the
+                // fallback that always works.
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    MaterialTextField {
+                        id: comboTextField
+                        Layout.fillWidth: true
+                        placeholderText: Translation.tr("Or type: SUPER + I")
+                        onAccepted: page.applyTypedCombo()
+                    }
+
+                    DialogButton {
+                        buttonText: Translation.tr("Use")
+                        onClicked: page.applyTypedCombo()
+                    }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    visible: page.capturing === "form" && !GlobalStates.keybindCaptureInhibited
+                    text: Translation.tr("The compositor is still holding this shortcut. Type the combination below instead.")
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    color: page.conflictColor
+                    wrapMode: Text.Wrap
                 }
 
                 StyledText {

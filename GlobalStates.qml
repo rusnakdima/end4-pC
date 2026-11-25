@@ -53,6 +53,15 @@ Singleton {
     // never hidden by a filter typed earlier.
     property string keybindFilter: ""
 
+    // True while the Keyboard page is listening for a combination. The
+    // settings window arms a compositor shortcut inhibitor with this, so a
+    // chord that is already bound (SUPER+I, the settings toggle) reaches the
+    // window instead of closing it. `keybindCaptureInhibited` is the
+    // inhibitor's own report: when it stays false the compositor is still
+    // holding the chord and the page offers the typed fallback.
+    property bool keybindCaptureArmed: false
+    property bool keybindCaptureInhibited: false
+
     // The theme's own WlSessionLock is the lock screen. A Quickshell reload or
     // a full qs restart destroys its lock surface; Hyprland then paints its
     // "lock screen died" fallback. misc:allow_session_lock_restore is enabled,
