@@ -63,6 +63,9 @@ Singleton {
     property bool dirReady: false
     // A setText is awaiting its onSaved confirmation before the generator runs.
     property bool awaitGeneration: false
+    // The last disk write failed; cleared when a write is saved again. Callers
+    // that report success must also check this, because FileView writes async.
+    property string lastSaveError: ""
 
     FileView {
         id: overlayFile
@@ -73,6 +76,7 @@ Singleton {
         onLoaded: root.reload()
         onFileChanged: root.reload()
         onSaved: {
+            root.lastSaveError = "";
             if (root.awaitGeneration) {
                 root.awaitGeneration = false;
                 root.runGenerator();
@@ -82,6 +86,7 @@ Singleton {
         }
         onSaveFailed: error => {
             console.error("[kbd] overlay save failed: " + error);
+            root.lastSaveError = String(error ?? "save-failed");
             root.awaitGeneration = false;
         }
         onLoadFailed: error => {
@@ -187,6 +192,7 @@ Singleton {
 
     function writeFile() {
         root.wrote = true;
+        root.lastSaveError = "";
         const text = KeybindStore.renderOverlay(root.overlay);
         console.log("[kbd] overlay write path=" + root.keybindsPath + " bytes=" + text.length);
         root.awaitGeneration = true;

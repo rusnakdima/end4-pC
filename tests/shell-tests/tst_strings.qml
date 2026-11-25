@@ -240,6 +240,26 @@ TestCase {
     }
 
     /**
+     * A single key name ("return", "s") is also ordinary search text. It must
+     * only become an exact combo filter when some row is actually bound to
+     * that combination; otherwise typing "return" would hide every terminal.
+     */
+    function test_filter_by_query_with_combos_keeps_text_when_no_exact_combo_exists() {
+        const items = [
+            { name: "Terminal", combo: "SUPER + Return" },
+            { name: "Sidebar", combo: "SUPER + B" },
+            { name: "Settings", combo: "SUPER + I" }
+        ];
+        const byReturn = StringUtils.filterByQueryWithCombos(items, "return", ["name"], ["combo"]);
+        compare(byReturn.length, 1);
+        compare(byReturn[0].name, "Terminal");
+        // "s" appears in SUPER for every row: it is text, not exact "S".
+        compare(StringUtils.filterByQueryWithCombos(items, "s", ["name"], ["combo"]).length, 3);
+        // An existing exact combo still narrows to that one row.
+        compare(StringUtils.filterByQueryWithCombos(items, "super+i", ["name"], ["combo"]).length, 1);
+    }
+
+    /**
      * The second-precision switch adds or removes the seconds field of the
      * clock format, so the helpers have to keep the chosen base format and
      * the am/pm marker intact.

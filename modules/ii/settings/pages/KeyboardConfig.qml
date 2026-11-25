@@ -154,7 +154,17 @@ ContentPage {
     function moveConflictHolder(group, holder, combo) {
         if (String(combo ?? "") === "") return false;
         const original = page.originalConflictHolder(group, holder);
-        const catalogId = String(original?.bind?.id ?? "");
+        // A shell action with several combos is recorded under its first bind;
+        // when the conflict is on another combo, that combo's bind is the one
+        // to move. Otherwise the primary alias would move and the duplicate
+        // would stay.
+        const shellAction = group?.kind === "combo"
+            ? HyprlandKeybinds.shellActions.find(
+                entry => entry.action === String(original?.bind?.action ?? ""))
+            : null;
+        const source = KeybindConflicts.targetHolder(
+            group, original, shellAction, HyprlandKeybinds.comboOf);
+        const catalogId = String(source?.bind?.id ?? "");
         // Without a catalog id there is no key the generator can write an
         // override for; refusing is better than writing a dead override file.
         if (catalogId === "") {
@@ -170,12 +180,12 @@ ContentPage {
         // same overlay service. `fixHolder` uses `overrideId` for a plain
         // bind, which is why it is set to the catalog id here.
         const fix = KeybindConflicts.fixHolder(
-            Object.assign({}, original, { overrideId: catalogId }), combo,
+            Object.assign({}, source, { overrideId: catalogId }), combo,
             bind => ManagedKeybinds.entryForSource(bind),
             ManagedKeybinds,
             ManagedKeybinds);
-        if (!fix.ok) {
-            page.captureError = page.formErrorMessage(fix.error);
+        if (!fix.ok || !KeybindConflicts.writeSucceeded(null, ManagedKeybinds.lastSaveError)) {
+            page.captureError = page.formErrorMessage(fix.ok ? "" : fix.error);
             return false;
         }
         page.conflictResolved = true;
@@ -203,8 +213,8 @@ ContentPage {
             : action;
         const result = DisabledKeybinds.disableBinds(
             "shell:" + action + ":" + combo, label, binds);
-        if (!result.ok) {
-            page.captureError = page.formErrorMessage(result.error);
+        if (!KeybindConflicts.writeSucceeded(result, ManagedKeybinds.lastSaveError)) {
+            page.captureError = page.formErrorMessage(result?.error ?? "");
             return false;
         }
         return true;
@@ -234,8 +244,8 @@ ContentPage {
             const managedEntry = ManagedKeybinds.entryForSource(bind);
             if (managedEntry !== null && managedEntry !== undefined) {
                 const result = ManagedKeybinds.remove(managedEntry.id);
-                if (!result.ok) {
-                    page.captureError = page.formErrorMessage(result.error);
+                if (!KeybindConflicts.writeSucceeded(result, ManagedKeybinds.lastSaveError)) {
+                    page.captureError = page.formErrorMessage(result?.error ?? "");
                     ok = false;
                 }
                 continue;
@@ -244,7 +254,12 @@ ContentPage {
             const action = String(bind?.action ?? "");
             if (action !== "") {
                 const actionData = HyprlandKeybinds.shellActions.find(entry => entry.action === action);
-                if (!page.deleteAliasCombo(actionData, HyprlandKeybinds.comboOf(bind))) ok = false;
+                // repeatIndex stores a multi-combo action under its first bind,
+                // so a duplicate on another combo must delete that combo.
+                const targetCombo = group?.kind === "combo"
+                    ? String(group.combo ?? "")
+                    : String(holder.combo ?? "");
+                if (!page.deleteAliasCombo(actionData, targetCombo)) ok = false;
                 continue;
             }
 
@@ -258,13 +273,13 @@ ContentPage {
             const result = DisabledKeybinds.disableBinds(
                 "bind:" + String(original?.file ?? "") + ":" + String(bind?.line ?? 0),
                 holder.label, [bind]);
-            if (!result.ok) {
-                page.captureError = page.formErrorMessage(result.error);
+            if (!KeybindConflicts.writeSucceeded(result, ManagedKeybinds.lastSaveError)) {
+                page.captureError = page.formErrorMessage(result?.error ?? "");
                 ok = false;
             }
         }
 
-        if (ok) {
+        if (ok && KeybindConflicts.writeSucceeded(null, ManagedKeybinds.lastSaveError)) {
             page.conflictResolved = true;
             conflictResolvedTimer.restart();
         }
@@ -520,9 +535,11 @@ ContentPage {
     }
 
     // The typed fallback: parse "super+i" into the spelling the store uses
-    // and take it as the draft, exactly as a captured press would.
-    function applyTypedCombo() {
-        const combo = CF.StringUtils.comboFromText(comboTextField.text);
+    // and take it as the draft, exactly as a captured press would. The text is
+    // passed in because the field lives inside the inline KeybindForm and a
+    // page-level function cannot see that component's ids.
+    function applyTypedCombo(text) {
+        const combo = CF.StringUtils.comboFromText(String(text ?? ""));
         if (combo === "") return;
         page.formCombo = combo;
         page.formError = "";
@@ -547,6 +564,19 @@ ContentPage {
         target: GlobalStates
         function onSettingsOpenChanged() {
             if (!GlobalStates.settingsOpen) page.stopCapture();
+        }
+    }
+
+    // FileView writes asynchronously: a disk failure arrives after the
+    // service already returned ok. Never leave "Conflicts resolved" on screen
+    // when the save that produced it failed.
+    Connections {
+        target: ManagedKeybinds
+        function onLastSaveErrorChanged() {
+            if (ManagedKeybinds.lastSaveError === "") return;
+            page.captureError = page.formErrorMessage("");
+            page.conflictResolved = false;
+            conflictResolvedTimer.stop();
         }
     }
 
@@ -1402,14 +1432,18 @@ ContentPage {
                             spacing: 2
                             StyledText {
                                 Layout.fillWidth: true
-                                text: keeperRow.modelData.label ?? ""
+                                text: panel.modelData?.kind === "alias"
+                                    ? (keeperRow.modelData.combo ?? "")
+                                    : (keeperRow.modelData.label ?? "")
                                 font.pixelSize: Appearance.font.pixelSize.normal
                                 color: Appearance.colors.colOnLayer1
                                 elide: Text.ElideRight
                             }
                             StyledText {
                                 Layout.fillWidth: true
-                                text: keeperRow.modelData.file ?? ""
+                                text: panel.modelData?.kind === "alias"
+                                    ? (keeperRow.modelData.label || keeperRow.modelData.file || "")
+                                    : (keeperRow.modelData.file ?? "")
                                 font.pixelSize: Appearance.font.pixelSize.smaller
                                 color: Appearance.colors.colSubtext
                                 elide: Text.ElideRight
@@ -2678,12 +2712,12 @@ ContentPage {
                         id: comboTextField
                         Layout.fillWidth: true
                         placeholderText: Translation.tr("Or type: SUPER + I")
-                        onAccepted: page.applyTypedCombo()
+                        onAccepted: page.applyTypedCombo(comboTextField.text)
                     }
 
                     DialogButton {
                         buttonText: Translation.tr("Use")
-                        onClicked: page.applyTypedCombo()
+                        onClicked: page.applyTypedCombo(comboTextField.text)
                     }
                 }
 

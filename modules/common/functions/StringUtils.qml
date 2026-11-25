@@ -361,8 +361,16 @@ Singleton {
             return [String(value ?? "")];
         };
 
-        if (KeyCombos.comboFromText(text) !== "") {
-            const wanted = KeyCombos.canonicalCombo(text);
+        const wanted = KeyCombos.canonicalCombo(text);
+        // "return", "s" and other key names are also ordinary search text.
+        // Only treat the query as an exact combo when a row actually carries
+        // that combination; otherwise typing a key name would empty the list.
+        const hasExactCombo = wanted !== "" && Array.from(items).some(item => {
+            if (item === null || item === undefined)
+                return false;
+            return comboKeys.some(key => valuesOf(item, key).some(value => KeyCombos.canonicalCombo(value) === wanted));
+        });
+        if (hasExactCombo) {
             return Array.from(items).filter(item => {
                 if (item === null || item === undefined)
                     return false;

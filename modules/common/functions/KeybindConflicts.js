@@ -96,7 +96,7 @@ function groupsFrom(repeatIndex, aliasIndex) {
                     id: action,
                     uid: action + "\u0000" + combo,
                     combo: combo,
-                    label: String(comboEntry?.bind?.comment ?? entry?.label ?? action),
+                    label: String(comboEntry?.bind?.comment || entry?.label || action),
                     file: "shell",
                     catalogIds: comboEntry?.bind?.id ? [comboEntry.bind.id] : []
                 };
@@ -167,6 +167,27 @@ function freeCombos(usedCombos, count, seedCombo) {
         }
     }
     return out;
+}
+
+// A duplicate combo may belong to a shell action that also has other combos.
+// repeatIndex records such an action with its first bind; the conflict is on
+// group.combo, so resolve the bind that actually owns that combo before the
+// caller deletes or moves it. Non-combo (alias) groups keep the original.
+function targetHolder(group, holder, actionData, comboOf) {
+    if (String(group?.kind ?? "") !== "combo") return holder;
+    const combo = String(group?.combo ?? "");
+    if (combo === "") return holder;
+    const binds = Array.from(actionData?.binds ?? []);
+    const bind = binds.find(candidate => String(comboOf(candidate) ?? "") === combo) ?? null;
+    if (bind === null) return holder;
+    return Object.assign({}, holder, { bind: bind, overrideId: String(bind?.id ?? "") });
+}
+
+// A write can be accepted by the service before FileView reports the disk
+// result. Treat a recorded save error as failure even when result.ok is true.
+function writeSucceeded(result, lastSaveError) {
+    const resultOk = !(result && result.ok === false);
+    return resultOk && String(lastSaveError ?? "") === "";
 }
 
 // Move one holder onto `combo`. Both services and the managed-entry lookup are

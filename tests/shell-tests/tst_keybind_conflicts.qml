@@ -305,6 +305,54 @@ TestCase {
         compare(plan.remove[0].combo, "SUPER + A");
     }
 
+    function test_alias_holders_have_readable_labels_when_binds_have_no_comment() {
+        const aliasIndex = new Map();
+        aliasIndex.set("sidebarLeftToggle", {
+            action: "sidebarLeftToggle",
+            label: "Toggle left sidebar",
+            combos: [
+                { combo: "SUPER + A", bind: { id: "bind-6", comment: "Toggle left sidebar" } },
+                { combo: "SUPER + B", bind: { id: "bind-8", comment: "" } },
+                { combo: "SUPER + O", bind: { id: "bind-9", comment: "" } }
+            ]
+        });
+        const groups = Conflicts.groupsFrom(new Map(), aliasIndex);
+        compare(groups.length, 1);
+        // Every row must be nameable: an empty catalog comment falls back to
+        // the action label instead of producing a blank keeper row.
+        for (const holder of groups[0].holders)
+            verify(holder.label !== "", "alias holder " + holder.combo + " has no label");
+        compare(groups[0].holders[1].label, "Toggle left sidebar");
+        compare(groups[0].holders[1].combo, "SUPER + B");
+        compare(groups[0].holders[2].combo, "SUPER + O");
+    }
+
+    function test_target_holder_uses_the_conflicting_combo_not_the_primary_bind() {
+        const group = { kind: "combo", combo: "SUPER + B", holders: [] };
+        const holder = { id: "sidebarLeftToggle", bind: { id: "bind-6", mods: ["SUPER"], key: "A" } };
+        const actionData = {
+            action: "sidebarLeftToggle",
+            binds: [
+                { id: "bind-6", mods: ["SUPER"], key: "A" },
+                { id: "bind-8", mods: ["SUPER"], key: "B" },
+                { id: "bind-9", mods: ["SUPER"], key: "O" }
+            ]
+        };
+        const comboOf = bind => ["SUPER", ...(bind.mods ?? []).filter(m => m !== "SUPER")].join(" + ") + " + " + bind.key;
+        const target = Conflicts.targetHolder(group, holder, actionData, comboOf);
+        compare(target.bind.id, "bind-8");
+        compare(target.overrideId, "bind-8");
+        // The input holder is not mutated.
+        compare(holder.bind.id, "bind-6");
+    }
+
+    function test_write_succeeded_requires_a_clean_save() {
+        verify(Conflicts.writeSucceeded({ ok: true, error: "" }, ""));
+        verify(Conflicts.writeSucceeded(null, ""));
+        verify(!Conflicts.writeSucceeded({ ok: true, error: "" }, "disk full"));
+        verify(!Conflicts.writeSucceeded({ ok: false, error: "not-loaded" }, ""));
+    }
+
     function test_fix_holder_reports_service_failure() {
         const holder = { id: "a", overrideId: "bind_x" };
         const managed = { update: () => ({ ok: false, error: "write-failed" }) };
