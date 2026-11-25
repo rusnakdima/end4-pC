@@ -64,4 +64,26 @@ TestCase {
         compare(WallpaperVideo.desktopElapsed, 0);
         compare(WallpaperVideo.lockElapsed, 0);
     }
+
+    // A surface that goes off screen and comes back must reuse the proxy it
+    // already prepared. Blanketing playbackPath on every activation makes the
+    // clip fall back to the still for the whole encode, which looks like a
+    // multi-second freeze on the desktop.
+    WallpaperMedia {
+        id: reactivated
+        source: "/tmp/reactivation-test.mp4"
+        allowLive: false
+        useProxy: false
+        showStill: false
+        playbackPath: "/tmp/reactivation-proxy.mp4"
+    }
+
+    function test_reactivation_keeps_a_ready_playback_path() {
+        // The proxy already resolved this exact source. A reactivation must
+        // not blank the path while a new encode is prepared.
+        reactivated.resolvedSource = reactivated.source;
+        reactivated.playbackPath = "/tmp/reactivation-proxy.mp4";
+        reactivated.updateProxy();
+        compare(reactivated.playbackPath, "/tmp/reactivation-proxy.mp4");
+    }
 }
