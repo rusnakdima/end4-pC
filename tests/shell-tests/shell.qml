@@ -32,6 +32,7 @@
 import QtQuick
 import QtTest
 import Quickshell
+import "modules/ii/bar"
 
 ShellRoot {
     id: root
