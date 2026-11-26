@@ -25,6 +25,13 @@ Singleton {
     property bool rulerActive: false
     property var cursorSamples: []
 
+    // Screen Ruler is the PowerToys-style measure tool. Its overlay is
+    // destroyed on every toggle, so the selected mode and detection settings
+    // live here and survive a close/reopen.
+    property string rulerMode: "none"
+    property bool rulerContinuous: false
+    property int rulerTolerance: 30
+
     readonly property int findMouseDuration: 2500
 
     function findMouse(): void {
@@ -42,6 +49,18 @@ Singleton {
 
     function toggleRuler(): void {
         root.rulerActive = !root.rulerActive;
+    }
+
+    function closeRuler(): void {
+        root.rulerActive = false;
+    }
+
+    function setRulerMode(mode: string): void {
+        root.rulerMode = mode;
+    }
+
+    function copyRulerMeasurement(text: string): void {
+        if (text.length > 0) Quickshell.clipboardText = text;
     }
 
     function toggleAwake(): void {
@@ -81,6 +100,8 @@ Singleton {
 
         function findMouse(): void { root.findMouse() }
         function ruler(): void { root.toggleRuler() }
+        function closeRuler(): void { root.closeRuler() }
+        function setRulerMode(mode: string): void { root.setRulerMode(mode) }
         function awake(): void { root.toggleAwake() }
         function alwaysOnTop(): void { root.toggleAlwaysOnTop() }
     }

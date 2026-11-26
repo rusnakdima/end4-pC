@@ -326,7 +326,7 @@ theme yourself. See `docs/design/theme-stack.md` for the full design.
 The same keybind snippet also installs three small PowerToys-style shortcuts:
 
 - `Super + Shift + F` — **Find My Mouse**: highlights the pointer with animated rings for a couple of seconds.
-- `Super + Shift + U` — **Screen Ruler**: a draggable, resizable strip showing pixels and centimetres (`Esc` or its close button dismisses it; length and position are remembered).
+- `Super + Shift + U` — **Screen Ruler** (PowerToys-style measure tool): pick Bounds, Spacing, Horizontal or Vertical from the toolbar (or `Ctrl+1`–`Ctrl+4`), hover or drag to measure pixels, click to copy the result, and dismiss with `Esc` or the toolbar ✕.
 - **Keep Awake** (Caffeine) is the existing `Idle` service — toggle it from the quick toggles, or with `qs -c end4-pC ipc call awake toggle`.
 - **Always On Top** is Hyprland's window pin (`Super + P` by default), also available as `qs -c end4-pC ipc call utilities alwaysOnTop`.
 
