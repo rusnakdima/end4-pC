@@ -25,6 +25,16 @@ TestCase {
         compare(entries[0].command, "playerctl next");
     }
 
+    function test_source_entry_for_effective_add_without_source_path() {
+        // effectiveBinds deliberately does not carry sourcePath for adds, so
+        // EntryForSource alone always reports "builtin" for a user command.
+        const bind = { id: "custom-1", combo: "SUPER + J", description: "Media: Next", dispatch: { kind: "command", command: "playerctl next" } };
+        const entries = [{ id: "custom-1", name: "Next", command: "playerctl next" }];
+        const entry = Commands.sourceEntryFor(bind, entries, () => null);
+        verify(entry !== null, "an overlay add must be found by id");
+        compare(entry.id, "custom-1");
+    }
+
     function test_delete_plan_for_overlay_add() {
         const bind = { id: "custom-1", combo: "SUPER + J", description: "Media: Next", dispatch: { kind: "command", command: "playerctl next" } };
         const plan = Commands.deletePlan(bind, () => ({ id: "custom-1" }));

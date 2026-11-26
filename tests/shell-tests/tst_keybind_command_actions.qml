@@ -9,14 +9,17 @@ TestCase {
     when: true
 
     property var savedCatalog: null
+    property var savedOverlay: null
     property var page: null
 
     function init() {
         testCase.savedCatalog = HyprlandKeybinds.catalog;
+        testCase.savedOverlay = HyprlandKeybinds.overlay;
     }
 
     function cleanup() {
         HyprlandKeybinds.catalog = testCase.savedCatalog;
+        HyprlandKeybinds.overlay = testCase.savedOverlay;
         if (testCase.page !== null) {
             testCase.page.destroy();
             testCase.page = null;
@@ -45,6 +48,19 @@ TestCase {
         compare(index[0].command, "playerctl next");
         compare(index[0].bindId, "m1");
         compare(index[2].category, "Shell");
+    }
+
+    function test_picker_keeps_builtin_command_after_its_bind_is_disabled() {
+        HyprlandKeybinds.catalog = { binds: [
+            { id: "bind-27", combo: "SUPER + M", description: "Shell: Open mixer", dispatch: { kind: "command", command: "pavucontrol" } }
+        ] };
+        HyprlandKeybinds.overlay = {
+            overrides: {}, adds: [], disabled: ["bind-27"]
+        };
+        const index = HyprlandKeybinds.commandActionIndex;
+        // Deleting the bind must not remove the reusable command from the picker.
+        verify(index.some(action => action.command === "pavucontrol"),
+            "the deleted built-in command must stay available");
     }
 
     function test_picker_selection_fills_only_the_command() {
