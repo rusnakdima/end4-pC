@@ -1,3 +1,4 @@
+import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
@@ -13,6 +14,10 @@ import Quickshell.Hyprland
 
 Scope { // Scope
     id: root
+    // Recording a keybind must not fire the theme's own global shortcuts.
+    // Unload them instead of renaming: GlobalShortcut.name cannot change
+    // after registration in Quickshell 0.3.2.
+    readonly property bool globalShortcutsEnabled: !GlobalStates.keybindCaptureArmed
     // This shell has no extension system, so the cheatsheet only ships the
     // built-in tabs.
     property var extensionCheatsheetTabs: []
@@ -213,30 +218,45 @@ Scope { // Scope
         }
     }
 
-    GlobalShortcut {
-        name: "cheatsheetToggle"
-        description: "Toggles cheatsheet on press"
+    Loader {
+        active: root.globalShortcutsEnabled
+        sourceComponent: Component {
+            GlobalShortcut {
+                name: "cheatsheetToggle"
+                description: "Toggles cheatsheet on press"
 
-        onPressed: {
-            cheatsheetLoader.active = !cheatsheetLoader.active;
+                onPressed: {
+                    cheatsheetLoader.active = !cheatsheetLoader.active;
+                }
+            }
         }
     }
 
-    GlobalShortcut {
-        name: "cheatsheetOpen"
-        description: "Opens cheatsheet on press"
+    Loader {
+        active: root.globalShortcutsEnabled
+        sourceComponent: Component {
+            GlobalShortcut {
+                name: "cheatsheetOpen"
+                description: "Opens cheatsheet on press"
 
-        onPressed: {
-            cheatsheetLoader.active = true;
+                onPressed: {
+                    cheatsheetLoader.active = true;
+                }
+            }
         }
     }
 
-    GlobalShortcut {
-        name: "cheatsheetClose"
-        description: "Closes cheatsheet on press"
+    Loader {
+        active: root.globalShortcutsEnabled
+        sourceComponent: Component {
+            GlobalShortcut {
+                name: "cheatsheetClose"
+                description: "Closes cheatsheet on press"
 
-        onPressed: {
-            cheatsheetLoader.active = false;
+                onPressed: {
+                    cheatsheetLoader.active = false;
+                }
+            }
         }
     }
 }

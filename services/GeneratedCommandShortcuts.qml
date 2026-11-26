@@ -6,6 +6,7 @@ import QtQml.Models
 import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
+import qs
 import qs.modules.common.functions
 
 /**
@@ -41,6 +42,10 @@ Singleton {
 
     // The only ids allowed to become shortcuts or be executed.
     readonly property var shortcutIds: Object.keys(root.commands).sort()
+    // Unload every command shortcut while a keybind is being recorded, so
+    // pressing the combination cannot run the command it is bound to.
+    readonly property var activeShortcutIds: GlobalStates.keybindCaptureArmed
+        ? [] : root.shortcutIds
 
     Component.onCompleted: root.reload()
 
@@ -78,7 +83,7 @@ Singleton {
     // unregisters shortcuts whose ids disappeared from the JSON.
     Instantiator {
         id: shortcutInstantiator
-        model: root.shortcutIds
+        model: root.activeShortcutIds
 
         delegate: GlobalShortcut {
             required property string modelData
