@@ -85,6 +85,7 @@ ShellRoot {
             // corresponding window happens to be opened.
             AdvancedPaste.close();
             ImagePreview.close();
+            Peek.close();
             DesktopUtilities.stopFindMouse();
             // Owns the generated "quickshell:runCommand:<id>" shortcuts; reading
             // it here registers them before any Hyprland bind can dispatch one.

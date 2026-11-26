@@ -7,6 +7,7 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVICE="$SCRIPT_DIR/services/Peek.qml"
 STATES="$SCRIPT_DIR/GlobalStates.qml"
+SHELL="$SCRIPT_DIR/shell.qml"
 
 fail=0
 check() {
@@ -93,6 +94,12 @@ if sed -n '/Component.onCompleted:/,/^    }/p' "$SCOPE" | grep -qF 'GlobalStates
     printf '  OK   scope resets stuck overlay\n'
 else
     printf 'FAIL: scope resets stuck overlay (missing reset in Component.onCompleted)\n' >&2
+    fail=1
+fi
+if sed -n '/id: deferredInitTimer/,/^        }/p' "$SHELL" | grep -qF 'Peek.close();'; then
+    printf '  OK   shell forces lazy Peek singleton at startup\n'
+else
+    printf 'FAIL: shell forces lazy Peek singleton (missing Peek.close() in deferred init)\n' >&2
     fail=1
 fi
 check "panel title is Peek" "$PANEL" 'title: "Peek"'
