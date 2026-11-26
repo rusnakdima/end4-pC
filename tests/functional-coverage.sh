@@ -152,6 +152,25 @@ if [[ -f "$TEST_DIR/shell.qml" ]]; then
     done < <(find "$TEST_DIR" -maxdepth 1 -name 'tst_*.qml' | sort)
 fi
 
+# Every app-theming settings key must appear both in the override map and in
+# a visible settings card, or the control is unreachable from the dashboard.
+CATALOG="modules/ii/settings/DashboardSettingsCatalog.qml"
+for key in \
+    "interface:Theme Qt Quick apps" \
+    "interface:Detect installed themes" \
+    "interface:Preferred theme family" \
+    "interface:Re-detect themes"
+do
+    if ! grep -qF "\"$key\":" "$CATALOG"; then
+        printf 'UNMAPPED SETTING %s (no override-map entry)\n' "$key"
+        missing=$((missing + 1))
+    fi
+    if ! grep -qF "key: \"$key\"" "$CATALOG"; then
+        printf 'UNLISTED SETTING %s (no settings card)\n' "$key"
+        missing=$((missing + 1))
+    fi
+done
+
 if [[ "$missing" -ne 0 ]]; then
     printf 'FAIL: %d functional area(s) are not covered\n' "$missing" >&2
     exit 1

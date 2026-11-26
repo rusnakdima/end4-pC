@@ -211,6 +211,14 @@ QtObject {
         "interface:MD3 for Thunar": { type: "switch", get: () => Config.options.appearance.appTheming.perApp.thunar, set: v => { Config.options.appearance.appTheming.perApp.thunar = v; applyAppTheming(); } },
         "interface:MD3 for Dolphin": { type: "switch", get: () => Config.options.appearance.appTheming.perApp.dolphin, set: v => { Config.options.appearance.appTheming.perApp.dolphin = v; applyAppTheming(); } },
         "interface:Refresh running apps": { type: "switch", get: () => Config.options.appearance.appTheming.refreshRunningApps, set: v => { Config.options.appearance.appTheming.refreshRunningApps = v; } },
+        "interface:Theme Qt Quick apps": { type: "switch", get: () => Config.options.appearance.appTheming.qtQuick, set: v => { Config.options.appearance.appTheming.qtQuick = v; applyAppTheming(); } },
+        "interface:Detect installed themes": { type: "switch", get: () => Config.options.appearance.appTheming.provision, set: v => { Config.options.appearance.appTheming.provision = v; applyAppTheming(); } },
+        "interface:Preferred theme family": { type: "combo", get: () => Config.options.appearance.appTheming.preferredFamily, set: v => { Config.options.appearance.appTheming.preferredFamily = v; applyAppTheming(); }, options: [{ displayName: Translation.tr("Auto"), icon: "auto_awesome", value: "auto" }, { displayName: Translation.tr("Adwaita"), icon: "palette", value: "adw-gtk3" }, { displayName: Translation.tr("Colloid"), icon: "widgets", value: "Colloid" }] },
+        "interface:Re-detect themes": { type: "action", run: () => {
+            const mode = Appearance.m3colors.darkmode ? "dark" : "light";
+            Quickshell.execDetached(["bash", `${Directories.scriptPath}/theming/theme-provision.sh`, mode, "--refresh"]);
+            applyAppTheming();
+        } },
         "desktop:Same wallpaper": { type: "switch", get: () => Config.options.background.lockWall === "", set: v => { if (v) Config.options.background.lockWall = ""; } },
         // The keyboard panel has no config key of its own: brightness and mode
         // live in the helper's state file, because that is what the hardware is
@@ -704,7 +712,11 @@ QtObject {
                 { type: "switch", key: "interface:Manage Qt style", title: Translation.tr("Manage Qt style (Kvantum + qt6ct)"), icon: "tune", kw: "kvantum qt6ct style override breeze re-login" },
                 { type: "switch", key: "interface:MD3 for Thunar", title: Translation.tr("MD3 styling for Thunar"), icon: "folder", kw: "thunar file manager md3 material" },
                 { type: "switch", key: "interface:MD3 for Dolphin", title: Translation.tr("MD3 styling for Dolphin"), icon: "folder_open", kw: "dolphin file manager md3 material" },
-                { type: "switch", key: "interface:Refresh running apps", title: Translation.tr("Refresh running apps"), icon: "autorenew", kw: "live update signal restart" }
+                { type: "switch", key: "interface:Refresh running apps", title: Translation.tr("Refresh running apps"), icon: "autorenew", kw: "live update signal restart" },
+                { type: "switch", key: "interface:Theme Qt Quick apps", title: Translation.tr("Theme Qt Quick apps"), icon: "flutter_dash", kw: "qt quick kirigami kde connect material style" },
+                { type: "switch", key: "interface:Detect installed themes", title: Translation.tr("Detect installed themes"), icon: "download", kw: "provision detect installed packages kvantum adw gtk" },
+                { type: "combo", key: "interface:Preferred theme family", title: Translation.tr("Preferred theme family"), icon: "family_restroom", kw: "adwaita colloid auto fallback select" },
+                { type: "action", key: "interface:Re-detect themes", title: Translation.tr("Re-detect themes"), icon: "find_replace", kw: "detect refresh install re-scan compatible" }
             ]
         },
         {

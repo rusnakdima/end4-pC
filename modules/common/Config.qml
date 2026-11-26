@@ -192,6 +192,16 @@ Singleton {
                         property bool dolphin: true // Qt/KDE reference app
                     }
                     property bool refreshRunningApps: true
+                    // Qt Quick/Kirigami apps (KDE Connect) need the generated
+                    // qtquickcontrols2.conf plus its env vars to follow the
+                    // shell's light/dark mode instead of defaulting to Light.
+                    property bool qtQuick: true
+                    // Re-detect installed theme families on apply/install only;
+                    // wallpaper switches must never install packages.
+                    property bool provision: true
+                    // "auto" picks the best available family. A concrete value
+                    // pins a family (adw-gtk3, Colloid) when more than one fits.
+                    property string preferredFamily: "auto"
                 }
                 property JsonObject palette: JsonObject {
                     property string type: "auto" // Allowed: auto, scheme-content, scheme-expressive, scheme-fidelity, scheme-fruit-salad, scheme-monochrome, scheme-neutral, scheme-rainbow, scheme-rose-water

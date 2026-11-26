@@ -15,7 +15,7 @@ palette to those apps.
 - Every GTK 2/3/4 and Qt/KDE window follows the shell's light/dark mode.
 - Thunar (GTK3) and Dolphin (Qt/KDE) receive MD3 styling from the same palette.
 - Reuse existing infrastructure: matugen palette, `adw-gtk3`, Kvantum
-  `MaterialAdw`, KDE `MaterialYou*` schemes. No new dependencies.
+  `MaterialAdw`, the KDE `Matugen` scheme. No new dependencies.
 - Keep user edits to GTK config/CSS intact.
 
 ## Non-goals / anti-goals
@@ -61,7 +61,7 @@ palette to those apps.
      the theme `materialQT.sh` writes its light/dark Colloid kvconfig into,
   3. `color_scheme=matugen` in `qt6ct.conf`, the palette matugen regenerates.
   `kdeglobals` gets `ColorScheme=Matugen` (the real generated
-  `Matugen.colors` file); nonexistent `MaterialYou*`/`IllogicalNamed*`
+  `Matugen.colors` file); nonexistent legacy
   schemes were removed. `plasma-apply-colorscheme` is called only if installed.
 - **GTK resilience:** matugen overwrites `gtk.css` on every apply. The guarded
   block is re-injected both by `applycolor.sh --refresh` and by a matugen

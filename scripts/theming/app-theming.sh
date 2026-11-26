@@ -36,6 +36,10 @@ FEATURE_DIR="${APP_THEMING_FEATURE_DIR:-$BASE_DIR/features/app-theming}"
 MATERIAL_QT="$BASE_DIR/scripts/kvantum/materialQT.sh"
 PALETTE_FILE="${APP_THEMING_PALETTE_FILE:-$XDG_STATE_HOME/quickshell/user/generated/material_colors.scss}"
 PALETTE_FALLBACK="$XDG_CACHE_HOME/quickshell/user/generated/material_colors.scss"
+RESOLVED_FILE="${APP_THEMING_RESOLVED_FILE:-$XDG_STATE_HOME/quickshell/theme-stack/resolved.json}"
+
+RESOLVED_GTK_THEME=""
+RESOLVED_KVANTUM_THEME=""
 
 BEGIN_MARK='/* end4-pC MD3 app theming:begin */'
 END_MARK='/* end4-pC MD3 app theming:end */'
@@ -75,7 +79,9 @@ fi
 cfg() {
     local filter="$1" default="$2" value=""
     if [[ -f "$SHELL_CONFIG_FILE" ]] && command -v jq >/dev/null 2>&1; then
-        value="$(jq -r "$filter // empty" "$SHELL_CONFIG_FILE" 2>/dev/null)"
+        # Do NOT append `// empty`: jq's alternative operator treats an explicit
+        # `false` as empty, which would turn an opt-out back into the default.
+        value="$(jq -r "$filter" "$SHELL_CONFIG_FILE" 2>/dev/null)"
     fi
     if [[ -n "$value" && "$value" != "null" ]]; then
         printf '%s\n' "$value"
@@ -126,6 +132,12 @@ render_template() {
         [[ "$MODE" == "dark" ]] && dark="true" || dark="false"
     }
     content="${content//\{\{darkmode\}\}/$dark}"
+
+    # Qt Quick Controls uses Dark/Light rather than matugen's true/false.
+    local qt_theme="Light"
+    [[ "$MODE" == "dark" ]] && qt_theme="Dark"
+    content="${content//\{\{qtTheme\}\}/$qt_theme}"
+
     printf '%s\n' "$content"
 }
 
@@ -203,17 +215,65 @@ write_css_block() {
     mv "$tmp" "$path"
 }
 
+# load_resolved() — read the theme names resolved by theme-provision.sh. An
+# absent/corrupt file is fine: every caller has a dependency-free fallback.
+load_resolved() {
+    RESOLVED_GTK_THEME=""
+    RESOLVED_KVANTUM_THEME=""
+    [[ -f "$RESOLVED_FILE" ]] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    RESOLVED_GTK_THEME="$(jq -r '.gtkTheme // empty' "$RESOLVED_FILE" 2>/dev/null)"
+    RESOLVED_KVANTUM_THEME="$(jq -r '.kvantumTheme // empty' "$RESOLVED_FILE" 2>/dev/null)"
+}
+
+# write_config_file <file> <template> — render a standalone config file (no
+# guard markers; unlike CSS, the whole file is ours to own).
+write_config_file() {
+    local path="$1" template="$2" content
+    content="$(render_template "$template")" || return 0
+    [[ -n "$content" ]] || return 0
+    mkdir -p "$(dirname "$path")"
+    backup_config "$path"
+    printf '%s\n' "$content" > "$path"
+}
+
+# set_lua_env <env.lua> <key> <value> — idempotent hl.env(...) entry that leaves
+# every other Hyprland environment line untouched.
+set_lua_env() {
+    local file="$1" key="$2" value="$3"
+    local line="hl.env(\"$key\", \"$value\")"
+    mkdir -p "$(dirname "$file")"
+    if [[ ! -f "$file" ]]; then
+        printf '%s\n' "$line" > "$file"
+        return 0
+    fi
+    backup_config "$file"
+    local tmp
+    tmp="$(mktemp)"
+    awk -v line="$line" -v key="$key" '
+        index($0, "hl.env(\"" key "\"") == 1 { print line; seen = 1; next }
+        { print }
+        END { if (!seen) print line }
+    ' "$file" > "$tmp"
+    mv "$tmp" "$file"
+}
+
 # ---------------------------------------------------------------------------
 # Sinks
 # ---------------------------------------------------------------------------
 apply_gtk() {
     enabled '.appearance.appTheming.gtk' 'true' || return 0
 
-    local theme prefer
+    local theme prefer family
+    family="$(cfg '.appearance.appTheming.preferredFamily' 'auto')"
+    [[ "$family" == "auto" ]] && family="adw-gtk3"
+    theme="${RESOLVED_GTK_THEME:-$family}"
     if [[ "$MODE" == "dark" ]]; then
-        theme="adw-gtk3-dark"; prefer="true"
+        [[ "$theme" == *-dark ]] || theme="${theme}-dark"
+        prefer="true"
     else
-        theme="adw-gtk3"; prefer="false"
+        theme="${theme%-dark}"
+        prefer="false"
     fi
 
     # --refresh only regenerates the CSS blocks; the mode apply already wrote
@@ -254,7 +314,8 @@ apply_qt() {
     #   2. qt6ct must hand Qt the generated matugen palette;
     #   3. the KDE ColorScheme name must be a scheme that actually exists.
     if enabled '.appearance.appTheming.manageQtStyle' 'true'; then
-        set_config_key "$XDG_CONFIG_HOME/Kvantum/kvantum.kvconfig" General theme MaterialAdw
+        set_config_key "$XDG_CONFIG_HOME/Kvantum/kvantum.kvconfig" General theme \
+            "${RESOLVED_KVANTUM_THEME:-MaterialAdw}"
         set_config_key "$XDG_CONFIG_HOME/qt6ct/qt6ct.conf" Appearance color_scheme matugen
     fi
 
@@ -275,6 +336,41 @@ apply_qt() {
     fi
 }
 
+# environment.d is read by systemd --user, so apps launched by KDE Connect's
+# daemon or by user units inherit the Qt Quick mode even though they are not
+# children of Hyprland. The drop-in is regenerated (not appended) per mode.
+write_environment_dropin() {
+    local conf="$1" theme="$2"
+    local dropin="$XDG_CONFIG_HOME/environment.d/90-end4-pc-app-theming.conf"
+    mkdir -p "$(dirname "$dropin")"
+    {
+        printf '# Generated by end4-pC app theming — do not edit by hand.\n'
+        printf 'QT_QPA_PLATFORMTHEME=qt6ct\n'
+        printf 'QT_QUICK_CONTROLS_STYLE=Material\n'
+        printf 'QT_QUICK_CONTROLS_CONF=%s\n' "$conf"
+        printf 'QT_QUICK_CONTROLS_MATERIAL_THEME=%s\n' "$theme"
+    } > "$dropin"
+}
+
+# Qt Quick Controls (KDE Connect, EasyEffects, other Kirigami apps) do not read
+# the QtWidgets style at all. They need their own config plus explicit env vars:
+# Qt only loads qtquickcontrols2.conf from a resource or QT_QUICK_CONTROLS_CONF.
+apply_qtquick() {
+    enabled '.appearance.appTheming.qtQuick' 'true' || return 0
+
+    local conf="$XDG_CONFIG_HOME/qtquickcontrols2.conf"
+    local env_file="$XDG_CONFIG_HOME/hypr/hyprland/env.lua"
+    local theme="Light"
+    [[ "$MODE" == "dark" ]] && theme="Dark"
+
+    write_config_file "$conf" "$FEATURE_DIR/qtquickcontrols2.conf.tmpl"
+    set_lua_env "$env_file" QT_QUICK_CONTROLS_CONF "$conf"
+    set_lua_env "$env_file" QT_QUICK_CONTROLS_STYLE Material
+    set_lua_env "$env_file" QT_QUICK_CONTROLS_MATERIAL_THEME "$theme"
+    set_lua_env "$env_file" QT_QPA_PLATFORMTHEME qt6ct
+    write_environment_dropin "$conf" "$theme"
+}
+
 signal_apps() {
     [[ "$NOSIGNAL" == "1" || "$NO_EXTERNAL" == "1" ]] && return 0
     enabled '.appearance.appTheming.refreshRunningApps' 'true' || return 0
@@ -283,6 +379,39 @@ signal_apps() {
     if command -v dbus-send >/dev/null 2>&1; then
         dbus-send --session --type=signal /KGlobalSettings \
             org.kde.KGlobalSettings.notifyChange int32:4 int32:0 >/dev/null 2>&1 || true
+    fi
+
+    # Qt Quick apps (KDE Connect, EasyEffects) cache their style at startup.
+    # --refresh only repaints with the new palette; the environment must not be
+    # pushed and apps must not be killed on every wallpaper change.
+    if [[ "$REFRESH" == "1" ]]; then
+        return 0
+    fi
+    enabled '.appearance.appTheming.qtQuick' 'true' || return 0
+
+    local qqc_conf="$XDG_CONFIG_HOME/qtquickcontrols2.conf"
+    local qqc_theme="Light"
+    [[ "$MODE" == "dark" ]] && qqc_theme="Dark"
+    local -a qenv=(
+        "QT_QPA_PLATFORMTHEME=qt6ct"
+        "QT_QUICK_CONTROLS_STYLE=Material"
+        "QT_QUICK_CONTROLS_CONF=$qqc_conf"
+        "QT_QUICK_CONTROLS_MATERIAL_THEME=$qqc_theme"
+    )
+
+    # import-environment would ignore unset shell variables. Pass explicit
+    # values instead; systemd --user does not re-read environment.d on change.
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl --user set-environment "${qenv[@]}" >/dev/null 2>&1 || true
+    fi
+    # KDE Connect's daemon is D-Bus activated, not a systemd user unit, so it
+    # does not inherit the user manager's environment either.
+    if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+        dbus-update-activation-environment --systemd "${qenv[@]}" >/dev/null 2>&1 || true
+    fi
+    if command -v pkill >/dev/null 2>&1; then
+        pkill -TERM -x kdeconnect-app >/dev/null 2>&1 || true
+        pkill -TERM -x kdeconnectd >/dev/null 2>&1 || true
     fi
     # GTK3 picks up gsettings changes via dconf automatically; nothing to do.
 }
@@ -298,7 +427,20 @@ if ! load_palette; then
     echo "[app-theming] Palette not found at $PALETTE_FILE — skipping CSS rendering." >&2
 fi
 
+if enabled '.appearance.appTheming.provision' 'true'; then
+    PROVISIONER_SCRIPT="$BASE_DIR/scripts/theming/theme-provision.sh"
+    if [[ -f "$PROVISIONER_SCRIPT" ]]; then
+        APP_THEMING_PREFERRED_FAMILY="$(cfg '.appearance.appTheming.preferredFamily' 'auto')"
+        export APP_THEMING_PREFERRED_FAMILY
+        bash "$PROVISIONER_SCRIPT" "$MODE" --detect >/dev/null 2>&1 || true
+    fi
+fi
+load_resolved
+
 apply_gtk
+# The QQC2 Accent comes from the live palette, so a --refresh must rewrite it
+# too; only the one-shot settings/style writes are skipped in refresh mode.
+apply_qtquick
 if [[ "$REFRESH" != "1" ]]; then
     apply_qt
 fi

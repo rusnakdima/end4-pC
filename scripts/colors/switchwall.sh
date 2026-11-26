@@ -44,7 +44,7 @@ handle_kde_material_you_colors() {
 
     # Konsole lock: the kde-material-you-colors wrapper also rewrites the
     # Konsole profiles' [Appearance] ColorScheme/Font to the generated
-    # MaterialYou values. Snapshot the profiles first and restore them after
+    # generated Matugen values. Snapshot the profiles first and restore them after
     # the wrapper runs so Konsole keeps the user's own color scheme while
     # every other app is still themed.
     KONSOLE_DIR="$HOME/.local/share/konsole"
@@ -94,7 +94,7 @@ pre_process() {
             sed -i 's/^gtk-application-prefer-dark-theme=.*/gtk-application-prefer-dark-theme=true/' "$ini"
         done
         if [[ -f "$HOME/.config/kdeglobals" ]]; then
-            sed -i 's/^ColorScheme=.*/ColorScheme=MaterialYouDark/' "$HOME/.config/kdeglobals"
+            sed -i 's/^ColorScheme=.*/ColorScheme=Matugen/' "$HOME/.config/kdeglobals"
         fi
     elif [[ "$mode_flag" == "light" ]]; then
         gsettings set org.gnome.desktop.interface color-scheme 'prefer-light'
@@ -105,7 +105,7 @@ pre_process() {
             sed -i 's/^gtk-application-prefer-dark-theme=.*/gtk-application-prefer-dark-theme=false/' "$ini"
         done
         if [[ -f "$HOME/.config/kdeglobals" ]]; then
-            sed -i 's/^ColorScheme=.*/ColorScheme=MaterialYouLight/' "$HOME/.config/kdeglobals"
+            sed -i 's/^ColorScheme=.*/ColorScheme=Matugen/' "$HOME/.config/kdeglobals"
         fi
     fi
 

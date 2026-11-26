@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+#
+# theme-provision.sh — detect compatible app themes and resolve them into one
+# state file consumed by app-theming.sh and materialQT.sh.
+#
+# Usage: theme-provision.sh <light|dark> [--detect|--install|--refresh|--status]
+#
+#   --detect    Probe installed themes and write resolved.json (default).
+#   --install   Install missing compatible themes, then detect (install-time only).
+#   --refresh   Re-detect; installation is not repeated on a mode switch.
+#   --status    Print the resolved map.
+#
+# Environment:
+#   APP_THEMING_RESOLVED_FILE   Override the resolved.json path.
+#   APP_THEMING_FEATURE_DIR     Override the feature directory holding manifest.json.
+#   APP_THEMING_NO_EXTERNAL=1   Skip all package manager calls.
+#   APP_THEMING_THEME_ROOTS     Colon-separated GTK theme roots (test seam).
+set -uo pipefail
+
+XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+FEATURE_DIR="${APP_THEMING_FEATURE_DIR:-$REPO_ROOT/features/app-theming}"
+MANIFEST="$FEATURE_DIR/manifest.json"
+RESOLVED="${APP_THEMING_RESOLVED_FILE:-$XDG_STATE_HOME/quickshell/theme-stack/resolved.json}"
+NO_EXTERNAL="${APP_THEMING_NO_EXTERNAL:-0}"
+
+MODE=""
+ACTION="--detect"
+for arg in "$@"; do
+    case "$arg" in
+        light|dark) MODE="$arg" ;;
+        --detect|--install|--refresh|--status) ACTION="$arg" ;;
+        *)
+            echo "[theme-provision] Unknown argument: $arg" >&2
+            echo "Usage: theme-provision.sh <light|dark> [--detect|--install|--refresh|--status]" >&2
+            exit 2
+            ;;
+    esac
+done
+[[ -z "$MODE" ]] && MODE="light"
+
+# `score_name <name> <patterns>` echoes the index of the best matching pattern.
+score_name() {
+    local name="$1" patterns="$2" i=0 best=999 pat
+    while IFS= read -r pat; do
+        [[ -n "$pat" ]] || continue
+        # shellcheck disable=SC2053
+        if [[ "$name" == $pat ]] && [[ $i -lt $best ]]; then
+            best=$i
+        fi
+        i=$((i + 1))
+    done <<< "$patterns"
+    [[ $best -lt 999 ]] && printf '%s\n' "$best"
+}
+
+# `best_name <patterns> <dirs...>` echoes the lowest-scoring directory name.
+best_name() {
+    local patterns="$1" best_name="" best_score=999 name score
+    shift
+    for name in "$@"; do
+        score="$(score_name "$name" "$patterns")"
+        [[ -n "$score" ]] || continue
+        if [[ $score -lt $best_score ]]; then
+            best_score=$score
+            best_name="$name"
+        fi
+    done
+    printf '%s\n' "$best_name"
+}
+
+ini_value() {
+    local file="$1" key="$2"
+    [[ -f "$file" ]] || return 0
+    awk -F= -v k="$key" '$1 == k { print $2; exit }' "$file" 2>/dev/null
+}
+
+detect() {
+    local gtk_patterns kv_patterns
+    gtk_patterns="$(jq -r '.catalog[] | select(.id == "gtk3") | .patterns[]' "$MANIFEST" 2>/dev/null)"
+    kv_patterns="$(jq -r '.catalog[] | select(.id == "qtWidgets") | .patterns[]' "$MANIFEST" 2>/dev/null)"
+    [[ -n "$gtk_patterns" ]] || gtk_patterns='adw-gtk3*'
+    [[ -n "$kv_patterns" ]] || kv_patterns='MaterialAdw'
+
+    local -a gtk_dirs=() kv_dirs=()
+    local base d name
+    local gtk_roots="${APP_THEMING_THEME_ROOTS:-$XDG_DATA_HOME/themes:$HOME/.themes:/usr/share/themes}"
+    local IFS_BAK="$IFS"
+    IFS=: read -ra gtk_root_list <<< "$gtk_roots"
+    IFS="$IFS_BAK"
+    for base in "${gtk_root_list[@]}"; do
+        [[ -d "$base" ]] || continue
+        for d in "$base"/*; do
+            [[ -d "$d" ]] || continue
+            name="$(basename "$d")"
+            [[ " ${gtk_dirs[*]} " == *" $name "* ]] || gtk_dirs+=("$name")
+        done
+    done
+    local kv_roots="${APP_THEMING_KVANTUM_ROOTS:-$XDG_CONFIG_HOME/Kvantum:$XDG_DATA_HOME/Kvantum:/usr/share/Kvantum}"
+    IFS=: read -ra kv_root_list <<< "$kv_roots"
+    for base in "${kv_root_list[@]}"; do
+        [[ -d "$base" ]] || continue
+        for d in "$base"/*; do
+            [[ -d "$d" ]] || continue
+            name="$(basename "$d")"
+            [[ -f "$d/$name.kvconfig" ]] || continue
+            [[ " ${kv_dirs[*]} " == *" $name "* ]] || kv_dirs+=("$name")
+        done
+    done
+
+    # A pinned family overrides auto-detection (including a deliberate user
+    # selection); "auto" keeps the existing precedence rules.
+    local family="${APP_THEMING_PREFERRED_FAMILY:-auto}" name filtered=()
+    if [[ "$family" == "adw-gtk3" ]]; then
+        for name in "${gtk_dirs[@]}"; do
+            [[ "$name" == adw-gtk3* ]] && filtered+=("$name")
+        done
+        gtk_dirs=("${filtered[@]}")
+    elif [[ "$family" == "Colloid" ]]; then
+        for name in "${kv_dirs[@]}"; do
+            [[ "$name" == Colloid* ]] && filtered+=("$name")
+        done
+        kv_dirs=("${filtered[@]}")
+    fi
+
+    # Preserve a deliberate user selection when the theme actually exists.
+    local user_gtk user_kv gtk_base kv_source
+    user_gtk="$(ini_value "$XDG_CONFIG_HOME/gtk-3.0/settings.ini" gtk-theme-name)"
+    user_kv="$(ini_value "$XDG_CONFIG_HOME/Kvantum/kvantum.kvconfig" theme)"
+    if [[ "$family" == "auto" && -n "$user_gtk" ]] && [[ " ${gtk_dirs[*]} " == *" $user_gtk "* ]]; then
+        gtk_base="$user_gtk"
+    else
+        gtk_base="$(best_name "$gtk_patterns" "${gtk_dirs[@]}")"
+    fi
+    [[ -n "$gtk_base" ]] || gtk_base="Adwaita"
+    if [[ "$family" == "auto" && -n "$user_kv" ]] && [[ " ${kv_dirs[*]} " == *" $user_kv "* ]]; then
+        kv_source="$user_kv"
+    else
+        kv_source="$(best_name "$kv_patterns" "${kv_dirs[@]}")"
+    fi
+
+    local gtk_theme="$gtk_base"
+    if [[ "$MODE" == "dark" && "$gtk_theme" != *-dark ]]; then
+        gtk_theme="$gtk_base-dark"
+    elif [[ "$MODE" == "light" && "$gtk_theme" == *-dark ]]; then
+        gtk_theme="${gtk_base%-dark}"
+    fi
+
+    local kv_theme="MaterialAdw" kv_light="" kv_dark="" gtk_source="missing" kv_source_kind="missing"
+    if [[ -n "$kv_source" ]]; then
+        kv_source_kind="installed"
+        [[ "$kv_source" == "Colloid" ]] && kv_theme="MaterialAdw" || kv_theme="$kv_source"
+        kv_light="$kv_source.kvconfig"
+        kv_dark="$kv_source.kvconfig"
+        [[ -f "$XDG_CONFIG_HOME/Kvantum/$kv_source/${kv_source}Dark.kvconfig" ]] && \
+            kv_dark="${kv_source}Dark.kvconfig"
+    fi
+    [[ " ${gtk_dirs[*]} " == *" $gtk_base "* ]] && gtk_source="installed"
+
+    mkdir -p "$(dirname "$RESOLVED")"
+    local tmp
+    tmp="$(mktemp "$(dirname "$RESOLVED")/.resolved.XXXXXX")"
+    jq -n \
+        --arg mode "$MODE" \
+        --arg gtkTheme "$gtk_theme" \
+        --arg kvTheme "$kv_theme" \
+        --arg kvSource "${kv_source:-}" \
+        --arg kvLight "$kv_light" \
+        --arg kvDark "$kv_dark" \
+        --arg gtkSource "$gtk_source" \
+        --arg kvSourceKind "$kv_source_kind" \
+        '{version: 1, mode: $mode, gtkTheme: $gtkTheme, kvantumTheme: $kvTheme,
+          kvantumSourceDir: $kvSource, kvantumLightSource: $kvLight,
+          kvantumDarkSource: $kvDark, qtQuickStyle: "Material",
+          sources: {gtk: $gtkSource, kvantum: $kvSourceKind, qtQuick: "builtin"}}' \
+        > "$tmp" && mv -f "$tmp" "$RESOLVED"
+}
+
+install_missing() {
+    # The installer owns package names (from install-system.sh's aur_pkgs list).
+    # Re-detect only re-probes the filesystem; no package manager runs here.
+    return 0
+}
+
+case "$ACTION" in
+    --install) install_missing; detect ;;
+    --refresh) detect ;;
+    --status)  [[ -f "$RESOLVED" ]] && cat "$RESOLVED" || echo '{}' ;;
+    *)         detect ;;
+esac

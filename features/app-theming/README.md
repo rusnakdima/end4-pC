@@ -10,7 +10,13 @@ to GTK and Qt/KDE applications.
 | Toolkit | Applications | Mechanism |
 | --- | --- | --- |
 | GTK 2/3/4 | Thunar, Nautilus, GNOME apps, … | `adw-gtk3` theme + guarded MD3 CSS block |
-| Qt / KDE | Dolphin, Kate, Konqueror, … | Kvantum `MaterialAdw` + KDE `Matugen` scheme + qt6ct matugen palette |
+| QtWidgets / KDE | Dolphin, Kate, Konqueror, … | Kvantum `MaterialAdw` + KDE `Matugen` scheme + qt6ct matugen palette |
+| Qt Quick / Kirigami | KDE Connect and other QML apps | generated `qtquickcontrols2.conf` + `environment.d` variables |
+
+A detector writes `~/.local/state/quickshell/theme-stack/resolved.json` with the
+theme actually available on this machine; a deliberately chosen user theme is
+preserved. GTK 4 / libadwaita apps keep the host accent — no CSS is injected
+into them.
 
 Electron, Firefox, LibreOffice and terminal emulators are **out of scope**;
 they have their own theming systems and are handled (if at all) elsewhere.
@@ -55,15 +61,30 @@ Under `appearance.appTheming` in `~/.config/illogical-impulse/config.json`
 | `manageQtStyle` | `true` | Drive Kvantum theme + qt6ct colour scheme (requires re-login for `QT_STYLE_OVERRIDE`) |
 | `perApp.thunar` | `true` | Thunar-focused MD3 selectors in GTK3 CSS |
 | `perApp.dolphin` | `true` | Dolphin-focused KDE scheme handling |
-| `refreshRunningApps` | `true` | Signal running apps to re-read settings |
+| `refreshRunningApps` | `true` | Signal running apps to re-read settings (also restarts KDE Connect) |
+| `qtQuick` | `true` | Write `qtquickcontrols2.conf` and the Qt Quick environment variables |
+| `provision` | `true` | Re-detect the compatible theme stack on every mode change |
+| `preferredFamily` | `auto` | Theme family preference: `auto`, `adw-gtk3`, or `Colloid` |
 
 Toggles are read at the next mode/palette change. Some applications (notably
 GTK3 ones) only re-read their CSS at startup, so restart them if a change does
-not appear immediately.
+not appear immediately. **KDE Connect** reads the Qt Quick mode at startup, so
+with `refreshRunningApps` enabled its running process is restarted once on a
+mode change. Hyprland and other already-running apps still need **one
+logout/login** before they pick up the environment variables for the first time.
+Dolphin's Kvantum path is unchanged; Thunar's toolbar/path-bar borders are
+removed inside the guarded CSS block.
+
+Use **Settings → Appearance → App theming → Re-detect themes** after installing
+a theme yourself to refresh `resolved.json`.
 
 Installer opt-outs: `APP_THEMING=0`, `APP_THEMING_QT_ENV=0`,
-`APP_THEMING_MATUGEN_HOOK=0`, or the flags `--no-app-theming`,
-`--no-app-theming-qt-env`, `--no-app-theming-hook`.
+`APP_THEMING_MATUGEN_HOOK=0`, `APP_THEME_PACKAGES=0`, or the flags
+`--no-app-theming`, `--no-app-theming-qt-env`, `--no-app-theming-hook`,
+`--no-theme-packages`.
+
+The full window-type catalog, fallbacks and design decisions live in
+`docs/design/theme-stack.md`.
 
 ## Adding a sink
 

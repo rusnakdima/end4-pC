@@ -10,6 +10,7 @@ set -euo pipefail
 # These stay at their defaults when this file is sourced by install.sh.
 DRY_RUN=0
 CLI_NO_AUR=0
+APP_THEME_PACKAGES="${APP_THEME_PACKAGES:-1}"
 EXTRA_PKGS=()
 
 # ---------------------------------------------------------------------------
@@ -29,6 +30,7 @@ Options:
   --dry-run            Print the packages that would be installed, change
                        nothing. Safe to run with no network and no root.
   --no-aur             Skip AUR packages (quickshell-git) entirely.
+  --no-theme-packages  Skip compatible GTK/Qt theme packages.
   --extra-pkg PKG      Also install PKG; may be repeated.
   --extra-pkg=PKG      Same, single-token form.
   --                   Stop option parsing.
@@ -47,6 +49,7 @@ EOF
             -h|--help) usage; exit 0 ;;
             --dry-run) DRY_RUN=1 ;;
             --no-aur) CLI_NO_AUR=1 ;;
+            --no-theme-packages) APP_THEME_PACKAGES=0 ;;
             --extra-pkg=*) EXTRA_PKGS+=("${1#*=}") ;;
             --extra-pkg) need_value "$@"; EXTRA_PKGS+=("$2"); shift ;;
             --) shift; break ;;
@@ -83,6 +86,22 @@ install_packages() {
     if [[ $DRY_RUN -eq 1 ]]; then
         echo "[install-system] DRY RUN: nothing will be installed."
     fi
+    # Compatible app window themes (see features/app-theming/manifest.json).
+    # --no-theme-packages / APP_THEME_PACKAGES=0 removes all of them.
+    local APP_THEME_PKGS=()
+    local APP_THEME_AUR_PKGS=()
+    if [[ "$APP_THEME_PACKAGES" -eq 1 ]]; then
+        APP_THEME_PKGS=(
+            adw-gtk-theme    # GTK3/GTK4 libadwaita port (adw-gtk3 / adw-gtk3-dark)
+            kvantum          # Qt6 SVG style engine
+            kvantum-qt5      # Qt5 style plugin for Kvantum
+            qt6ct            # Qt6 platform theme config (palette/color scheme)
+        )
+        APP_THEME_AUR_PKGS=(
+            plasma6-themes-colloid-git  # Kvantum Colloid source themes (light + dark)
+        )
+    fi
+
     # pacman packages
     local pkgs=(
         brightnessctl
@@ -105,6 +124,7 @@ install_packages() {
         neovim
         libqalculate
         papirus-icon-theme
+        ${APP_THEME_PKGS[@]+"${APP_THEME_PKGS[@]}"}
         # hotspot (AP) feature — see scripts/hotspot/README.md
         wireless-regdb # regulatory.db; without it 5 GHz AP channels are NO-IR
         hostapd        # AP daemon (helper runs its own instance, not the unit)
@@ -118,6 +138,7 @@ install_packages() {
     # when the installer runs as a regular user.
     local aur_pkgs=(
         quickshell-git
+        ${APP_THEME_AUR_PKGS[@]+"${APP_THEME_AUR_PKGS[@]}"}
     )
 
     # An installed quickshell already provides the same binary, so the git
@@ -126,7 +147,12 @@ install_packages() {
     # pacman, which needs a password and would abort the whole installer.
     if command -v quickshell &>/dev/null; then
         echo "[install-system] quickshell is already installed, skipping the git build."
-        aur_pkgs=()
+        local filtered_aur=()
+        for pkg in "${aur_pkgs[@]}"; do
+            [[ "$pkg" == "quickshell-git" ]] && continue
+            filtered_aur+=("$pkg")
+        done
+        aur_pkgs=("${filtered_aur[@]}")
     fi
 
     [[ $CLI_NO_AUR -eq 1 ]] && aur_pkgs=()

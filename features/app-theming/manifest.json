@@ -14,6 +14,42 @@
     "outline",
     "error"
   ],
+  "catalog": [
+    {
+      "id": "gtk3",
+      "toolkit": "gtk",
+      "mechanism": "gtk-theme-name + dark preference + guarded GTK3 CSS",
+      "compatible": ["adw-gtk3", "adw-gtk3-dark"],
+      "patterns": ["adw-gtk3*", "Adwaita*", "md3*"],
+      "packages": ["adw-gtk-theme"],
+      "fallback": "Adwaita with the guarded MD3 CSS block"
+    },
+    {
+      "id": "gtk4",
+      "toolkit": "gtk",
+      "mechanism": "gsettings color-scheme + guarded GTK4 CSS where honored",
+      "compatible": ["adw-gtk3-dark"],
+      "patterns": ["adw-gtk3*", "Adwaita*"],
+      "fallback": "gsettings dark preference only"
+    },
+    {
+      "id": "qtWidgets",
+      "toolkit": "qt",
+      "mechanism": "QT_STYLE_OVERRIDE + Kvantum + qt6ct + KDE ColorScheme",
+      "compatible": ["MaterialAdw", "Colloid"],
+      "patterns": ["MaterialAdw", "Colloid*", "Material*"],
+      "packages": ["kvantum", "kvantum-qt5", "qt6ct", "plasma6-themes-colloid-git"],
+      "fallback": "Fusion style with the qt6ct matugen palette"
+    },
+    {
+      "id": "qtQuick",
+      "toolkit": "qtquick",
+      "mechanism": "QT_QUICK_CONTROLS_CONF + built-in Material style + Matugen KDE ColorScheme",
+      "compatible": ["Material"],
+      "patterns": ["Material"],
+      "fallback": "built-in Qt Quick Controls Material style"
+    }
+  ],
   "sinks": [
     {
       "id": "gtk-appearance",
@@ -44,7 +80,7 @@
       "applies-to": ["Qt", "KDE", "Dolphin"],
       "config": ".appearance.appTheming.qt",
       "targets": [
-        { "path": "$XDG_CONFIG_HOME/kdeglobals", "mode": "ini", "key": "ColorScheme", "light": "MaterialYouLight", "dark": "MaterialYouDark" }
+        { "path": "$XDG_CONFIG_HOME/kdeglobals", "mode": "ini", "key": "ColorScheme", "light": "Matugen", "dark": "Matugen" }
       ]
     },
     {
@@ -52,9 +88,31 @@
       "toolkit": "qt",
       "applies-to": ["Dolphin"],
       "config": ".appearance.appTheming.perApp.dolphin",
-      "note": "Dolphin is the reference Qt/KDE app for the MaterialYou KDE scheme.",
+      "note": "Dolphin is the reference Qt/KDE app for the Matugen KDE scheme.",
       "targets": [
-        { "path": "$XDG_CONFIG_HOME/kdeglobals", "mode": "ini", "key": "ColorScheme", "light": "MaterialYouLight", "dark": "MaterialYouDark" }
+        { "path": "$XDG_CONFIG_HOME/kdeglobals", "mode": "ini", "key": "ColorScheme", "light": "Matugen", "dark": "Matugen" }
+      ]
+    },
+    {
+      "id": "qt-quick",
+      "toolkit": "qtquick",
+      "applies-to": ["KDE Connect", "EasyEffects", "Kirigami apps"],
+      "config": ".appearance.appTheming.qtQuick",
+      "note": "Qt reads qtquickcontrols2.conf only from QT_QUICK_CONTROLS_CONF; env.lua and environment.d both set it.",
+      "targets": [
+        { "path": "$XDG_CONFIG_HOME/qtquickcontrols2.conf", "mode": "rendered", "template": "qtquickcontrols2.conf.tmpl" },
+        { "path": "$XDG_CONFIG_HOME/hypr/hyprland/env.lua", "mode": "lua-env" },
+        { "path": "$XDG_CONFIG_HOME/environment.d/90-end4-pc-app-theming.conf", "mode": "ini" }
+      ]
+    },
+    {
+      "id": "theme-provision",
+      "toolkit": "all",
+      "applies-to": ["GTK apps", "Qt/KDE apps", "Qt Quick apps"],
+      "config": ".appearance.appTheming.provision",
+      "note": "Detect compatible themes and write resolved.json; install only from install.sh or the Re-detect action.",
+      "targets": [
+        { "path": "$XDG_STATE_HOME/quickshell/theme-stack/resolved.json", "mode": "json" }
       ]
     }
   ]
