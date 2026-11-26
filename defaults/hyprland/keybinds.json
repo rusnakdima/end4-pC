@@ -248,6 +248,8 @@
   "--#/# bind = SUPER+SHIFT, F,, -- Find My Mouse: highlight the pointer --",
   "--#/# bind = SUPER+SHIFT, U,, -- Toggle the on-screen ruler --",
   "--#/# bind = SUPER+SHIFT, I,, -- Image Preview: view a file or clipboard image --",
+  "--#/# bind = ALT, Space,, -- Peek: preview the current selection or file --",
+  "--#/# bind = SUPER+SHIFT, Space,, -- Peek preview fallback --",
   "-- <<< end4-pC utilities keybinds",
   "",
   "-- >>> end4-pC advanced-paste window rule (managed by end4-pC)",
@@ -259,6 +261,13 @@
   "-- Keep the image preview overlay floating with the theme's rounding.",
   "hl.window_rule({ match = { class = \"org.quickshell\", title = \"Image Preview\" }, float = true, rounding = 18 })",
   "-- <<< end4-pC image-preview window rule",
+  "",
+  "-- >>> end4-pC peek window rules (managed by end4-pC)",
+  "-- Keep Peek floating with the theme's rounding; the nvim editor launched by",
+  "-- Peek opens as a floating terminal so the selected text stays readable.",
+  "hl.window_rule({ match = { class = \"org.quickshell\", title = \"Peek\" }, float = true, rounding = 18 })",
+  "hl.window_rule({ match = { title = \"end4-pc-peek\" }, float = true, size = { \"monitor_w * 0.75\", \"monitor_h * 0.75\" } })",
+  "-- <<< end4-pC peek window rules",
   "",
   "-- >>> end4-pC tap-super launcher keybinds (managed by end4-pC)",
   "-- Tap Super alone opens the launcher; Super + <key> must not.",
@@ -577,8 +586,8 @@
    "category": "",
    "group": "",
    "combo": "CTRL + ALT + TAB",
-   "description": "Window: Pin window switcher (lock scope)",
-   "label": "Window: Pin window switcher (lock scope)",
+   "description": "Window: Pin overview (keep open after Alt release)",
+   "label": "Window: Pin overview (keep open after Alt release)",
    "options": {},
    "dispatch": {
     "kind": "global",
@@ -587,7 +596,7 @@
      "value": "quickshell:windowSwitcherLock"
     }
    },
-   "code": "hl.bind(\"CTRL + ALT + TAB\", hl.dsp.global(\"quickshell:windowSwitcherLock\"), { description = \"Window: Pin window switcher (lock scope)\" })"
+   "code": "hl.bind(\"CTRL + ALT + TAB\", hl.dsp.global(\"quickshell:windowSwitcherLock\"), { description = \"Window: Pin overview (keep open after Alt release)\" })"
   },
   {
    "id": "bind-16",
@@ -786,13 +795,10 @@
    "label": "Shell: Reload theme",
    "options": {},
    "dispatch": {
-    "kind": "global",
-    "arg": {
-     "kind": "string",
-     "value": "quickshell:shellReload"
-    }
+    "kind": "raw",
+    "code": "hl.bind(\"CTRL + SUPER + R\", hl.dsp.exec_cmd(qsIpcCall .. \" wallpapers reloadShell || qs -p $HOME/.config/quickshell/$qsConfig\"), { description = \"Shell: Reload theme\" })"
    },
-   "code": "hl.bind(\"CTRL + SUPER + R\", hl.dsp.global(\"quickshell:shellReload\"), { description = \"Shell: Reload theme\" })"
+   "code": "hl.bind(\"CTRL + SUPER + R\", hl.dsp.exec_cmd(qsIpcCall .. \" wallpapers reloadShell || qs -p $HOME/.config/quickshell/$qsConfig\"), { description = \"Shell: Reload theme\" })"
   },
   {
    "id": "bind-27",
@@ -4363,6 +4369,101 @@
     }
    },
    "code": "hl.bind(\"SUPER + SHIFT + I\", hl.dsp.global(\"quickshell:imagePreview\"), { description = \"Utilities: Image preview\" })"
-  }
- ]
+  },
+  {
+   "id": "utilities-15",
+   "source": "custom",
+   "line": 63,
+   "category": "Utilities",
+   "group": "/# bind = ALT, Space,, -- Peek: preview the current selection or file --",
+   "combo": "ALT + SPACE",
+   "description": "Utilities: Peek preview",
+   "label": "Utilities: Peek preview",
+   "options": {},
+   "dispatch": {
+    "kind": "global",
+    "arg": {
+     "kind": "string",
+     "value": "quickshell:peek"
+    }
+   },
+   "code": "hl.bind(\"ALT + SPACE\", hl.dsp.global(\"quickshell:peek\"), { description = \"Utilities: Peek preview\" })"
+  },
+  {
+   "id": "utilities-16",
+   "source": "custom",
+   "line": 65,
+   "category": "Utilities",
+   "group": "/# bind = SUPER+SHIFT, Space,, -- Peek preview fallback --",
+   "combo": "SUPER + SHIFT + SPACE",
+   "description": "Utilities: Peek preview",
+   "label": "Utilities: Peek preview",
+   "options": {},
+   "dispatch": {
+    "kind": "global",
+    "arg": {
+     "kind": "string",
+     "value": "quickshell:peek"
+    }
+   },
+   "code": "hl.bind(\"SUPER + SHIFT + SPACE\", hl.dsp.global(\"quickshell:peek\"), { description = \"Utilities: Peek preview\" })"
+  },
+   {
+    "id": "window-76",
+    "source": "custom",
+    "line": 63,
+    "category": "Window",
+    "group": "",
+    "combo": "ALT + code:49",
+    "description": "Window: Overview Windows next",
+    "label": "Window: Overview Windows next",
+    "options": {},
+    "dispatch": {
+     "kind": "global",
+     "arg": {
+      "kind": "string",
+      "value": "quickshell:overviewWindowsNext"
+     }
+    },
+    "code": "hl.bind(\"ALT + code:49\", hl.dsp.global(\"quickshell:overviewWindowsNext\"), { description = \"Window: Overview Windows next\" })"
+   },
+   {
+    "id": "window-77",
+    "source": "custom",
+    "line": 64,
+    "category": "Window",
+    "group": "",
+    "combo": "ALT + SHIFT + code:49",
+    "description": "Window: Overview Windows previous",
+    "label": "Window: Overview Windows previous",
+    "options": {},
+    "dispatch": {
+     "kind": "global",
+     "arg": {
+      "kind": "string",
+      "value": "quickshell:overviewWindowsPrev"
+     }
+    },
+    "code": "hl.bind(\"ALT + SHIFT + code:49\", hl.dsp.global(\"quickshell:overviewWindowsPrev\"), { description = \"Window: Overview Windows previous\" })"
+   },
+    {
+     "id": "window-78",
+     "source": "custom",
+     "line": 65,
+     "category": "Window",
+     "group": "",
+     "combo": "CTRL + ALT + code:49",
+     "description": "Window: Pin Overview Windows",
+     "label": "Window: Pin Overview Windows",
+     "options": {},
+     "dispatch": {
+      "kind": "global",
+      "arg": {
+       "kind": "string",
+       "value": "quickshell:overviewWindowsLock"
+      }
+     },
+     "code": "hl.bind(\"CTRL + ALT + code:49\", hl.dsp.global(\"quickshell:overviewWindowsLock\"), { description = \"Window: Pin Overview Windows\" })"
+    }
+   ]
 }

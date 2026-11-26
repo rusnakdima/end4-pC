@@ -37,6 +37,12 @@ function keyNames() {
     names[Qt.Key_Backslash] = "Backslash";
     names[Qt.Key_Semicolon] = "Semicolon";
     names[Qt.Key_Apostrophe] = "Apostrophe";
+    // Backtick and tilde share one physical key. Hyprland's code:49 bind names
+    // that key regardless of the keysym Shift produces, which is what the
+    // Overview Windows chord needs: Alt+` and Alt+Shift+` are two distinct
+    // binds, so the direction is decided by the compositor, not by Qt.
+    names[Qt.Key_QuoteLeft] = "code:49";
+    names[Qt.Key_AsciiTilde] = "code:49";
     names[Qt.Key_Comma] = "Comma";
     names[Qt.Key_Period] = "Period";
     names[Qt.Key_Minus] = "Minus";
@@ -97,7 +103,9 @@ var displayLabels = {
     "Minus": "-",
     "Equal": "=",
     "BracketLeft": "[",
-    "BracketRight": "]"
+    "BracketRight": "]",
+    // The physical grave/tilde key, as it appears in the frozen keybind catalog.
+    "code:49": "`"
 };
 
 // The readable word for one part of a combination. Unknown tokens (media
@@ -154,6 +162,11 @@ function keyNameByToken() {
     names["pgdown"] = "Page_Down";
     names["prtsc"] = "Print";
     names["print"] = "Print";
+    names["grave"] = "code:49";
+    names["asciitilde"] = "code:49";
+    names["`"] = "code:49";
+    names["~"] = "code:49";
+    names["code:49"] = "code:49";
     names["capslock"] = "Caps_Lock";
     names["numlock"] = "Num_Lock";
     names["scrolllock"] = "Scroll_Lock";

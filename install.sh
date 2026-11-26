@@ -767,6 +767,39 @@ install_image_preview_configs() {
 }
 
 # ---------------------------------------------------------------------------
+# Peek config (fish + nvim)
+# ---------------------------------------------------------------------------
+# The fish function and the nvim keymaps are shipped as snippets and appended
+# behind markers so repeated install.sh runs never duplicate them.
+install_peek_configs() {
+    echo "[install] Installing peek config..."
+    local snippets="$SOURCE_DIR/features/peek"
+    [[ -d "$snippets" ]] || return 0
+
+    mkdir -p "$TARGET_HOME/.config/fish/conf.d"
+    deploy_atomic "$snippets/fish.fish" "$TARGET_HOME/.config/fish/conf.d/peek.fish"
+
+    local keymaps="$TARGET_HOME/.config/nvim/lua/config/keymaps.lua"
+    local marker="end4-pC peek keymaps"
+    mkdir -p "$(dirname "$keymaps")"
+    touch "$keymaps"
+    if grep -qF "$marker" "$keymaps"; then
+        echo "[install] peek keymaps already present"
+    else
+        {
+            printf '\n-- >>> %s >>>\n' "$marker"
+            cat "$snippets/nvim-keymaps.lua"
+            printf -- '-- <<< %s <<<\n' "$marker"
+        } >> "$keymaps"
+    fi
+
+    if [[ $(id -u) -eq 0 && -n "${TARGET_USER:-}" ]]; then
+        chown "$TARGET_USER:" "$TARGET_HOME/.config/fish/conf.d/peek.fish" \
+            "$keymaps" 2>/dev/null || true
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Python venv
 # ---------------------------------------------------------------------------
 # Pre-download the whisper 'base' model so the first STT use is not delayed.
@@ -1244,6 +1277,7 @@ main() {
     install_omp_config
     install_nvim_bootstrap
     install_image_preview_configs
+    install_peek_configs
     install_python_venv
     install_ii_config
     apply_app_theming

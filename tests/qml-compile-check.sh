@@ -48,7 +48,7 @@ trap 'rm -rf "$modules" "$files" "$out_file" "$quickshell_types"' EXIT
 # Files that do not compile. The remaining qmllint warnings are about
 # properties that only exist at runtime, for example the dynamic members of
 # the Appearance singleton, so they are not failures.
-hard_errors='is not a type|was not found|Duplicated signal name|Cannot assign to non-existent property'
+hard_errors='is not a type|was not found|Duplicated signal name|Cannot assign to non-existent property|\[syntax\]|Could not find property .selectByMouse.'
 
 # Quickshell exports its own types from the core module and from the
 # per-compositor submodules. A submodule sees the types of the core module,

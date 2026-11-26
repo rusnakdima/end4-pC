@@ -52,6 +52,27 @@ TestCase {
         compare(KeyCombos.keyEventToCombo({ key: 0, modifiers: Qt.NoModifier, text: ";" }), ";");
     }
 
+    function test_grave_and_tilde_are_the_same_physical_key() {
+        // Both keysyms name evdev code 41, so the frozen catalog's Alt+` binds
+        // keep working when Shift changes the keysym to a tilde.
+        compare(KeyCombos.keyEventToCombo({ key: Qt.Key_QuoteLeft, modifiers: Qt.NoModifier, text: "`" }), "code:49");
+        compare(KeyCombos.keyEventToCombo({ key: Qt.Key_AsciiTilde, modifiers: Qt.NoModifier, text: "~" }), "code:49");
+        compare(
+            KeyCombos.keyEventToCombo({
+                key: Qt.Key_QuoteLeft,
+                modifiers: Qt.AltModifier,
+                text: "`",
+            }),
+            "ALT + code:49");
+        compare(
+            KeyCombos.keyEventToCombo({
+                key: Qt.Key_AsciiTilde,
+                modifiers: Qt.ShiftModifier | Qt.AltModifier,
+                text: "~",
+            }),
+            "SHIFT + ALT + code:49");
+    }
+
     function test_modifier_presses_are_ignored() {
         // A modifier on its own is not a combination Hyprland could bind.
         compare(KeyCombos.keyEventToCombo({ key: Qt.Key_Shift, modifiers: Qt.ShiftModifier, text: "" }), "");
@@ -100,6 +121,7 @@ TestCase {
     function test_display_parts_splits_a_combo() {
         compare(KeyCombos.displayParts("CTRL + SUPER + K").join("|"), "Ctrl|Super|K");
         compare(KeyCombos.displayParts("SUPER + Return").join("|"), "Super|Enter");
+        compare(KeyCombos.displayParts("ALT + code:49").join("|"), "Alt|`");
         compare(KeyCombos.displayParts("").length, 0);
         compare(KeyCombos.displayParts(undefined).length, 0);
     }
@@ -109,6 +131,8 @@ TestCase {
         compare(KeyCombos.comboFromText("Super + I"), "SUPER + I");
         compare(KeyCombos.comboFromText("i super"), "SUPER + I");
         compare(KeyCombos.comboFromText("ctrl shift k"), "CTRL + SHIFT + K");
+        compare(KeyCombos.comboFromText("alt grave"), "ALT + code:49");
+        compare(KeyCombos.comboFromText("alt shift `"), "SHIFT + ALT + code:49");
         compare(KeyCombos.comboFromText(""), "");
         compare(KeyCombos.comboFromText("shift"), "");
     }

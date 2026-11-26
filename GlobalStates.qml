@@ -12,6 +12,7 @@ Singleton {
     signal requestBluetoothDialog()
     property bool advancedPasteOpen: false
     property bool imagePreviewOpen: false
+    property bool peekOpen: false
     property bool barOpen: true
     // True while the bar is hidden by its auto hide, so that everything the
     // bar draws below itself (the music line under the island pill) can go
@@ -122,12 +123,6 @@ Singleton {
     function requestShellReload(): void {
         reloadMarkerFile.setText(root.lockStateSession)
         Quickshell.reload(true);
-    }
-
-    CompositorGlobalShortcut {
-        name: "shellReload"
-        description: "Reload the theme"
-        onPressed: root.requestShellReload()
     }
 
     // Lock with the theme's own lock screen. hyprlock remains an opt-in

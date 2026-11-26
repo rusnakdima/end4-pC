@@ -34,6 +34,10 @@ hl.bind("SUPER + SHIFT + F", hl.dsp.global("quickshell:findMouse"), {description
 hl.bind("SUPER + SHIFT + U", hl.dsp.global("quickshell:screenRuler"), {description = "Utilities: Screen ruler"})
 --#/# bind = SUPER+SHIFT, I,, -- Image Preview: view a file or clipboard image --
 hl.bind("SUPER + SHIFT + I", hl.dsp.global("quickshell:imagePreview"), {description = "Utilities: Image preview"})
+--#/# bind = ALT, Space,, -- Peek: preview the current selection or file --
+hl.bind("ALT + SPACE", hl.dsp.global("quickshell:peek"), {description = "Utilities: Peek preview"})
+--#/# bind = SUPER+SHIFT, Space,, -- Peek preview fallback --
+hl.bind("SUPER + SHIFT + SPACE", hl.dsp.global("quickshell:peek"), {description = "Utilities: Peek preview"})
 -- <<< end4-pC utilities keybinds
 
 -- >>> end4-pC advanced-paste window rule (managed by end4-pC)
@@ -45,6 +49,13 @@ hl.window_rule({ match = { class = "org.quickshell", title = "Advanced Paste" },
 -- Keep the image preview overlay floating with the theme's rounding.
 hl.window_rule({ match = { class = "org.quickshell", title = "Image Preview" }, float = true, rounding = 18 })
 -- <<< end4-pC image-preview window rule
+
+-- >>> end4-pC peek window rules (managed by end4-pC)
+-- Keep Peek floating with the theme's rounding; the nvim editor launched by
+-- Peek opens as a floating terminal so the selected text stays readable.
+hl.window_rule({ match = { class = "org.quickshell", title = "Peek" }, float = true, rounding = 18 })
+hl.window_rule({ match = { title = "end4-pc-peek" }, float = true, size = { "monitor_w * 0.75", "monitor_h * 0.75" } })
+-- <<< end4-pC peek window rules
 
 -- >>> end4-pC tap-super launcher keybinds (managed by end4-pC)
 -- Tap Super alone opens the launcher; Super + <key> must not.
