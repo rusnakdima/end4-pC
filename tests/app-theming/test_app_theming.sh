@@ -204,5 +204,24 @@ bash "$APP_THEMING" light
 check 'master toggle: disabled leaves files untouched' \
     "cmp -s '$TMP_DIR/before-disabled.css' '$LIGHT_CSS'"
 
+# --- environment.d drop-in for native KDE Connect (systemd children) --------
+DROPIN="$XDG_CONFIG_HOME/environment.d/90-end4-pc-app-theming.conf"
+printf '{}\n' > "$SHELL_CONFIG_FILE"
+bash "$APP_THEMING" dark
+check 'drop-in: dark mode sets Material Dark' \
+    "grep -qx 'QT_QUICK_CONTROLS_MATERIAL_THEME=Dark' '$DROPIN'"
+check 'drop-in: exposes QT_QPA_PLATFORMTHEME' \
+    "grep -qx 'QT_QPA_PLATFORMTHEME=qt6ct' '$DROPIN'"
+check 'drop-in: points QT_QUICK_CONTROLS_CONF at generated conf' \
+    "grep -qx 'QT_QUICK_CONTROLS_CONF=$QQC_CONF' '$DROPIN'"
+
+bash "$APP_THEMING" light
+check 'drop-in: light mode rewrites to Light' \
+    "grep -qx 'QT_QUICK_CONTROLS_MATERIAL_THEME=Light' '$DROPIN'"
+check 'drop-in: mode switch does not duplicate keys' \
+    "test \"\$(grep -c '^QT_QUICK_CONTROLS_MATERIAL_THEME=' '$DROPIN')\" -eq 1"
+check 'env.lua: two applies leave no duplicate keys' \
+    "test \"\$(grep -c 'hl.env(\"QT_QUICK_CONTROLS_CONF\"' '$XDG_CONFIG_HOME/hypr/hyprland/env.lua')\" -eq 1"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]
