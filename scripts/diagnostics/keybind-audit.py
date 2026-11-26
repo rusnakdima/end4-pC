@@ -28,7 +28,10 @@ UNSAFE_TOKENS = (
 )
 DANGEROUS_CMD = re.compile(
     r'\b(loginctl\s+lock-session|systemctl\s+(poweroff|suspend|hibernate|reboot)'
-    r'|loginctl\s+(poweroff|suspend|hibernate|reboot)|hyprctl\s+reload)\b', re.I)
+    r'|loginctl\s+(poweroff|suspend|hibernate|reboot)|hyprctl\s+(reload|kill)'
+    r'|pkill|killall)\b', re.I)
+PLACEHOLDER_CMD = re.compile(
+    r'\b(not[-_ ]?configured|unimplemented|placeholder|TODO|FIXME)\b', re.I)
 SHELL_BUILTINS = frozenset({'true', 'false', 'command', 'echo', 'printf', 'test', '['})
 
 
@@ -121,6 +124,8 @@ def audit_commands(commands, home, repo):
     ipc_index = _index_ipc_methods(repo)
     for cid, entry in (commands or {}).items():
         command = entry.get('command', '')
+        if PLACEHOLDER_CMD.search(command):
+            issues.append(f'{cid}: placeholder command, does nothing: {command}')
         expanded = (command.replace('$HOME', str(home))
                     .replace('$qsConfig', 'end4-pC')
                     .replace('$qsScripts', str(Path(home) / '.config/hypr/hyprland/scripts'))

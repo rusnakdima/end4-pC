@@ -81,6 +81,27 @@ class AuditTests(unittest.TestCase):
         self.assertTrue(any('ipc' in i and 'missingMethod' in i for i in issues), issues)
         self.assertFalse(any('good' in i for i in issues), issues)
 
+    def test_placeholder_command_is_reported(self):
+        commands = {
+            'ocr': {'command': 'echo OCR-not-configured'},
+            'good': {'command': 'true'},
+        }
+        issues = self.ka.audit_commands(commands, home=str(ROOT), repo=str(ROOT))
+        self.assertTrue(any('ocr' in i and 'placeholder' in i for i in issues), issues)
+        self.assertFalse(any('good' in i for i in issues), issues)
+
+    def test_real_ocr_bind_is_wired_to_region_ocr(self):
+        catalog = json.loads((ROOT / 'defaults/hyprland/keybinds.json').read_text())
+        bind = next(b for b in catalog['binds'] if b['id'] == 'utilities-5')
+        command = (bind.get('dispatch') or {}).get('command', '')
+        self.assertIn('ipc call region ocr', command)
+        self.assertNotIn('not-configured', command)
+
+    def test_process_stopping_command_is_unsafe_to_test(self):
+        catalog = json.loads((ROOT / 'defaults/hyprland/keybinds.json').read_text())
+        result = self.ka.classify_binds(catalog, {}, None)
+        self.assertEqual(result['window-16']['category'], 'unsafe-to-test')
+
     def test_audit_live_binds_reports_missing_effective_combo(self):
         effective = [{'id': 'x', 'combo': 'SUPER + A',
                       'dispatch': {'kind': 'focus', 'target': 'window'}}]

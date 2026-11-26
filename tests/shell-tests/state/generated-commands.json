@@ -45,7 +45,7 @@
   "category": "Utilities"
  },
  "utilities-5": {
-  "command": "echo OCR-not-configured",
+  "command": "qs -c $qsConfig ipc call region ocr",
   "description": "Utilities: OCR region >> clipboard",
   "category": "Utilities"
  },

@@ -898,7 +898,7 @@
    "options": {},
    "dispatch": {
     "kind": "command",
-    "command": "echo OCR-not-configured"
+    "command": "qs -c $qsConfig ipc call region ocr"
    },
    "code": "hl.bind(\"SUPER + SHIFT + O\", hl.dsp.global(\"quickshell:runCommand:utilities-5\"), { description = \"Utilities: OCR region >> clipboard\" })"
   },
