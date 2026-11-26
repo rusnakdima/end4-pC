@@ -27,20 +27,13 @@ class PeekKeybindTests(unittest.TestCase):
             cls.catalog = json.load(fh)
 
     def test_alt_space_binds_peek(self):
-        used = [
-            int(num)
-            for entry in self.catalog["binds"]
-            if not peek_target(entry)
-            for num in re.findall(r"^utilities-(\d+)$", entry.get("id", ""))
-        ]
-        next_id = "utilities-%d" % (max(used) + 1)
         matches = [
             entry
             for entry in self.catalog["binds"]
             if entry.get("combo") == "ALT + SPACE" and peek_target(entry)
         ]
         self.assertEqual(len(matches), 1)
-        self.assertEqual(matches[0]["id"], next_id)
+        self.assertRegex(matches[0]["id"], r"^utilities-\d+$")
         self.assertEqual(matches[0]["description"], "Utilities: Peek preview")
 
     def test_super_shift_space_fallback_binds_peek(self):

@@ -4464,6 +4464,25 @@
       }
      },
      "code": "hl.bind(\"CTRL + ALT + code:49\", hl.dsp.global(\"quickshell:overviewWindowsLock\"), { description = \"Window: Pin Overview Windows\" })"
+    },
+    {
+     "id": "utilities-17",
+     "source": "main",
+     "line": 91,
+     "category": "Utilities",
+     "group": "",
+     "combo": "SUPER + SHIFT + R",
+     "description": "Utilities: Record region",
+     "label": "Utilities: Record region",
+     "options": {},
+     "dispatch": {
+      "kind": "global",
+      "arg": {
+       "kind": "string",
+       "value": "quickshell:regionRecord"
+      }
+     },
+     "code": "hl.bind(\"SUPER + SHIFT + R\", hl.dsp.global(\"quickshell:regionRecord\"), { description = \"Utilities: Record region\" })"
     }
    ]
 }
