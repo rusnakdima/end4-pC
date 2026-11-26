@@ -24,8 +24,9 @@ class KeybindReloadTest(unittest.TestCase):
         # the dispatch must be made from a function with hl.dispatch().
         expected = (
             'hl.bind("CTRL + SUPER + R", function() '
-            'hl.dispatch(hl.dsp.exec_cmd(qsIpcCall .. '
-            '" wallpapers reloadShell || qs -p $HOME/.config/quickshell/$qsConfig")) '
+            'hl.dispatch(hl.dsp.exec_cmd("env WAYLAND_DISPLAY=wayland-1 " .. '
+            'qsIpcCall .. " wallpapers reloadShell || '
+            'qs -n -p $HOME/.config/quickshell/$qsConfig")) '
             'end, { description = "Shell: Reload theme" })'
         )
         self.assertEqual(bind["dispatch"]["kind"], "raw")
@@ -49,7 +50,8 @@ class KeybindReloadTest(unittest.TestCase):
             with open(os.path.join(d, "main.lua")) as main_file:
                 main = main_file.read()
             self.assertIn("wallpapers reloadShell", main)
-            self.assertIn("qs -p $HOME/.config/quickshell/$qsConfig", main)
+            self.assertIn("WAYLAND_DISPLAY=wayland-1", main)
+            self.assertIn("qs -n -p $HOME/.config/quickshell/$qsConfig", main)
             self.assertIn("function() hl.dispatch(hl.dsp.exec_cmd(", main)
             self.assertNotIn('hl.dsp.global("quickshell:shellReload")', main)
 

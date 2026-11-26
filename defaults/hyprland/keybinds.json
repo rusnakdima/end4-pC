@@ -811,9 +811,9 @@
    "options": {},
    "dispatch": {
     "kind": "raw",
-    "code": "hl.bind(\"CTRL + SUPER + R\", function() hl.dispatch(hl.dsp.exec_cmd(qsIpcCall .. \" wallpapers reloadShell || qs -p $HOME/.config/quickshell/$qsConfig\")) end, { description = \"Shell: Reload theme\" })"
+    "code": "hl.bind(\"CTRL + SUPER + R\", function() hl.dispatch(hl.dsp.exec_cmd(\"env WAYLAND_DISPLAY=wayland-1 \" .. qsIpcCall .. \" wallpapers reloadShell || qs -n -p $HOME/.config/quickshell/$qsConfig\")) end, { description = \"Shell: Reload theme\" })"
    },
-   "code": "hl.bind(\"CTRL + SUPER + R\", function() hl.dispatch(hl.dsp.exec_cmd(qsIpcCall .. \" wallpapers reloadShell || qs -p $HOME/.config/quickshell/$qsConfig\")) end, { description = \"Shell: Reload theme\" })"
+   "code": "hl.bind(\"CTRL + SUPER + R\", function() hl.dispatch(hl.dsp.exec_cmd(\"env WAYLAND_DISPLAY=wayland-1 \" .. qsIpcCall .. \" wallpapers reloadShell || qs -n -p $HOME/.config/quickshell/$qsConfig\")) end, { description = \"Shell: Reload theme\" })"
   },
   {
    "id": "bind-27",
