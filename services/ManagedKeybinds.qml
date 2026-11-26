@@ -74,7 +74,10 @@ Singleton {
         watchChanges: true
 
         onLoaded: root.reload()
-        onFileChanged: root.reload()
+        // A watch event can fire while our own setText is still in flight.
+        // Reading then would restore the old file contents over the just
+        // written overlay; onSaved performs the authoritative read instead.
+        onFileChanged: { if (!root.awaitGeneration) root.reload(); }
         onSaved: {
             root.lastSaveError = "";
             if (root.awaitGeneration) {
@@ -164,8 +167,9 @@ Singleton {
 
     function reload() {
         // A write in flight owns the file. Reading it now would drop the
-        // change that is about to be written.
-        if (root.pendingWrite) return;
+        // change that is about to be written (pendingWrite covers the mkdir
+        // hop, awaitGeneration the setText -> onSaved window).
+        if (root.pendingWrite || root.awaitGeneration) return;
 
         root.loaded = true;
         root.loadGeneration += 1;
