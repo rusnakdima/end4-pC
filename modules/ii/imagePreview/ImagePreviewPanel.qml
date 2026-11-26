@@ -24,10 +24,10 @@ Window {
     visible: false
 
     // Cover the whole screen so the backdrop dims the desktop behind the card.
-    x: root.screen ? root.screen.x : 0
-    y: root.screen ? root.screen.y : 0
-    width: root.screen ? root.screen.width : 1280
-    height: root.screen ? root.screen.height : 800
+    x: root.screen && root.screen.x !== undefined ? root.screen.x : 0
+    y: root.screen && root.screen.y !== undefined ? root.screen.y : 0
+    width: root.screen && root.screen.width !== undefined ? root.screen.width : 1280
+    height: root.screen && root.screen.height !== undefined ? root.screen.height : 800
 
     readonly property int previewWidth: Math.round(root.width * 0.75)
     readonly property int previewHeight: Math.round(root.height * 0.75)

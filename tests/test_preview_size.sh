@@ -34,10 +34,10 @@ check_absent() {
 for panel in "$PEEK_PANEL" "$IMAGE_PANEL"; do
     name="$(basename "$panel")"
     check_absent "$name has no invalid screen.geometry access" "$panel" 'screen.geometry'
-    check "$name window x uses ShellScreen.x" "$panel" 'root.screen ? root.screen.x : 0'
-    check "$name window y uses ShellScreen.y" "$panel" 'root.screen ? root.screen.y : 0'
-    check "$name window width uses ShellScreen.width" "$panel" 'root.screen ? root.screen.width : 1280'
-    check "$name window height uses ShellScreen.height" "$panel" 'root.screen ? root.screen.height : 800'
+    check "$name window x uses ShellScreen.x" "$panel" 'root.screen.x !== undefined ? root.screen.x : 0'
+    check "$name window y uses ShellScreen.y" "$panel" 'root.screen.y !== undefined ? root.screen.y : 0'
+    check "$name window width uses ShellScreen.width" "$panel" 'root.screen.width !== undefined ? root.screen.width : 1280'
+    check "$name window height uses ShellScreen.height" "$panel" 'root.screen.height !== undefined ? root.screen.height : 800'
 done
 
 # The preview is a floating 75% card with its full button bar, not a dimmed
