@@ -19,6 +19,27 @@ check() {
     fi
 }
 
+check_absent() {
+    local label="$1" file="$2" pattern="$3"
+    if grep -qF -- "$pattern" "$file"; then
+        printf 'FAIL: %s (unexpected %q in %s)\n' "$label" "$pattern" "$file" >&2
+        fail=1
+    else
+        printf '  OK   %s\n' "$label"
+    fi
+}
+
+# Quickshell's ShellScreen exposes x/y/width/height directly; `.geometry` is
+# undefined and made both windows fall back to a 500x500 default.
+for panel in "$PEEK_PANEL" "$IMAGE_PANEL"; do
+    name="$(basename "$panel")"
+    check_absent "$name has no invalid screen.geometry access" "$panel" 'screen.geometry'
+    check "$name window x uses ShellScreen.x" "$panel" 'root.screen ? root.screen.x : 0'
+    check "$name window y uses ShellScreen.y" "$panel" 'root.screen ? root.screen.y : 0'
+    check "$name window width uses ShellScreen.width" "$panel" 'root.screen ? root.screen.width : 1280'
+    check "$name window height uses ShellScreen.height" "$panel" 'root.screen ? root.screen.height : 800'
+done
+
 check "Peek card width is 75% of the screen" "$PEEK_PANEL" 'Math.round(root.width * 0.75)'
 check "Peek card height is 75% of the screen" "$PEEK_PANEL" 'Math.round(root.height * 0.75)'
 check "Peek image card uses the 75% width" "$PEEK_PANEL" 'card.width = previewWidth'
