@@ -40,6 +40,14 @@ for panel in "$PEEK_PANEL" "$IMAGE_PANEL"; do
     check "$name window height uses ShellScreen.height" "$panel" 'root.screen ? root.screen.height : 800'
 done
 
+# An image preview is a bare 75% image block: no header, no inner margins, no
+# card chrome. Other Peek kinds keep the normal labelled card.
+check "Peek image-only mode follows the image kind" "$PEEK_PANEL" 'property bool imageOnly: Peek.kind === "image"'
+check "Peek image-only card has no margins" "$PEEK_PANEL" 'margins: imageOnly ? 0 : 10'
+check "Peek hides the header in image-only mode" "$PEEK_PANEL" 'visible: !imageOnly'
+check "Peek image-only card has no radius" "$PEEK_PANEL" 'radius: imageOnly ? 0 : Appearance.rounding.verylarge'
+check "Peek image-only card has no border" "$PEEK_PANEL" 'border.width: imageOnly ? 0 : 1'
+
 check "Peek card width is 75% of the screen" "$PEEK_PANEL" 'Math.round(root.width * 0.75)'
 check "Peek card height is 75% of the screen" "$PEEK_PANEL" 'Math.round(root.height * 0.75)'
 check "Peek image card uses the 75% width" "$PEEK_PANEL" 'card.width = previewWidth'

@@ -29,6 +29,7 @@ Window {
 
     readonly property int previewWidth: Math.round(root.width * 0.75)
     readonly property int previewHeight: Math.round(root.height * 0.75)
+    readonly property bool imageOnly: Peek.kind === "image"
 
     onClosing: event => Peek.close()
 
@@ -64,17 +65,18 @@ Window {
         anchors.centerIn: parent
         width: previewWidth
         height: previewHeight
-        radius: Appearance.rounding.verylarge
+        radius: imageOnly ? 0 : Appearance.rounding.verylarge
         color: Appearance.colors.colUiPopupBackground
-        border.width: 1
+        border.width: imageOnly ? 0 : 1
         border.color: Appearance.colors.colOutlineVariant
-        StyledRectangularShadow { target: card }
+        StyledRectangularShadow { target: card; visible: !imageOnly }
 
         ColumnLayout {
-            anchors { fill: parent; margins: 10 }
+            anchors { fill: parent; margins: imageOnly ? 0 : 10 }
             spacing: 8
 
             RowLayout {
+                visible: !imageOnly
                 Layout.fillWidth: true
                 Layout.preferredHeight: 32
                 spacing: 8
@@ -155,7 +157,7 @@ Window {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                radius: Appearance.rounding.normal
+                radius: imageOnly ? 0 : Appearance.rounding.normal
                 color: Appearance.colors.colLayer1
                 clip: true
 
