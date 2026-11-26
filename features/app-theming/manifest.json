@@ -21,6 +21,7 @@
       "mechanism": "gtk-theme-name + dark preference + guarded GTK3 CSS",
       "compatible": ["adw-gtk3", "adw-gtk3-dark"],
       "patterns": ["adw-gtk3*", "Adwaita*", "md3*"],
+      "packages": ["adw-gtk-theme"],
       "fallback": "Adwaita with the guarded MD3 CSS block"
     },
     {
@@ -37,6 +38,7 @@
       "mechanism": "QT_STYLE_OVERRIDE + Kvantum + qt6ct + KDE ColorScheme",
       "compatible": ["MaterialAdw", "Colloid"],
       "patterns": ["MaterialAdw", "Colloid*", "Material*"],
+      "packages": ["kvantum", "kvantum-qt5", "qt6ct", "plasma6-themes-colloid-git"],
       "fallback": "Fusion style with the qt6ct matugen palette"
     },
     {

@@ -105,6 +105,11 @@ install_packages() {
         neovim
         libqalculate
         papirus-icon-theme
+        # compatible app window themes (see features/app-theming/manifest.json)
+        adw-gtk-theme    # GTK3/GTK4 libadwaita port (adw-gtk3 / adw-gtk3-dark)
+        kvantum          # Qt6 SVG style engine
+        kvantum-qt5      # Qt5 style plugin for Kvantum
+        qt6ct            # Qt6 platform theme config (palette/color scheme)
         # hotspot (AP) feature — see scripts/hotspot/README.md
         wireless-regdb # regulatory.db; without it 5 GHz AP channels are NO-IR
         hostapd        # AP daemon (helper runs its own instance, not the unit)
@@ -118,6 +123,7 @@ install_packages() {
     # when the installer runs as a regular user.
     local aur_pkgs=(
         quickshell-git
+        plasma6-themes-colloid-git  # Kvantum Colloid source themes (light + dark)
     )
 
     # An installed quickshell already provides the same binary, so the git
@@ -126,7 +132,12 @@ install_packages() {
     # pacman, which needs a password and would abort the whole installer.
     if command -v quickshell &>/dev/null; then
         echo "[install-system] quickshell is already installed, skipping the git build."
-        aur_pkgs=()
+        local filtered_aur=()
+        for pkg in "${aur_pkgs[@]}"; do
+            [[ "$pkg" == "quickshell-git" ]] && continue
+            filtered_aur+=("$pkg")
+        done
+        aur_pkgs=("${filtered_aur[@]}")
     fi
 
     [[ $CLI_NO_AUR -eq 1 ]] && aur_pkgs=()

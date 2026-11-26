@@ -58,6 +58,7 @@ Options:
   --no-app-theming           Do not apply external app theming.
   --no-app-theming-qt-env    Do not set QT_STYLE_OVERRIDE=kvantum.
   --no-app-theming-hook      Do not install matugen post-hooks.
+  --no-theme-packages        Do not install compatible GTK/Qt theme packages.
   --                         Stop option parsing.
 
 Environment (flags take precedence; binary variables must be 0 or 1):
@@ -68,6 +69,7 @@ Environment (flags take precedence; binary variables must be 0 or 1):
   APP_THEMING=0              Same as --no-app-theming.
   APP_THEMING_QT_ENV=0       Same as --no-app-theming-qt-env.
   APP_THEMING_MATUGEN_HOOK=0 Same as --no-app-theming-hook.
+  APP_THEME_PACKAGES=0       Same as --no-theme-packages.
   VNC_MODE / VNC_AUDIO / VNC_AUTOLOGIN  Same as the matching flags.
 
 Examples:
@@ -101,6 +103,7 @@ DISABLE_WINDOW_BUTTONS="${DISABLE_WINDOW_BUTTONS:-1}"
 APP_THEMING="${APP_THEMING:-1}"
 APP_THEMING_QT_ENV="${APP_THEMING_QT_ENV:-1}"
 APP_THEMING_MATUGEN_HOOK="${APP_THEMING_MATUGEN_HOOK:-1}"
+APP_THEME_PACKAGES="${APP_THEME_PACKAGES:-1}"
 OFFLINE="${OFFLINE:-0}"
 OFFLINE_WHEELHOUSE="${OFFLINE_WHEELHOUSE:-}"
 SKIP_STT_MODEL_DOWNLOAD="${SKIP_STT_MODEL_DOWNLOAD:-0}"
@@ -129,6 +132,7 @@ while (($#)); do
         --no-app-theming) APP_THEMING=0 ;;
         --no-app-theming-qt-env) APP_THEMING_QT_ENV=0 ;;
         --no-app-theming-hook) APP_THEMING_MATUGEN_HOOK=0 ;;
+        --no-theme-packages) APP_THEME_PACKAGES=0 ;;
         --) shift; break ;;
         -*) die "unknown option: $1 (try --help)" ;;
         *) die "unexpected argument: $1 (try --help)" ;;
@@ -143,6 +147,7 @@ check_01 DISABLE_WINDOW_BUTTONS "$DISABLE_WINDOW_BUTTONS"
 check_01 APP_THEMING "$APP_THEMING"
 check_01 APP_THEMING_QT_ENV "$APP_THEMING_QT_ENV"
 check_01 APP_THEMING_MATUGEN_HOOK "$APP_THEMING_MATUGEN_HOOK"
+check_01 APP_THEME_PACKAGES "$APP_THEME_PACKAGES"
 check_01 VNC_AUTOLOGIN "$VNC_AUTOLOGIN"
 case "$VNC_MODE" in full|mirror) ;; *) die "invalid --vnc-mode '$VNC_MODE' (expected full or mirror)" ;; esac
 case "$VNC_AUDIO" in sunshine|none) ;; *) die "invalid --vnc-audio '$VNC_AUDIO' (expected sunshine or none)" ;; esac
@@ -591,6 +596,19 @@ apply_app_theming() {
     if command -v gsettings >/dev/null 2>&1; then
         scheme=$("${gs[@]}" get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
         [[ "$scheme" == "prefer-dark" ]] && mode="dark"
+    fi
+
+    local provisioner="$SOURCE_DIR/scripts/theming/theme-provision.sh"
+    if [[ $APP_THEME_PACKAGES -eq 1 && -f "$provisioner" ]]; then
+        echo "[install] Provisioning compatible app themes..."
+        if [[ $(id -u) -eq 0 ]] && id "$TARGET_USER" &>/dev/null; then
+            sudo -u "$TARGET_USER" env HOME="$TARGET_HOME" \
+                XDG_CONFIG_HOME="$TARGET_HOME/.config" \
+                XDG_STATE_HOME="$TARGET_HOME/.local/state" \
+                bash "$provisioner" "$mode" --install >/dev/null 2>&1 || true
+        else
+            bash "$provisioner" "$mode" --install >/dev/null 2>&1 || true
+        fi
     fi
 
     echo "[install] Applying app window theming ($mode)..."

@@ -80,5 +80,27 @@ check_resolved 'fallback qt quick style' qtQuickStyle Material
 check_resolved 'fallback gtk source' 'sources.gtk' missing
 check_resolved 'fallback kvantum source' 'sources.kvantum' missing
 
+# --- installer opt-out wiring ------------------------------------------------
+INSTALL="$REPO_ROOT/install.sh"
+check 'installer documents --no-theme-packages' \
+    "grep -qF -- '--no-theme-packages' '$INSTALL'"
+check 'installer defines APP_THEME_PACKAGES default' \
+    "grep -q 'APP_THEME_PACKAGES=\"\${APP_THEME_PACKAGES:-1}\"' '$INSTALL'"
+check 'installer validates APP_THEME_PACKAGES' \
+    "grep -q 'check_01 APP_THEME_PACKAGES' '$INSTALL'"
+check 'installer --help exits 0' \
+    "bash '$INSTALL' --help >/dev/null 2>&1"
+check 'invalid theme-packages option exits 2' \
+    "bash '$INSTALL' --theme-packages=bogus >/dev/null 2>&1; test \$? -eq 2"
+
+# --- --install is safe under the no-external test seam -----------------------
+mkdir -p "$TMP_DIR/bin"
+printf '#!/usr/bin/env bash\nexit 99\n' > "$TMP_DIR/bin/yay"
+chmod +x "$TMP_DIR/bin/yay"
+PATH="$TMP_DIR/bin:$PATH" APP_THEMING_NO_EXTERNAL=1 \
+    bash "$PROVISION" dark --install >/dev/null 2>&1
+check '--install is a no-op with APP_THEMING_NO_EXTERNAL=1' \
+    "test -f '$RESOLVED'"
+
 printf '%d passed, %d failed\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]
