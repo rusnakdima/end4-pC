@@ -30,7 +30,15 @@ Singleton {
             return 1;
         return b.strength - a.strength;
     })
+    // SSIDs of saved NetworkManager Wi-Fi profiles. A profile created by
+    // `nmcli dev wifi connect` is named after its SSID, which is what the
+    // connect/disconnect actions already assume. Kept live from nmcli monitor.
+    property var savedWifiSsids: []
     property string wifiStatus: "disconnected"
+
+    function isWifiSaved(ssid: string): bool {
+        return !!ssid && root.savedWifiSsids.includes(ssid);
+    }
 
     property string networkName: ""
     property int networkStrength
@@ -81,8 +89,13 @@ Singleton {
 
     }
 
-    function disconnectWifiNetwork(): void {
-        if (active) disconnectProc.exec(["nmcli", "connection", "down", active.ssid]);
+    function disconnectWifiNetwork(ssid = active?.ssid ?? ""): void {
+        if (ssid) disconnectProc.exec(["nmcli", "connection", "down", ssid]);
+    }
+
+    function forgetWifiNetwork(ssid: string): void {
+        if (!ssid) return;
+        forgetProc.exec(["nmcli", "connection", "delete", ssid]);
     }
 
     function openPublicWifiPortal() {
@@ -115,6 +128,8 @@ Singleton {
             onRead: line => {
                 // print(line)
                 getNetworks.running = true
+                // A successful connect creates/updates a saved profile.
+                getSavedWifiProfiles.running = true
             }
         }
         stderr: SplitParser {
@@ -135,6 +150,16 @@ Singleton {
         id: disconnectProc
         stdout: SplitParser {
             onRead: getNetworks.running = true
+        }
+    }
+
+    Process {
+        id: forgetProc
+        onExited: {
+            // Deleting the active profile disconnects without a scan, so both
+            // the saved set and the visible AP list must be refreshed here.
+            getSavedWifiProfiles.running = true
+            getNetworks.running = true
         }
     }
 
@@ -165,6 +190,7 @@ Singleton {
         updateNetworkStrength.running = true;
         updateNetworkDetails.running = true;
         updatePublicIp.running = true;
+        getSavedWifiProfiles.running = true;
     }
 
     Process {
@@ -386,6 +412,23 @@ Singleton {
                         }));
                     }
                 }
+            }
+        }
+    }
+
+    // NetworkManager reports Wi-Fi connection profiles as TYPE
+    // 802-11-wireless, not "wifi". Only these profiles can be forgotten.
+    Process {
+        id: getSavedWifiProfiles
+        running: true
+        command: ["sh", "-c", "nmcli -t -f NAME,TYPE c show | awk -F: '$2 == \"802-11-wireless\" {print $1}'"]
+        environment: ({
+            LANG: "C",
+            LC_ALL: "C"
+        })
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.savedWifiSsids = text.trim().split("\n").filter(name => name.length > 0);
             }
         }
     }

@@ -9,12 +9,12 @@ import QtQuick.Layouts
 DialogListItem {
     id: root
     required property WifiAccessPoint wifiNetwork
+    property bool expanded: false
     enabled: !(Network.wifiConnectTarget === root.wifiNetwork && !wifiNetwork?.active)
+    pointingHandCursor: !expanded
 
     active: (wifiNetwork?.askingPassword || wifiNetwork?.active) ?? false
-    onClicked: {
-        Network.connectToWifiNetwork(wifiNetwork);
-    }
+    onClicked: expanded = !expanded
 
     contentItem: ColumnLayout {
         anchors {
@@ -47,6 +47,54 @@ DialogListItem {
                 text: root.wifiNetwork?.active ? "check" : Network.wifiConnectTarget === root.wifiNetwork ? "settings_ethernet" : "lock"
                 iconSize: Appearance.font.pixelSize.larger
                 color: Appearance.colors.colOnSurfaceVariant
+            }
+            MaterialSymbol {
+                text: "keyboard_arrow_down"
+                iconSize: Appearance.font.pixelSize.larger
+                color: Appearance.colors.colOnLayer3
+                rotation: root.expanded ? 180 : 0
+                Behavior on rotation {
+                    animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+                }
+            }
+        }
+
+        RowLayout {
+            visible: root.expanded
+            Layout.topMargin: 8
+            Item {
+                Layout.fillWidth: true
+            }
+            DialogButton {
+                visible: Network.isWifiSaved(root.wifiNetwork?.ssid ?? "")
+                colBackground: Appearance.colors.colError
+                colBackgroundHover: Appearance.colors.colErrorHover
+                colRipple: Appearance.colors.colErrorActive
+                colText: Appearance.colors.colOnError
+                buttonText: Translation.tr("Forget")
+                onClicked: {
+                    const ssid = root.wifiNetwork?.ssid;
+                    if (!ssid) return;
+                    root.expanded = false;
+                    Network.forgetWifiNetwork(ssid);
+                }
+            }
+            DialogButton {
+                colBackground: Appearance.colors.colPrimary
+                colBackgroundHover: Appearance.colors.colPrimaryHover
+                colRipple: Appearance.colors.colPrimaryActive
+                colText: Appearance.colors.colOnPrimary
+                buttonText: (root.wifiNetwork?.active ?? false) ? Translation.tr("Disconnect") : Translation.tr("Connect")
+                onClicked: {
+                    const wifiNetwork = root.wifiNetwork;
+                    if (!wifiNetwork) return;
+                    root.expanded = false;
+                    if (wifiNetwork.active) {
+                        Network.disconnectWifiNetwork(wifiNetwork.ssid);
+                    } else {
+                        Network.connectToWifiNetwork(wifiNetwork);
+                    }
+                }
             }
         }
 
