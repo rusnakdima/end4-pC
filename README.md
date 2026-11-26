@@ -266,6 +266,35 @@ pass `--no-app-theming` (`APP_THEMING=0`), `--no-app-theming-qt-env`
 (`APP_THEMING_MATUGEN_HOOK=0`). The matugen post-hook re-injects the MD3 CSS
 block after every palette regeneration, so it cannot be lost.
 
+### Compatible theme stack
+
+The installer provisions a compatible theme for every supported window type,
+then records what it found in
+`~/.local/state/quickshell/theme-stack/resolved.json`. If you already chose a
+theme of your own, detection keeps it instead of replacing it.
+
+| Window type | Theme used | Fallback when unavailable |
+| --- | --- | --- |
+| GTK 2/3/4 (Thunar, GNOME apps) | `adw-gtk3` / `adw-gtk3-dark` | stock GTK theme + MD3 CSS block |
+| QtWidgets (Dolphin, Kate) | Kvantum `MaterialAdw` + KDE `Matugen` scheme | Fusion with `QT_QPA_PLATFORMTHEME=qt6ct` |
+| Qt Quick / Kirigami (KDE Connect) | generated `qtquickcontrols2.conf` (Material, mode + accent) | Material style with host scheme |
+| GTK 4 / libadwaita | host libadwaita accent | no CSS injection |
+
+Qt Quick mode and accent are delivered to apps through
+`~/.config/environment.d/90-end4-pc-app-theming.conf` and
+`~/.config/hypr/hyprland/env.lua`; running KDE Connect instances are restarted
+once on a mode change when **Refresh running apps** is on. Because Hyprland
+and already-running apps read those variables at startup, **log out and back in
+once** after installing or changing the theme family. Dolphin keeps its Kvantum
+path unchanged; Thunar's toolbar and path-bar borders are removed by the
+guarded MD3 CSS block.
+
+New opt-outs: `--no-theme-packages` (`APP_THEME_PACKAGES=0`) skips installing
+theme packages, and the **Auto-install themes**, **Theme Qt Quick apps**, and
+**Preferred theme family** switches in Settings control detection, Qt Quick
+theming, and theme preference. **Re-detect themes** re-provisions after you
+install a theme yourself. See `docs/design/theme-stack.md` for the full design.
+
 ### 🛠️ Desktop utilities
 
 The same keybind snippet also installs three small PowerToys-style shortcuts:
