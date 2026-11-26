@@ -118,6 +118,8 @@ check 'thunar: linked entries borderless with shell radius' \
     "grep -qF '.thunar .linked entry {' '$LIGHT_CSS' && grep -qF 'border-radius: 8px;' '$LIGHT_CSS'"
 check 'thunar: toolbar radius uses shell token literal' \
     "grep -qF 'border-radius: 12px;' '$LIGHT_CSS'"
+check 'thunar: linked toolbar buttons are flat' \
+    "grep -qF '.thunar .linked > button,' '$LIGHT_CSS' && grep -qF '.thunar toolbar button,' '$LIGHT_CSS' && grep -qF '.thunar headerbar button {' '$LIGHT_CSS' && grep -qF 'background-color: transparent;' '$LIGHT_CSS'"
 check 'thunar: every rule sits inside the guard markers' \
     "awk '/end4-pC MD3 app theming:begin/{in_guard=1; next} /end4-pC MD3 app theming:end/{in_guard=0} in_guard && /\\.thunar toolbar,/{found=1} END{exit !found}' '$LIGHT_CSS' && ! awk '/end4-pC MD3 app theming:begin/{in_guard=1; next} /end4-pC MD3 app theming:end/{in_guard=0} !in_guard && /\\.thunar toolbar,/{found=1} END{exit !found}' '$LIGHT_CSS'"
 

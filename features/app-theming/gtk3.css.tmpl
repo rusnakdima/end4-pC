@@ -89,6 +89,15 @@ treeview.view:selected {
     border-radius: 8px;
 }
 
+/* Thunar draws its navigation buttons as .linked > button; flatten those too. */
+.thunar .linked > button,
+.thunar toolbar button,
+.thunar headerbar button {
+    border: none;
+    box-shadow: none;
+    background-color: transparent;
+}
+
 entry.error,
 .error {
     border-color: @md3_error;
