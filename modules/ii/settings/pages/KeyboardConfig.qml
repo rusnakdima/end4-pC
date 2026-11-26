@@ -9,6 +9,7 @@ import qs.modules.common.widgets
 import qs.modules.common.functions as CF
 import "../../../common/functions/KeybindLabels.js" as KeybindLabels
 import "../../../common/functions/KeybindConflicts.js" as KeybindConflicts
+import "../../../common/functions/KeybindCommands.js" as KeybindCommands
 import "../../../common/functions/SettingsEscape.js" as SettingsEscape
 
 /**
@@ -62,6 +63,15 @@ ContentPage {
         HyprlandKeybinds.shellActions, GlobalStates.keybindFilter,
         ["description", "action"], ["combos"])
 
+    // Command binds are listed separately so a saved command can be deleted
+    // from Settings. Built-in commands stay in the action picker afterwards.
+    readonly property var commandEntries: KeybindCommands.commandEntries(
+        HyprlandKeybinds.effectiveBinds)
+
+    readonly property var visibleCommands: CF.StringUtils.filterByQueryWithCombos(
+        page.commandEntries, GlobalStates.keybindFilter,
+        ["label", "command", "category", "description"], ["combo"])
+
     // Series members get one grouped row below, so they are left out of the
     // flat "Other keybinds" list. Every other bind renders exactly as before.
     function filterOtherSections(sections, query) {
@@ -95,8 +105,8 @@ ContentPage {
         HyprlandKeybinds.otherSections, GlobalStates.keybindFilter)
 
     readonly property int keybindMatchCount: page.visibleManaged.length
-        + page.visibleShell.length + page.visibleSeries.length
-        + page.visibleOtherSections.length
+        + page.visibleShell.length + page.visibleCommands.length
+        + page.visibleSeries.length + page.visibleOtherSections.length
 
     // ------------------------------------------------------
     // Deleting shell / compositor binds (recoverable)
@@ -746,6 +756,26 @@ ContentPage {
         }
     }
 
+    // Delete a command keybind from the Commands section. Overlay adds own
+    // their generated command entry, so removing the add drops both; a frozen
+    // catalog bind can only be disabled, leaving its command in the picker.
+    function deleteCommandBind(bind) {
+        const plan = KeybindCommands.deletePlan(
+            bind, candidate => ManagedKeybinds.entryForSource(candidate));
+        if (plan === null || plan.id === "") {
+            page.captureError = page.formErrorMessage("not-found");
+            return false;
+        }
+        const result = plan.kind === "add"
+            ? ManagedKeybinds.remove(plan.id)
+            : DisabledKeybinds.disableBinds(plan.id, plan.label, plan.binds);
+        if (!KeybindConflicts.writeSucceeded(result, ManagedKeybinds.lastSaveError)) {
+            page.captureError = page.formErrorMessage(result?.error ?? "");
+            return false;
+        }
+        return true;
+    }
+
     function saveForm() {
         const entry = {
             name: page.formName.trim(),
@@ -1219,6 +1249,63 @@ ContentPage {
                             font.pixelSize: Appearance.font.pixelSize.normal
                             color: Appearance.colors.colSubtext
                             wrapMode: Text.Wrap
+                        }
+                    }
+                }
+            }
+        }
+
+        // Saved commands are keybinds too. They get their own list so a
+        // command can be deleted without hunting through the catalog binds;
+        // built-in commands remain available in the action picker after their
+        // bind is removed.
+        Loader {
+            Layout.fillWidth: true
+            active: WM.compositor === "hyprland" && page.visibleCommands.length > 0
+            sourceComponent: Component {
+                ContentSection {
+                    icon: "terminal"
+                    title: Translation.tr("Commands")
+                    hint: Translation.tr("Keybinds that run a saved command")
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+
+                        Repeater {
+                            model: page.visibleCommands
+                            delegate: RowLayout {
+                                required property var modelData
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 2
+                                    StyledText {
+                                        Layout.fillWidth: true
+                                        text: modelData.description
+                                        font.pixelSize: Appearance.font.pixelSize.small
+                                        color: Appearance.colors.colOnLayer1
+                                        elide: Text.ElideRight
+                                    }
+                                    StyledText {
+                                        Layout.fillWidth: true
+                                        text: modelData.combo + "  " + modelData.command
+                                        font.pixelSize: Appearance.font.pixelSize.smaller
+                                        color: Appearance.colors.colSubtext
+                                        elide: Text.ElideRight
+                                    }
+                                }
+
+                                IconToolbarButton {
+                                    text: "delete"
+                                    onClicked: page.deleteCommandBind(modelData.bind)
+                                    StyledToolTip {
+                                        text: Translation.tr("Delete command keybind")
+                                    }
+                                }
+                            }
                         }
                     }
                 }
