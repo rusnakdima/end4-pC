@@ -167,8 +167,15 @@ backup_config() {
 # set_config_key <file> <section> <key> <value> — idempotent ini-style edit that
 # preserves every other key (and the section layout) of the file.
 set_config_key() {
-    local file="$1" section="$2" key="$3" value="$4"
-    mkdir -p "$(dirname "$file")"
+    local file="$1" section="$2" key="$3" value="$4" dir
+    dir="$(dirname "$file")"
+    # A user may symlink a config dir to a profile that is not mounted here.
+    # Never delete the link or fail the whole apply over it.
+    if [[ -L "$dir" && ! -d "$dir" ]]; then
+        printf '[app-theming] WARN: %s is a broken symlink; skipping %s\n' "$dir" "$file" >&2
+        return 0
+    fi
+    mkdir -p "$dir" || return 0
     if [[ ! -f "$file" ]]; then
         printf '[%s]\n%s=%s\n' "$section" "$key" "$value" > "$file"
         return 0

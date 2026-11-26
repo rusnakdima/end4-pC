@@ -134,5 +134,25 @@ check 'settings toggle is labelled as detection, not installation' \
 check 'installer log does not claim packages were provisioned' \
     "! grep -qF 'Provisioning compatible app themes' '$REPO_ROOT/install.sh'"
 
+# --- live regressions: generated destination must never be a source ----------
+mkdir -p "$XDG_CONFIG_HOME/Kvantum"
+printf '[General]\ntheme=MaterialAdw\n' > "$XDG_CONFIG_HOME/Kvantum/kvantum.kvconfig"
+out="$TMP_DIR/generated-source.json"
+APP_THEMING_RESOLVED_FILE="$out" bash "$PROVISION" dark --detect
+check 'generated MaterialAdw is never selected as the Kvantum source' \
+    "test \"\$(jq -r .kvantumSourceDir '$out')\" = Colloid"
+check 'generated source keeps the real Colloid dark kvconfig' \
+    "test \"\$(jq -r .kvantumDarkSource '$out')\" = ColloidDark.kvconfig"
+
+# --- live regressions: broken qt6ct symlink must not abort app theming --------
+rm -rf "$XDG_CONFIG_HOME/qt6ct"
+ln -s "$TMP_DIR/missing-qt6ct" "$XDG_CONFIG_HOME/qt6ct"
+err="$TMP_DIR/stderr"
+APP_THEMING_NO_EXTERNAL=1 bash "$APP_THEMING" dark 2>"$err" >/dev/null
+check 'broken qt6ct symlink is skipped with a clear warning' \
+    "grep -qF 'broken symlink' '$err' && ! grep -q 'cannot create directory' '$err'"
+check 'other app settings are still written with a broken qt6ct symlink' \
+    "grep -q '^ColorScheme=Matugen' '$XDG_CONFIG_HOME/kdeglobals'"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]

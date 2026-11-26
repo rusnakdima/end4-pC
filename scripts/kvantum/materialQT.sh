@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
 XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -35,23 +36,44 @@ apply_qt() {
 	light_source="$(resolved_value kvantumLightSource Colloid.kvconfig)"
 	dark_source="$(resolved_value kvantumDarkSource ColloidDark.kvconfig)"
 
-	local folder_path="$XDG_CONFIG_HOME/Kvantum/$source_dir/"
+	# MaterialAdw is the generated destination, never its own source. If
+	# detection found no source theme, keep the existing generated files.
+	if [[ -z "$source_dir" || "$source_dir" == "$theme_name" ]]; then
+		return 0
+	fi
+
+	local kv_roots="${APP_THEMING_KVANTUM_ROOTS:-$XDG_CONFIG_HOME/Kvantum:$XDG_DATA_HOME/Kvantum:/usr/share/Kvantum}"
+	local kv_root_list=() base
+	IFS=: read -ra kv_root_list <<< "$kv_roots"
+	local folder_path=""
+	for base in "${kv_root_list[@]}"; do
+		if [[ -d "$base/$source_dir" ]] \
+			&& { [[ -f "$base/$source_dir/$light_source" ]] || [[ -f "$base/$source_dir/$dark_source" ]]; }; then
+			folder_path="$base/$source_dir/"
+			break
+		fi
+	done
 	local destination="$XDG_CONFIG_HOME/Kvantum/$theme_name/$theme_name.kvconfig"
 
-	if [ ! -d "$folder_path" ]; then
+	if [[ -z "$folder_path" ]]; then
 		if [ "${APP_THEMING_NO_EXTERNAL:-0}" != 1 ]; then
-			notify-send "Kvantum source theme required" " The folder '$folder_path' does not exist."
+			notify-send "Kvantum source theme required" "No folder for '$source_dir' was found in $kv_roots."
 		fi
-		exit 1 # Exit the function if the folder does not exist
+		return 1
 	fi
 
 	mkdir -p "$(dirname "$destination")"
 	lightdark=$(get_light_dark)
+	local source_file
 	if [ "$lightdark" = "light" ]; then
-		cp "$folder_path/$light_source" "$destination"
+		source_file="$folder_path/$light_source"
+		[[ -f "$source_file" ]] || return 0
+		cp "$source_file" "$destination"
 		python "$CONFIG_DIR/scripts/kvantum/adwsvg.py"
 	else
-		cp "$folder_path/$dark_source" "$destination"
+		source_file="$folder_path/$dark_source"
+		[[ -f "$source_file" ]] || return 0
+		cp "$source_file" "$destination"
 		python "$CONFIG_DIR/scripts/kvantum/adwsvgDark.py"
 	fi
 }

@@ -34,7 +34,11 @@ setup_case() {
     cat > "$d/state/quickshell/theme-stack/resolved.json" <<'JSON'
 {"version":1,"mode":"dark","gtkTheme":"adw-gtk3","kvantumTheme":"MaterialAdw","kvantumSourceDir":"Colloid","kvantumLightSource":"Colloid.kvconfig","kvantumDarkSource":"ColloidDark.kvconfig","qtQuickStyle":"Material","sources":{}}
 JSON
-    printf '#!/usr/bin/env bash\necho prefer-%s\n' "$mode" > "$d/bin/gsettings"
+    if [[ "$mode" == "light" ]]; then
+        printf '#!/usr/bin/env bash\necho prefer-light\n' > "$d/bin/gsettings"
+    else
+        printf '#!/usr/bin/env bash\necho prefer-dark\n' > "$d/bin/gsettings"
+    fi
     printf '#!/usr/bin/env bash\nexit 0\n' > "$d/bin/python"
     printf '#!/usr/bin/env bash\ntouch "%s/notified"\n' "$d/home" > "$d/bin/notify-send"
     chmod +x "$d/bin/"*
@@ -67,6 +71,37 @@ rm -rf "$TMP_DIR/missing/home/.config/Kvantum/Colloid"
 run_case missing
 check 'missing source dir is non-fatal to notifications under NO_EXTERNAL' \
     "test ! -e '$TMP_DIR/missing/home/notified'"
+
+setup_case selfcopy
+d="$TMP_DIR/selfcopy"
+jq '.kvantumSourceDir = "MaterialAdw" | .kvantumDarkSource = "MaterialAdw.kvconfig"' \
+    "$d/state/quickshell/theme-stack/resolved.json" > "$d/resolved.tmp"
+mv "$d/resolved.tmp" "$d/state/quickshell/theme-stack/resolved.json"
+printf 'existing-destination\n' > "$d/home/.config/Kvantum/MaterialAdw/MaterialAdw.kvconfig"
+cat > "$d/bin/cp" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$d/cp.log"
+exec /usr/bin/cp "\$@"
+EOF
+chmod +x "$d/bin/cp"
+run_case selfcopy
+selfcopy_status=$?
+check 'self-copy mapping is skipped without an error' \
+    "test $selfcopy_status -eq 0"
+check 'self-copy mapping never invokes cp on the generated destination' \
+    "test ! -s '$d/cp.log'"
+check 'self-copy mapping leaves the generated kvconfig intact' \
+    "grep -qx 'existing-destination' '$d/home/.config/Kvantum/MaterialAdw/MaterialAdw.kvconfig'"
+
+setup_case datasource
+d="$TMP_DIR/datasource"
+mkdir -p "$d/home/.local/share/Kvantum/Colloid"
+mv "$d/home/.config/Kvantum/Colloid/Colloid.kvconfig" "$d/home/.local/share/Kvantum/Colloid/Colloid.kvconfig"
+mv "$d/home/.config/Kvantum/Colloid/ColloidDark.kvconfig" "$d/home/.local/share/Kvantum/Colloid/ColloidDark.kvconfig"
+APP_THEMING_KVANTUM_ROOTS="$d/home/.config/Kvantum:$d/home/.local/share/Kvantum" \
+    run_case datasource
+check 'source in XDG_DATA_HOME is copied from its own root' \
+    "cmp -s '$d/home/.local/share/Kvantum/Colloid/ColloidDark.kvconfig' '$d/home/.config/Kvantum/MaterialAdw/MaterialAdw.kvconfig'"
 
 printf '%d passed, %d failed\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]
