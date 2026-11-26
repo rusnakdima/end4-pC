@@ -24,14 +24,25 @@ import Quickshell.Hyprland
  * honest. Committing a window on another monitor focuses that monitor first.
  *
  * Two view modes share the same entries: the list/coverflow and a grid that
- * shows every window at once. Alt+G toggles them. Alt+Ctrl+Tab opens the
- * overview locked: the Alt-release commit is ignored so the overview stays
- * open for mouse selection, like Windows' sticky task view.
+ * shows every window at once. Alt+G toggles them. Alt+Ctrl+Tab pins the
+ * overview: the Alt-release commit is ignored so the overview stays
+ * open for mouse selection, like Windows' sticky task view. If the deck is
+ * already open (Alt+Tab or Alt+`), the same chord pins it in place. A later
+ * plain Alt+Tab or Alt+` clears the pin again, restoring release-to-commit.
+ *
+ * Overview Windows reuses this deck for a PowerToys-style class filter: hold
+ * Alt+` (Alt+Shift+` reverses) to cycle only the windows whose class matches
+ * the focused window's class. Ctrl+Alt+` opens the same list pinned. It shares
+ * the commit-on-Alt-release hook, so the compositor script needs no changes.
+ * The enable switch and the three shortcuts are configurable in Settings; the
+ * shortcuts live in the frozen keybind catalog. With one matching window it
+ * stays closed, like Window Hopper.
  *
  * Input comes from:
  *   - the bound Alt+Tab shortcut (Shift reverses via the tracked modifier),
  *   - hyprland/window_switch.lua (Alt release = commit, Shift state, no second
- *     keysym bind),
+ *     keysym bind), with a Keys.onReleased fallback in the deck itself for a
+ *     stale/reloaded Lua module,
  *   - the exclusive keyboard grab while open (Escape, Enter, arrows),
  *   - the pointer (click commits, wheel cycles).
  */
@@ -84,6 +95,13 @@ Scope {
     // True for Alt+Ctrl+Tab: the Alt-release commit is ignored until a window
     // is clicked or the overview is cancelled.
     property bool locked: false
+
+    // Overview Windows reuses this exact deck, narrowed to windows whose class
+    // matches the focused window's class. It shares the keyboard grab, the
+    // view/grid modes and the commit-on-Alt-release path; only the entry list
+    // and the header change. This is distinct from the full-screen Overview.
+    property bool overviewWindowsMode: false
+    property string overviewWindowsClass: ""
 
     // Two scope modes, available in both list and grid views. Monitor ids,
     // not workspace ids, decide membership: both monitors share the 1-10
@@ -154,6 +172,8 @@ Scope {
     // the deck widens, follow the highlighted card instead, so the header
     // always shows the workspace the selected window actually belongs to.
     readonly property string headerLabel: {
+        if (root.overviewWindowsMode)
+            return `${Translation.tr("Overview Windows")} · ${root.overviewWindowsClass}`;
         if (root.openedScope === "workspace" || !root.selectedEntry)
             return root.openedWorkspaceLabel;
         const workspace = root.selectedEntry.windowData?.workspace;
@@ -174,7 +194,9 @@ Scope {
         return workspace.name ?? String(workspace.id);
     }
 
-    function buildEntries() {
+    // A non-empty classFilter builds the Overview Windows list: every window of
+    // that class, in MRU order, regardless of workspace or monitor.
+    function buildEntries(classFilter = "") {
         const activeAddress = root.addressOf(ToplevelManager.activeToplevel);
         const windows = [];
 
@@ -208,6 +230,17 @@ Scope {
         const currentIndex = windows.findIndex(w => w.address === activeAddress);
         if (currentIndex > 0)
             windows.unshift(windows.splice(currentIndex, 1)[0]);
+
+        // Overview Windows deliberately ignores the workspace/monitor scope:
+        // the point is to cycle the windows of one application, wherever they
+        // are. The focused window stays first, MRU order is preserved and the
+        // normal Alt+Tab path is untouched when no filter is given.
+        if (classFilter !== "") {
+            root.openedScope = "all";
+            root.openedWorkspaceRangeLabel = "";
+            root.openedWorkspaceLabel = `${Translation.tr("Overview Windows")} · ${classFilter}`;
+            return windows.filter(w => String(w.windowData.class ?? "") === classFilter);
+        }
 
         const workspaceId = root.focusedMonitor?.activeWorkspace?.id ?? 1;
         const monitorId = root.focusedMonitor?.id ?? -1;
@@ -274,6 +307,22 @@ Scope {
             return;
 
         if (GlobalStates.windowSwitcherOpen) {
+            if (locked) {
+                // Pin the already-open deck, whether it is the normal Alt+Tab
+                // list or the Alt+` class-filtered Overview Windows list. This
+                // is the Ctrl+Alt+Tab path: Alt release must no longer close
+                // the overview, and the current highlight must not move.
+                root.locked = true;
+                safetyTimer.stop();
+                return;
+            }
+            // A plain Alt+Tab after a pinned session must restore the normal
+            // hold-to-show / release-to-commit behaviour. Without this, the
+            // stale locked flag makes every later Alt+Tab stick open.
+            if (root.locked) {
+                root.locked = false;
+                safetyTimer.restart();
+            }
             root.step(direction);
             return;
         }
@@ -287,6 +336,66 @@ Scope {
         root.locked = locked;
         // The two full-screen overlays would stack; the switcher wins.
         GlobalStates.overviewOpen = false;
+        root.entries = list;
+        // Opening shows the previous window; Shift reverses from the oldest.
+        root.selectedIndex = direction < 0 ? list.length - 1 : 1;
+        const workspace = root.focusedMonitor?.activeWorkspace;
+        root.openedWorkspaceId = String(workspace?.id ?? 1);
+        root.panelScreenName = root.focusedMonitor?.name
+            ?? (Quickshell.screens.length > 0 ? Quickshell.screens[0].name : "");
+        GlobalStates.windowSwitcherOpen = true;
+        if (!root.locked)
+            safetyTimer.restart();
+    }
+
+    function focusedWindowClass() {
+        const active = root.addressOf(ToplevelManager.activeToplevel);
+        return HyprlandData.windowByAddress[active]?.class
+            ?? root.selectedEntry?.windowData?.class
+            ?? "";
+    }
+
+    // PowerToys-style Window Hopper, called "Overview Windows" here: hold the
+    // chord and press its key repeatedly to cycle the windows of the focused
+    // application. Releasing Alt commits through the same windowSwitcherCommit
+    // hook as normal Alt+Tab, so no compositor script changes are needed.
+    // Ctrl+Alt+` opens the same list pinned: the overview stays after Alt is
+    // released until an Enter/click commits it or Esc dismisses it.
+    function openOverviewWindows(direction = 1, locked = false) {
+        if (!root.enabled || !(Config.options?.overviewWindows?.enable ?? true))
+            return;
+
+        // Already open in this mode: pin in place for Ctrl+Alt+`, or cycle for
+        // a plain Alt+` (which also clears a stale pin).
+        if (GlobalStates.windowSwitcherOpen && root.overviewWindowsMode) {
+            if (locked) {
+                root.locked = true;
+                safetyTimer.stop();
+                return;
+            }
+            if (root.locked) {
+                root.locked = false;
+                safetyTimer.restart();
+            }
+            root.step(direction);
+            return;
+        }
+
+        const className = root.focusedWindowClass();
+        if (!className)
+            return;
+
+        const list = root.buildEntries(className);
+        if (list.length < 2)
+            return;
+
+        closeTimer.stop();
+        root.closing = false;
+        root.locked = locked;
+        // The two full-screen overlays would stack; the switcher wins.
+        GlobalStates.overviewOpen = false;
+        root.overviewWindowsMode = true;
+        root.overviewWindowsClass = className;
         root.entries = list;
         // Opening shows the previous window; Shift reverses from the oldest.
         root.selectedIndex = direction < 0 ? list.length - 1 : 1;
@@ -352,7 +461,9 @@ Scope {
     property real lastScopeToggleMs: 0
 
     function toggleWorkspaceScope() {
-        if (!GlobalStates.windowSwitcherOpen)
+        // Overview Windows is class-based and spans every workspace; a scope
+        // toggle there would silently rebuild the normal all-windows list.
+        if (!GlobalStates.windowSwitcherOpen || root.overviewWindowsMode)
             return;
         const now = Date.now();
         if (now - root.lastScopeToggleMs < 250)
@@ -410,6 +521,8 @@ Scope {
 
     function close() {
         root.locked = false;
+        root.overviewWindowsMode = false;
+        root.overviewWindowsClass = "";
         GlobalStates.windowSwitcherOpen = false;
         root.closing = true;
         safetyTimer.stop();
@@ -422,7 +535,9 @@ Scope {
         const selectedAddress = root.selectedEntry?.address;
         const next = root.entries.filter(entry => {
             const windowData = HyprlandData.windowByAddress[entry.address];
-            return windowData && !windowData.hidden && windowData.mapped !== false;
+            return windowData && !windowData.hidden && windowData.mapped !== false
+                && (!root.overviewWindowsMode
+                    || String(windowData.class ?? "") === root.overviewWindowsClass);
         });
         if (next.length === root.entries.length)
             return;
@@ -569,6 +684,21 @@ Scope {
                 }
             }
 
+            // The compositor-side Lua hook normally announces the last Alt
+            // release, but a reloaded/cached Lua module can miss it. While the
+            // deck owns the keyboard grab it also receives the modifier release
+            // directly, so commit here as a fallback. commit() is a no-op when
+            // the deck is already closed, and commitFromAltRelease() still
+            // ignores the release while the overview is pinned.
+            Keys.onReleased: event => {
+                if (event.key === Qt.Key_Alt || event.key === Qt.Key_AltGr
+                    || event.nativeScanCode === 56 || event.nativeScanCode === 64
+                    || event.nativeScanCode === 100 || event.nativeScanCode === 108) {
+                    root.commitFromAltRelease();
+                    event.accepted = true;
+                }
+            }
+
             Connections {
                 target: GlobalStates
                 function onWindowSwitcherOpenChanged() {
@@ -624,7 +754,7 @@ Scope {
 
                             MaterialSymbol {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: "workspaces"
+                                text: root.overviewWindowsMode ? "select_window" : "workspaces"
                                 iconSize: 15
                                 color: Appearance.colors.colOnSurfaceVariant
                             }
@@ -682,8 +812,11 @@ Scope {
                                 }
                             }
                             // Clickable scope chip: one monitor's workspace
-                            // block (e.g. 1-10) vs every workspace.
+                            // block (e.g. 1-10) vs every workspace. Meaningless
+                            // in Overview Windows, which spans all classes'
+                            // windows of one app regardless of workspace.
                             Rectangle {
+                                visible: !root.overviewWindowsMode
                                 anchors.verticalCenter: parent.verticalCenter
                                 implicitWidth: scopeLabel.implicitWidth + 34
                                 implicitHeight: 22
@@ -964,7 +1097,7 @@ Scope {
                             spacing: 7
 
                             KeyCap { label: "Alt" }
-                            KeyCap { label: "Tab" }
+                            KeyCap { label: root.overviewWindowsMode ? "\u0060" : "Tab" }
                             StyledText {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: Translation.tr("cycle")
@@ -980,10 +1113,16 @@ Scope {
                                 font.pixelSize: Appearance.font.pixelSize.smaller
                                 color: Appearance.colors.colOnSurfaceVariant
                             }
-                            Item { anchors.verticalCenter: parent.verticalCenter; width: 10; height: 1 }
-                            KeyCap { label: "Alt" }
-                            KeyCap { label: "M" }
+                            Item {
+                                visible: !root.overviewWindowsMode
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 10
+                                height: 1
+                            }
+                            KeyCap { visible: !root.overviewWindowsMode; label: "Alt" }
+                            KeyCap { visible: !root.overviewWindowsMode; label: "M" }
                             StyledText {
+                                visible: !root.overviewWindowsMode
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: Translation.tr("scope")
                                 font.pixelSize: Appearance.font.pixelSize.smaller
@@ -1060,6 +1199,15 @@ Scope {
         function prev(): void {
             root.openSwitcher(-1);
         }
+        function overviewNext(): void {
+            root.openOverviewWindows(1);
+        }
+        function overviewPrev(): void {
+            root.openOverviewWindows(-1);
+        }
+        function overviewLock(): void {
+            root.openOverviewWindows(1, true);
+        }
         function close(): void {
             root.cancel();
         }
@@ -1079,6 +1227,9 @@ Scope {
             return JSON.stringify({
                 open: GlobalStates.windowSwitcherOpen,
                 enabled: root.enabled,
+                overviewWindowsEnabled: Config.options?.overviewWindows?.enable ?? true,
+                overviewWindowsMode: root.overviewWindowsMode,
+                overviewWindowsClass: root.overviewWindowsClass,
                 entries: root.entries.length,
                 selected: root.selectedIndex,
                 workspace: root.openedWorkspaceId,
@@ -1116,6 +1267,30 @@ Scope {
         description: "Cycles the workspace window switcher backward"
 
         onPressed: root.openSwitcher(-1)
+    }
+
+    CompositorGlobalShortcut {
+        name: "overviewWindowsNext"
+        description: "Cycles Overview Windows forward (Shift reverses)"
+
+        // Shift is tracked by window_switch.lua; the code-based bind fires
+        // even when Shift changes the keysym, so both directions work with
+        // one physical key.
+        onPressed: root.openOverviewWindows(root.shiftHeld ? -1 : 1)
+    }
+
+    CompositorGlobalShortcut {
+        name: "overviewWindowsPrev"
+        description: "Cycles Overview Windows backward"
+
+        onPressed: root.openOverviewWindows(-1)
+    }
+
+    CompositorGlobalShortcut {
+        name: "overviewWindowsLock"
+        description: "Opens Overview Windows pinned, so it stays after key release"
+
+        onPressed: root.openOverviewWindows(1, true)
     }
 
     CompositorGlobalShortcut {

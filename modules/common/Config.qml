@@ -935,6 +935,13 @@ Singleton {
                 property int workspacesPerMonitor: 10
             }
 
+            // Overview Windows: an Alt+Tab-style deck narrowed to windows that
+            // share the focused window's class name. Keys live in the frozen
+            // keybind catalog so they stay rebindable in Settings → Keyboard.
+            property JsonObject overviewWindows: JsonObject {
+                property bool enable: true
+            }
+
             property JsonObject regionSelector: JsonObject {
                 property JsonObject targetRegions: JsonObject {
                     property bool windows: true

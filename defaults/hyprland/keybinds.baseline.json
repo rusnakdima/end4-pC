@@ -1,11 +1,11 @@
 {
- "catalog_binds": 211,
- "hyprctl_binds": 209,
+ "catalog_binds": 212,
+ "hyprctl_binds": 210,
  "runtime_only_ids": [
   "bind",
   "bind-2"
  ],
- "id_sha256": "34a7234994f4d59bf1bc6c2be26c77db6ee59f2f454388606ddd91f6309f12c8",
+ "id_sha256": "5bfcd3b78b63c3367ae5f3fd1549c09fd28b72671f46dc4dd1ea5e6c41862f26",
  "duplicate_combo_whitelist": {
   "SUPER + SHIFT + S": [
    "utilities",

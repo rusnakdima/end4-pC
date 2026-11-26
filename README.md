@@ -326,9 +326,9 @@ The same keybind snippet also installs three small PowerToys-style shortcuts:
 
 ### 🔁 Overview Windows
 
-Hold ``Alt + ` `` to open an Alt+Tab-style deck showing only windows whose class matches the focused window's class; keep pressing it to cycle, and use ``Alt + Shift + ` `` to go backward. Releasing Alt focuses the highlighted window, and Esc cancels. With fewer than two matching windows nothing opens. Normal `Alt + Tab` is unchanged.
+Hold ``Alt + ` `` to open an Alt+Tab-style deck showing only windows whose class matches the focused window's class; keep pressing it to cycle, and use ``Alt + Shift + ` `` to go backward. Releasing Alt focuses the highlighted window, and Esc cancels. ``Ctrl + Alt + ` `` opens the same list pinned, so it stays visible after Alt is released until Enter/a click picks a window or Esc dismisses it. A plain ``Alt + ` `` (or `Alt + Tab`) unpins it again. With fewer than two matching windows nothing opens. Normal `Alt + Tab` is unchanged.
 
-Both shortcuts are rebindable in Settings → Keyboard, and the feature can be switched off in Settings → Interface → Overview Windows.
+All three shortcuts are rebindable in Settings → Keyboard, and the feature can be switched off in Settings → Interface → Overview Windows.
 
 Extras: OCR from the screen-snip tool now feeds directly into Advanced Paste (toggle in its settings), and the color picker offers HEX / RGB / CSS rgba() / HSL / Flutter formats in the same popup.
 

@@ -4417,7 +4417,7 @@
     "line": 63,
     "category": "Window",
     "group": "",
-    "combo": "ALT + code:41",
+    "combo": "ALT + code:49",
     "description": "Window: Overview Windows next",
     "label": "Window: Overview Windows next",
     "options": {},
@@ -4428,7 +4428,7 @@
       "value": "quickshell:overviewWindowsNext"
      }
     },
-    "code": "hl.bind(\"ALT + code:41\", hl.dsp.global(\"quickshell:overviewWindowsNext\"), { description = \"Window: Overview Windows next\" })"
+    "code": "hl.bind(\"ALT + code:49\", hl.dsp.global(\"quickshell:overviewWindowsNext\"), { description = \"Window: Overview Windows next\" })"
    },
    {
     "id": "window-77",
@@ -4436,7 +4436,7 @@
     "line": 64,
     "category": "Window",
     "group": "",
-    "combo": "ALT + SHIFT + code:41",
+    "combo": "ALT + SHIFT + code:49",
     "description": "Window: Overview Windows previous",
     "label": "Window: Overview Windows previous",
     "options": {},
@@ -4447,7 +4447,26 @@
       "value": "quickshell:overviewWindowsPrev"
      }
     },
-    "code": "hl.bind(\"ALT + SHIFT + code:41\", hl.dsp.global(\"quickshell:overviewWindowsPrev\"), { description = \"Window: Overview Windows previous\" })"
-   }
-  ]
+    "code": "hl.bind(\"ALT + SHIFT + code:49\", hl.dsp.global(\"quickshell:overviewWindowsPrev\"), { description = \"Window: Overview Windows previous\" })"
+   },
+    {
+     "id": "window-78",
+     "source": "custom",
+     "line": 65,
+     "category": "Window",
+     "group": "",
+     "combo": "CTRL + ALT + code:49",
+     "description": "Window: Pin Overview Windows",
+     "label": "Window: Pin Overview Windows",
+     "options": {},
+     "dispatch": {
+      "kind": "global",
+      "arg": {
+       "kind": "string",
+       "value": "quickshell:overviewWindowsLock"
+      }
+     },
+     "code": "hl.bind(\"CTRL + ALT + code:49\", hl.dsp.global(\"quickshell:overviewWindowsLock\"), { description = \"Window: Pin Overview Windows\" })"
+    }
+   ]
 }

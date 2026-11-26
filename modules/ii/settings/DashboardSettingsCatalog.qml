@@ -179,6 +179,7 @@ QtObject {
         "bar:Icons folder": { type: "text", get: () => Config.options.custom.iconsPath, set: v => { Config.options.custom.iconsPath = v; } },
         "bar:Preferred player": { type: "text", get: () => Config.options.bar.media.preferredPlayer, set: v => { Config.options.bar.media.preferredPlayer = v; } },
         "interface:Window controls": { type: "switch", get: () => Config.options.windows.controls.enable, set: v => { Config.options.windows.controls.enable = v; } },
+        "interface:Overview Windows/Enable": { type: "switch", get: () => Config.options.overviewWindows.enable, set: v => { Config.options.overviewWindows.enable = v; } },
         "interface:Controls placement": { type: "select", get: () => Config.options.windows.controls.placement, set: v => { Config.options.windows.controls.placement = v; }, options: [{ displayName: Translation.tr("On the active window"), icon: "open_in_full", value: "overlay" }, { displayName: Translation.tr("In the bar"), icon: "web_asset", value: "bar" }, { displayName: Translation.tr("Off"), icon: "block", value: "off" }] },
         "interface:Controls reveal": { type: "select", get: () => Config.options.windows.controls.reveal, set: v => { Config.options.windows.controls.reveal = v; }, options: [{ displayName: Translation.tr("On hover"), icon: "visibility", value: "hover" }, { displayName: Translation.tr("Always"), icon: "visibility_off", value: "always" }] },
         "interface:Controls size": { type: "spin", get: () => Config.options.windows.controls.buttonSize, set: v => { Config.options.windows.controls.buttonSize = v; }, from: 28, to: 48, stepSize: 2 },
@@ -488,6 +489,11 @@ QtObject {
                 { type: "select", key: "interface:Overview/Style", title: Translation.tr("Style"), icon: "grid_view" },
                 { type: "select", key: "interface:Overview order horizontal", title: Translation.tr("Horizontal order"), icon: "swap_horiz" },
                 { type: "select", key: "interface:Overview order vertical", title: Translation.tr("Vertical order"), icon: "swap_vert" }
+            ]
+        },
+        {
+            page: Translation.tr("Interface"), title: Translation.tr("Overview Windows"), icon: "select_window", cards: [
+                { type: "toggle", key: "interface:Overview Windows/Enable", title: Translation.tr("Enable"), icon: "select_window", kw: "window hopper alt tab class name same app cycle windows" }
             ]
         },
         {
