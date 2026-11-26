@@ -8,6 +8,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
 import "../modules/common/functions/KeybindStore.js" as KeybindStore
+import "../modules/common/functions/KeybindCommands.js" as KeybindCommands
 
 /**
  * A service that provides access to Hyprland keybinds.
@@ -192,6 +193,26 @@ Singleton {
         };
         for (const section of (root.keybinds.children ?? [])) collect(section);
         return names;
+    }
+
+    // Named command actions for the settings form. Only real command binds
+    // with a "Category: Label" description become picker entries, and a
+    // command/label pair appears once even when several keys trigger it.
+    readonly property var commandActionIndex: {
+        const out = [];
+        const seen = new Set();
+        for (const entry of KeybindCommands.commandEntries(root.effectiveBinds)) {
+            const key = entry.command + "\u0000" + entry.label;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push({
+                category: entry.category,
+                label: entry.label,
+                command: entry.command,
+                bindId: entry.id
+            });
+        }
+        return out;
     }
 
     // The shell actions, grouped by the action name the theme binds them with.

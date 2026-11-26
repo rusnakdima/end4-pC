@@ -59,6 +59,7 @@ ShellRoot {
         "tst_keyboard_config_typed.qml",
         "tst_keybind_commands.qml",
         "tst_keybind_capture.qml",
+        "tst_keybind_command_actions.qml",
         "tst_keybinds.qml", "tst_xkbrules.qml",
         "tst_collapsible_section_header.qml",
         "tst_ConfigMultiSelect.qml",

@@ -756,6 +756,24 @@ ContentPage {
         }
     }
 
+    // The category/action pickers only fill the command field. A typed name
+    // or category is the user's own and must never be overwritten by a pick.
+    function filteredActions(category) {
+        const wanted = String(category ?? "");
+        const all = HyprlandKeybinds.commandActionIndex ?? [];
+        return wanted === "" ? all : all.filter(action => action.category === wanted);
+    }
+
+    function applyAction(action) {
+        page.formCommand = String(action?.command ?? "");
+    }
+
+    function resolveCommand(action) {
+        return page.formCommand !== ""
+            ? page.formCommand
+            : String(action?.command ?? "");
+    }
+
     // Delete a command keybind from the Commands section. Overlay adds own
     // their generated command entry, so removing the add drops both; a frozen
     // catalog bind can only be disabled, leaving its command in the picker.
@@ -2586,6 +2604,11 @@ ContentPage {
             return [{ displayName: Translation.tr("Pick an app"), value: "" }].concat(apps);
         }
 
+        readonly property var commandCategories: [...new Set(
+            (HyprlandKeybinds.commandActionIndex ?? []).map(action => action.category)
+        )].sort()
+        readonly property var filteredActions: page.filteredActions(page.formCategory)
+
         Layout.fillWidth: true
         implicitHeight: formColumn.implicitHeight + 24
         color: Appearance.colors.colLayer1
@@ -2655,6 +2678,54 @@ ContentPage {
                 StyledText {
                     Layout.fillWidth: true
                     text: Translation.tr("Groups the keybind in the cheatsheet, for example Apps. Pick a group above or type a new name.")
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    color: Appearance.colors.colSubtext
+                    wrapMode: Text.Wrap
+                }
+            }
+
+            // ---- Command action ----
+            // Picking a category shows the named actions in it; picking an
+            // action fills the command field below. Typing your own command
+            // still wins, so this is a shortcut, not a restriction.
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 4
+
+                ConfigComboBox {
+                    Layout.fillWidth: true
+                    buttonIcon: "category"
+                    text: Translation.tr("Command category")
+                    searchable: true
+                    model: form.commandCategories.map(category => ({
+                        displayName: category,
+                        value: category
+                    }))
+                    currentValue: page.formCategory
+                    onSelected: newValue => categoryField.text = newValue
+                }
+
+                ConfigComboBox {
+                    Layout.fillWidth: true
+                    buttonIcon: "bolt"
+                    text: Translation.tr("Action")
+                    searchable: true
+                    model: [{
+                        displayName: Translation.tr("Pick an action"),
+                        value: ""
+                    }].concat(form.filteredActions.map(action => ({
+                        displayName: action.category + ": " + action.label,
+                        value: action.command
+                    })))
+                    currentValue: page.formCommand
+                    onSelected: newValue => {
+                        if (newValue !== "") page.applyAction({ command: newValue });
+                    }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: Translation.tr("Choose a named command action, or type your own command below. A typed command is used as-is.")
                     font.pixelSize: Appearance.font.pixelSize.smaller
                     color: Appearance.colors.colSubtext
                     wrapMode: Text.Wrap
