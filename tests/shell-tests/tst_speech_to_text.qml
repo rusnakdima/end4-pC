@@ -179,6 +179,8 @@ TestCase {
     }
 
     function test_exit_applies_success_and_failure() {
+        const blockWrites = Config.blockWrites;
+        const wasEnabled = Config.options.stt.enabled;
         const saved = {
             target: SpeechToText.sessionTarget,
             state: SpeechToText.state,
@@ -191,37 +193,46 @@ TestCase {
             pendingError: SpeechToText.pendingError,
             segments: SpeechToText.streamedSegments
         };
-        const gen = SpeechToText.captureGeneration;
-        SpeechToText.sessionTarget = "chat";
-        SpeechToText.wavPath = "";
-        SpeechToText.stopPath = "";
-        SpeechToText.streamedSegments = 0;
+        Config.blockWrites = true;
 
-        SpeechToText.pendingText = "a final transcript";
-        SpeechToText.pendingHasText = true;
-        SpeechToText.pendingError = "";
-        SpeechToText.processExited(gen, 0);
-        compare(SpeechToText.state, "idle");
-        compare(SpeechToText.transcript, "a final transcript");
-        compare(SpeechToText.error, "");
+        try {
+            // A disabled service ignores process exits, so the live setting
+            // must not decide whether this test exercises the success path.
+            compare(Config.setNestedValue("stt.enabled", true), true);
+            const gen = SpeechToText.captureGeneration;
+            SpeechToText.sessionTarget = "chat";
+            SpeechToText.wavPath = "";
+            SpeechToText.stopPath = "";
+            SpeechToText.streamedSegments = 0;
 
-        SpeechToText.pendingText = "";
-        SpeechToText.pendingHasText = false;
-        SpeechToText.pendingError = "backend failed";
-        SpeechToText.processExited(gen, 2);
-        compare(SpeechToText.state, "error");
-        compare(SpeechToText.error, "backend failed");
+            SpeechToText.pendingText = "a final transcript";
+            SpeechToText.pendingHasText = true;
+            SpeechToText.pendingError = "";
+            SpeechToText.processExited(gen, 0);
+            compare(SpeechToText.state, "idle");
+            compare(SpeechToText.transcript, "a final transcript");
+            compare(SpeechToText.error, "");
 
-        SpeechToText.sessionTarget = saved.target;
-        SpeechToText.currentState = saved.state;
-        SpeechToText.transcriptValue = saved.transcript;
-        SpeechToText.errorValue = saved.error;
-        SpeechToText.wavPath = saved.wav;
-        SpeechToText.stopPath = saved.stop;
-        SpeechToText.pendingText = saved.text;
-        SpeechToText.pendingHasText = saved.hasText;
-        SpeechToText.pendingError = saved.pendingError;
-        SpeechToText.streamedSegments = saved.segments;
+            SpeechToText.pendingText = "";
+            SpeechToText.pendingHasText = false;
+            SpeechToText.pendingError = "backend failed";
+            SpeechToText.processExited(gen, 2);
+            compare(SpeechToText.state, "error");
+            compare(SpeechToText.error, "backend failed");
+        } finally {
+            Config.setNestedValue("stt.enabled", wasEnabled);
+            Config.blockWrites = blockWrites;
+            SpeechToText.sessionTarget = saved.target;
+            SpeechToText.currentState = saved.state;
+            SpeechToText.transcriptValue = saved.transcript;
+            SpeechToText.errorValue = saved.error;
+            SpeechToText.wavPath = saved.wav;
+            SpeechToText.stopPath = saved.stop;
+            SpeechToText.pendingText = saved.text;
+            SpeechToText.pendingHasText = saved.hasText;
+            SpeechToText.pendingError = saved.pendingError;
+            SpeechToText.streamedSegments = saved.segments;
+        }
     }
 
     function test_stale_process_events_are_ignored() {

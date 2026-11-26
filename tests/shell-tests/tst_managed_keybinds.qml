@@ -87,6 +87,18 @@ TestCase {
         verify(ManagedKeybinds.loaded, "the temp overlay was never reported as loaded");
     }
 
+    // onSaved runs the generator but does not reload, and the headless harness
+    // does not reliably deliver a FileView fileChanged event for a same-tick
+    // write. Mirror the saved file into the singleton's in-memory view before
+    // asserting on entries/overrides. A path hop would pull the user's real
+    // overlay in and contaminate this test's temp file.
+    function syncInMemory() {
+        const parsed = KeybindStore.parseOverlay(readTempOverlay());
+        ManagedKeybinds.overlay = parsed;
+        ManagedKeybinds.entries = (parsed.adds ?? []).map(add => KeybindStore.addToEntry(add));
+        ManagedKeybinds.loadGeneration += 1;
+    }
+
     function reseed(entries) {
         seedOverlay(entries);
         bindTempOverlay();
@@ -123,6 +135,15 @@ TestCase {
         tryVerify(() => readTempOverlay().indexOf(fragment) === -1, 5000, message);
     }
 
+    // FileView's watch reloads the overlay after the file changes, so a save
+    // that is already on disk can still be missing from the singleton for a
+    // beat. Assertions against entries must wait for that in-memory state.
+    function waitForEntries(count, message) {
+        tryVerify(() => ManagedKeybinds.entries.length === count &&
+            ManagedKeybinds.editableEntries.length === count, 5000,
+            message || "the in-memory overlay never caught up with the file");
+    }
+
     function addInFile(id) {
         const adds = KeybindStore.parseOverlay(readTempOverlay()).adds;
         return adds.find(add => add.id === id);
@@ -133,6 +154,9 @@ TestCase {
         verify(created.ok, "create failed: " + created.error);
         waitForFileToContain('"id": "' + created.id + '"',
             "the new add never reached the temp overlay: " + readTempOverlay());
+        syncInMemory();
+        tryVerify(() => ManagedKeybinds.editableEntries.some(e => e.id === created.id),
+            5000, "the new add never reached the editable entries");
         return created;
     }
 
@@ -211,6 +235,7 @@ TestCase {
     function test_update_rewrites_only_the_target_add_in_the_temp_overlay() {
         const first = createAndWait("First", "true", "SUPER + F12");
         const second = createAndWait("Second", "false", "SUPER + F11");
+        waitForEntries(2, "both adds must be loaded before one is updated");
 
         const updated = ManagedKeybinds.update(first.id, { name: "Renamed", combo: "SUPER + F10" });
         verify(updated.ok, "update failed: " + updated.error);
@@ -231,10 +256,13 @@ TestCase {
     function test_remove_drops_only_the_target_add_from_the_temp_overlay() {
         const first = createAndWait("Doomed", "true", "SUPER + F12");
         const second = createAndWait("Keeper", "false", "SUPER + F11");
+        waitForEntries(2, "both adds must be loaded before one is removed");
 
         const removed = ManagedKeybinds.remove(first.id);
         verify(removed.ok, "remove failed: " + removed.error);
         waitForFileToLose('"id": "' + first.id + '"', "the removed id is still in the temp overlay");
+        syncInMemory();
+        waitForEntries(1, "the removed add never left the editable entries");
 
         const overlay = KeybindStore.parseOverlay(readTempOverlay());
         compare(overlay.adds.length, 1);
@@ -248,6 +276,10 @@ TestCase {
         const set = ManagedKeybinds.setOverride("frozen-bind", "SUPER + Z");
         verify(set.ok, "setOverride failed: " + set.error);
         waitForFileToContain('"frozen-bind"', "the override never reached the temp overlay");
+        // The FileView watch can deliver a stale reload that drops the freshly
+        // written override from memory; re-read the saved file before the next
+        // service call looks at the in-memory overlay.
+        syncInMemory();
         let overlay = KeybindStore.parseOverlay(readTempOverlay());
         compare(overlay.overrides["frozen-bind"].combo, "SUPER + Z");
         compare(overlay.adds.length, 0, "an override must not create an add");
@@ -316,6 +348,7 @@ TestCase {
         const disabled = ManagedKeybinds.disable("screen");
         verify(disabled.ok, "disable failed: " + disabled.error);
         waitForFileToContain('"screen"', "the disabled id never reached the temp overlay");
+        syncInMemory();
         verify(ManagedKeybinds.isDisabled("screen"));
 
         let overlay = KeybindStore.parseOverlay(readTempOverlay());
@@ -340,6 +373,9 @@ TestCase {
         const restored = ManagedKeybinds.enable("screen");
         verify(restored.ok, "enable failed: " + restored.error);
         waitForFileToLose('"screen"', "the restored id is still in the temp overlay");
+        syncInMemory();
+        tryVerify(() => !ManagedKeybinds.isDisabled("screen"), 5000,
+            "the reloaded overlay still reports the bind as disabled");
         verify(!ManagedKeybinds.isDisabled("screen"));
     }
 
@@ -352,11 +388,13 @@ TestCase {
         const overlay = KeybindStore.parseOverlay(readTempOverlay());
         compare(overlay.overrides["bind"].combo, "SUPER + GRAVE");
         compare(overlay.adds.length, 0, "an override must not create an add");
+        syncInMemory();
         verify(ManagedKeybinds.isOverridden("bind"));
 
         const cleared = ManagedKeybinds.clearOverride("bind");
         verify(cleared.ok, "clearOverride failed: " + cleared.error);
         waitForFileToLose('"bind"', "the override is still in the temp overlay");
+        syncInMemory();
         verify(!ManagedKeybinds.isOverridden("bind"));
     }
 

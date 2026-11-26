@@ -13,7 +13,9 @@ TestCase {
 
     function test_a_known_role_resolves_to_its_colour() {
         compare(String(Appearance.getColorFromName("primary")), "#cbc4cb");
-        compare(String(Appearance.getColorFromName("layer0")), "#161515");
+        // The alpha of layer0 follows the live background transparency, so
+        // compare the RGB components only.
+        compare("#" + String(Appearance.getColorFromName("layer0")).slice(-6), "#161515");
     }
 
     function test_the_black_role_resolves_to_the_string_black() {

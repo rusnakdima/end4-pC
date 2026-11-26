@@ -67,8 +67,11 @@ TestCase {
 
         verify(thumbnail.isVideoSource);
         compare(thumbnail.effectiveSizeName, "large");
-        compare(thumbnail.sizeCandidates.length, 1);
-        compare(thumbnail.sizeCandidates[0], "large");
+        // Videos try the mpvpaper still frame first, then the freedesktop
+        // large bucket as a fallback.
+        compare(thumbnail.sizeCandidates.length, 2);
+        compare(thumbnail.sizeCandidates[0], "mpvpaper-still");
+        compare(thumbnail.sizeCandidates[1], "large");
         compare(thumbnail.thumbnailPath, thumbnail.thumbnailPathFor("large"));
     }
 
@@ -118,8 +121,8 @@ TestCase {
 
         thumbnail.loadCandidate(2);
         compare(thumbnail.candidateIndex, 2);
-        compare(thumbnail.candidateSizeName, "x-large");
-        compare(thumbnail.activePath, thumbnail.thumbnailPathFor("x-large"));
+        compare(thumbnail.candidateSizeName, "xx-large");
+        compare(thumbnail.activePath, thumbnail.thumbnailPathFor("xx-large"));
     }
 
     function test_the_candidate_index_stays_inside_the_buckets() {

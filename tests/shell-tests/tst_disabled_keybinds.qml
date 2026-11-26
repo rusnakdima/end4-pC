@@ -3,18 +3,20 @@ import QtTest
 import Quickshell
 import Quickshell.Io
 import qs.services
+import "modules/common/functions/KeybindStore.js" as KeybindStore
 
 /**
  * The write path of the recoverable "delete keybind" feature.
  *
- * The service owns two config files. Both are pointed at temporary files
- * here, so the real hyprland/keybinds.lua and custom/keybinds.lua are never
- * touched. Every test reseeds the files, which proves that a write only
- * changes the targeted lines and that restore puts the exact bytes back.
+ * A delete is no longer a comment marker spliced into generated Lua: it is a
+ * catalog id in the overlay JSON, written through ManagedKeybinds, so the next
+ * generator run cannot resurrect the bind. The service keeps read-only Lua
+ * snapshots only to label a row with its source file.
  *
- * The FileView save chain is asynchronous, so each write is followed by a
- * wait on the service's load counter. File contents are read through a fresh
- * reader every time, so no assertion can pass on a stale watch.
+ * The overlay path and the two Lua snapshot paths are all overridden to temp
+ * files here, so the user's real overlay and generated Lua are never edited by
+ * a test. Every test reseeds the overlay and checks that both Lua snapshots
+ * stay byte-for-byte unchanged after a disable and after a restore.
  */
 TestCase {
     id: testCase
@@ -24,9 +26,11 @@ TestCase {
     readonly property string tempDir: "/tmp/end4pc-shell-tests/tst_disabled_keybinds"
     readonly property string mainPath: tempDir + "/hyprland-keybinds.lua"
     readonly property string customPath: tempDir + "/custom-keybinds.lua"
+    readonly property string overlayPath: tempDir + "/keybind-overlay.json"
 
     property string originalMainPath: ""
     property string originalCustomPath: ""
+    property string originalOverlayPath: ""
     property bool seedDone: false
     property bool readerLoaded: false
     property var reader: null
@@ -44,28 +48,24 @@ TestCase {
             + "-- custom tail\n";
     }
 
-    function multilineText() {
-        return "-- custom head\n"
-            + "hl.bind(\"SUPER + M\",\n"
-            + "  hl.dsp.exec_cmd(\"one; two; three\"),\n"
-            + "  {description = \"Multi\"})\n"
-            + "-- custom tail\n";
+    // A bind as the settings pane hands it to disableBinds: the catalog id is
+    // the only part that decides what is written. Action/combo are used solely
+    // to clear a stale bind override in the same save.
+    function bind(catalogId, action, mods, key) {
+        const result = { id: catalogId };
+        if (action) result.action = action;
+        if (mods) result.mods = mods;
+        if (key) result.key = key;
+        return result;
     }
 
-    function terminalLine() {
-        return "hl.bind(\"SUPER + T\", hl.dsp.exec_cmd(\"kitty\"), {description = \"Terminal\"})";
-    }
-
-    function startLine(id) { return "-- >>> end4-pC disabled keybind: " + id; }
-    function endLine() { return "-- <<< end4-pC disabled keybind <<<"; }
-
-    function seed(text) {
+    function seedFile(path, text) {
         testCase.seedDone = false;
         seedProc.command = ["sh", "-c",
             "mkdir -p \"$1\" && printf '%s' \"$2\" > \"$3\"",
-            "seed", testCase.tempDir, text, testCase.mainPath];
+            "seed", testCase.tempDir, text, path];
         seedProc.running = true;
-        tryCompare(testCase, "seedDone", true, 5000, "the main seed was never written");
+        tryCompare(testCase, "seedDone", true, 5000, "the seed was never written: " + path);
     }
 
     function seedBoth(main, custom) {
@@ -75,6 +75,12 @@ TestCase {
             "seed", testCase.tempDir, main, testCase.mainPath, custom, testCase.customPath];
         seedProc.running = true;
         tryCompare(testCase, "seedDone", true, 5000, "the seed was never written");
+    }
+
+    function seedOverlay(disabled) {
+        const overlay = KeybindStore.newOverlay();
+        overlay.disabled = disabled ?? [];
+        seedFile(testCase.overlayPath, KeybindStore.renderOverlay(overlay));
     }
 
     Process {
@@ -90,6 +96,7 @@ TestCase {
         }
     }
 
+    // A fresh reader per read, so no assertion can pass on a stale watch.
     function fileText(path) {
         if (testCase.reader !== null) {
             testCase.reader.destroy();
@@ -101,43 +108,87 @@ TestCase {
         return testCase.reader.text();
     }
 
-    function waitForSave(generationBefore) {
-        tryCompare(DisabledKeybinds, "pendingSaves", 0, 5000,
-            "the FileView save never finished");
-        tryVerify(() => DisabledKeybinds.loadGeneration > generationBefore, 5000,
-            "the save never landed (loadGeneration stayed at " + generationBefore + ")");
+    function overlay() {
+        return KeybindStore.parseOverlay(fileText(testCase.overlayPath));
     }
 
-    // An external re-seed is invisible to the service until its FileView
-    // actually reads it. Hop away and back so the next edit cannot splice
-    // against the bytes the service saw before the re-seed.
-    function forceReread() {
-        const main = DisabledKeybinds.defaultKeybindConfigPath;
-        const custom = DisabledKeybinds.userKeybindConfigPath;
-        const generation = DisabledKeybinds.loadGeneration;
-        DisabledKeybinds.defaultKeybindConfigPath = testCase.originalMainPath;
-        DisabledKeybinds.userKeybindConfigPath = testCase.originalCustomPath;
+    function entryFor(id) {
+        return DisabledKeybinds.disabled.find(entry => entry.id === id);
+    }
+
+    function waitForSave(generation) {
+        tryCompare(ManagedKeybinds, "pendingWrite", false, 5000,
+            "the overlay save never finished");
         tryVerify(() => DisabledKeybinds.loadGeneration > generation, 5000,
-            "the hop away never loaded");
-        const away = DisabledKeybinds.loadGeneration;
-        DisabledKeybinds.defaultKeybindConfigPath = main;
-        DisabledKeybinds.userKeybindConfigPath = custom;
-        tryVerify(() => DisabledKeybinds.loadGeneration > away, 5000,
-            "the hop back never loaded");
+            "the overlay change never landed (loadGeneration stayed at " + generation + ")");
+        // DisabledKeybinds bumps loadGeneration synchronously, while the
+        // FileView write is still async. Wait until the file really shows the
+        // in-memory overlay before asserting on it.
+        const expected = KeybindStore.renderOverlay(ManagedKeybinds.overlay);
+        tryVerify(() => KeybindStore.renderOverlay(testCase.overlay()) === expected, 5000,
+            "the overlay file never reflected the in-memory change");
+        // A stale FileView watch can briefly rebuild the list from the old
+        // file; wait for the service to settle on the in-memory ids too.
+        const expectedDisabled = (ManagedKeybinds.overlay?.disabled ?? []).length;
+        tryVerify(() => DisabledKeybinds.disabled.length === expectedDisabled, 5000,
+            "the Deleted section never settled on the saved ids");
     }
 
-    // Reseed and force a real re-read. On the first test the singleton still
-    // points at the real paths; afterwards hop away and back so the change
-    // watch cannot hand us stale bytes from the previous run.
+    // Repoint the manager at the temp overlay and force a real re-read. The
+    // hop away and back is deliberate: a file rewritten in the same tick as
+    // the seed is not always picked up by FileView's watch.
+    function bindTempOverlay() {
+        tryCompare(ManagedKeybinds, "pendingWrite", false, 5000);
+        let generation = ManagedKeybinds.loadGeneration;
+        if (ManagedKeybinds.keybindsPath !== testCase.overlayPath) {
+            ManagedKeybinds.keybindsPath = testCase.overlayPath;
+        } else {
+            ManagedKeybinds.keybindsPath = testCase.originalOverlayPath;
+            tryVerify(() => ManagedKeybinds.loadGeneration > generation, 5000,
+                "the hop away from the temp overlay never loaded");
+            generation = ManagedKeybinds.loadGeneration;
+            ManagedKeybinds.keybindsPath = testCase.overlayPath;
+        }
+        tryVerify(() => ManagedKeybinds.loadGeneration > generation, 5000,
+            "the switch to the temp overlay never loaded");
+        verify(ManagedKeybinds.loaded, "the temp overlay was never reported as loaded");
+    }
+
     function init() {
+        // The previous test's FileView reloads are async. Let them finish
+        // before resetting the label maps, or a late rebuild can repopulate
+        // the list from a stale overlay with the new (empty) maps.
+        tryCompare(ManagedKeybinds, "pendingWrite", false, 5000);
+        wait(150);
+
         if (testCase.originalMainPath === "")
             testCase.originalMainPath = DisabledKeybinds.defaultKeybindConfigPath;
         if (testCase.originalCustomPath === "")
             testCase.originalCustomPath = DisabledKeybinds.userKeybindConfigPath;
+        if (testCase.originalOverlayPath === "")
+            testCase.originalOverlayPath = ManagedKeybinds.keybindsPath;
+
+        // Look away from the temp overlay before reseeding it. Otherwise the
+        // FileView watch sees the seed write and can reload an empty overlay
+        // after the previous test's last save has already landed.
+        if (testCase.originalOverlayPath !== ""
+            && ManagedKeybinds.keybindsPath === testCase.overlayPath) {
+            const awayGeneration = ManagedKeybinds.loadGeneration;
+            ManagedKeybinds.keybindsPath = testCase.originalOverlayPath;
+            tryVerify(() => ManagedKeybinds.loadGeneration > awayGeneration, 5000,
+                "the init hop away from the temp overlay never loaded");
+        }
+
+        // The label/file maps are per-session bookkeeping; a fresh test must
+        // not inherit the grouping established by the previous one.
+        DisabledKeybinds.catalogIdsByEntry = {};
+        DisabledKeybinds.entryByCatalogId = {};
+        DisabledKeybinds.labelById = {};
 
         seedBoth(testCase.mainText(), testCase.customText());
+        seedOverlay([]);
 
-        const generation = DisabledKeybinds.loadGeneration;
+        let generation = DisabledKeybinds.loadGeneration;
         if (DisabledKeybinds.defaultKeybindConfigPath === testCase.originalMainPath) {
             DisabledKeybinds.defaultKeybindConfigPath = testCase.mainPath;
             DisabledKeybinds.userKeybindConfigPath = testCase.customPath;
@@ -152,9 +203,9 @@ TestCase {
             tryVerify(() => DisabledKeybinds.loadGeneration > away, 5000,
                 "the hop back never loaded");
         }
-        tryVerify(() => DisabledKeybinds.ready
-            && DisabledKeybinds.loadGeneration >= generation + 2, 5000,
-            "the service never loaded both seeded files");
+        bindTempOverlay();
+        tryVerify(() => DisabledKeybinds.ready && ManagedKeybinds.loaded, 5000,
+            "the service never loaded both seeded snapshots and the temp overlay");
     }
 
     function cleanup() {
@@ -162,9 +213,9 @@ TestCase {
             testCase.reader.destroy();
             testCase.reader = null;
         }
-        // Leave no test override behind for the real overrides file.
-        if (HyprlandBindOverrides.isOverridden("zzDisabledKeybindsTestAction"))
-            HyprlandBindOverrides.clearOverride("zzDisabledKeybindsTestAction");
+        const action = "zzDisabledKeybindsTestAction";
+        if (HyprlandBindOverrides.isOverridden(action))
+            HyprlandBindOverrides.clearOverride(action);
         const plainOverrideId = "bind_" + "SUPER + T".replace(/[^A-Za-z0-9_]/g, "_");
         if (HyprlandBindOverrides.isOverridden(plainOverrideId))
             HyprlandBindOverrides.clearOverride(plainOverrideId);
@@ -175,88 +226,81 @@ TestCase {
             DisabledKeybinds.defaultKeybindConfigPath = testCase.originalMainPath;
             DisabledKeybinds.userKeybindConfigPath = testCase.originalCustomPath;
         }
+        if (testCase.originalOverlayPath !== "")
+            ManagedKeybinds.keybindsPath = testCase.originalOverlayPath;
         Quickshell.execDetached(["rm", "-rf", testCase.tempDir]);
     }
 
-    function bindAt(path, line, endLine, action, comment) {
-        return {
-            sourcePath: path, line: line, endLine: endLine,
-            action: action, comment: comment
-        };
-    }
-
-    function entryFor(id) {
-        return DisabledKeybinds.disabled.find(entry => entry.id === id);
-    }
-
-    function test_disable_one_line_writes_marker_and_updates_state() {
+    function test_disable_one_bind_writes_the_catalog_id_and_updates_state() {
         const generation = DisabledKeybinds.loadGeneration;
         const result = DisabledKeybinds.disableBinds(
-            "main:Terminal", "Terminal",
-            [testCase.bindAt(testCase.mainPath, 2, 2, "actionTerm", "Terminal")]);
+            "main:Snip", "Screen snip",
+            [testCase.bind("utilities", "actionSnip", ["SUPER", "SHIFT"], "S")]);
         verify(result.ok, "disableBinds failed: " + result.error);
         waitForSave(generation);
 
-        const text = testCase.fileText(testCase.mainPath);
-        verify(text.includes(testCase.startLine("main:Terminal")), "no start marker:\n" + text);
-        verify(text.includes("-- " + testCase.terminalLine()), "the bind line was not commented:\n" + text);
-        verify(text.includes(testCase.endLine()), "no end marker:\n" + text);
-        verify(text.includes("-- main head") && text.includes("-- main tail"), "a user line was lost");
-        verify(text.includes("hl.bind(\"SUPER + B\""), "the untouched neighbour was lost");
+        const disabled = testCase.overlay().disabled;
+        compare(disabled.length, 1, "exactly one catalog id must be disabled");
+        compare(disabled[0], "utilities");
 
-        const entry = testCase.entryFor("main:Terminal");
+        const entry = testCase.entryFor("main:Snip");
         verify(entry !== undefined, "disabled did not get the new entry");
-        compare(entry.label, "Terminal");
+        compare(entry.label, "Screen snip");
         compare(entry.file, "main");
-        compare(entry.lines.length, 1);
-        compare(entry.lines[0], testCase.terminalLine());
-        verify(DisabledKeybinds.isDisabled("main:Terminal"));
+        verify(DisabledKeybinds.isDisabled("main:Snip"));
         verify(!DisabledKeybinds.isDisabled("main:Missing"));
+        compare(testCase.fileText(testCase.mainPath), testCase.mainText(),
+            "the generated Lua must never be edited by a delete");
     }
 
-    function test_restore_returns_the_original_bytes() {
+    function test_restore_removes_the_id_and_leaves_the_lua_unchanged() {
         const original = testCase.mainText();
         let generation = DisabledKeybinds.loadGeneration;
         const removed = DisabledKeybinds.disableBinds(
-            "main:Terminal", "Terminal",
-            [testCase.bindAt(testCase.mainPath, 2, 2, "actionTerm", "Terminal")]);
+            "main:Snip", "Screen snip",
+            [testCase.bind("utilities", "actionSnip", ["SUPER", "SHIFT"], "S")]);
         verify(removed.ok, "disableBinds failed: " + removed.error);
         waitForSave(generation);
 
         generation = DisabledKeybinds.loadGeneration;
-        const restored = DisabledKeybinds.restore("main:Terminal");
+        const restored = DisabledKeybinds.restore("main:Snip");
         verify(restored.ok, "restore failed: " + restored.error);
         waitForSave(generation);
 
+        compare(testCase.overlay().disabled.length, 0,
+            "the restored id is still disabled in the overlay");
+        compare(testCase.entryFor("main:Snip"), undefined);
+        verify(!DisabledKeybinds.isDisabled("main:Snip"));
         compare(testCase.fileText(testCase.mainPath), original);
-        compare(testCase.entryFor("main:Terminal"), undefined);
-        verify(!DisabledKeybinds.isDisabled("main:Terminal"));
     }
 
     function test_restore_of_an_unknown_id_does_not_write() {
+        const before = KeybindStore.renderOverlay(testCase.overlay());
         const result = DisabledKeybinds.restore("never-disabled");
         verify(!result.ok, "restoring an unknown id must fail");
         compare(result.error, "not-found");
+        compare(KeybindStore.renderOverlay(testCase.overlay()), before,
+            "an unknown id must not write to the overlay");
         compare(testCase.fileText(testCase.mainPath), testCase.mainText());
     }
 
-    function test_disable_multiline_comments_every_line() {
-        seedBoth(testCase.multilineText(), testCase.customText());
-        testCase.forceReread();
+    function test_grouped_binds_are_tracked_under_one_row() {
         const generation = DisabledKeybinds.loadGeneration;
         const result = DisabledKeybinds.disableBinds(
             "main:Multi", "Multi",
-            [testCase.bindAt(testCase.mainPath, 2, 4, "actionMulti", "Multi")]);
-        verify(result.ok, "disableBinds failed: " + result.error);
+            [
+                testCase.bind("utilities", "", ["SUPER", "SHIFT"], "S"),
+                testCase.bind("utilities-2", "", ["SUPER"], "A")
+            ]);
+        verify(result.ok, "grouped disable failed: " + result.error);
         waitForSave(generation);
 
-        const text = testCase.fileText(testCase.mainPath);
-        verify(text.includes(testCase.startLine("main:Multi")), "no start marker:\n" + text);
-        verify(text.includes("-- hl.bind(\"SUPER + M\","), "first line not commented:\n" + text);
-        verify(text.includes("--   hl.dsp.exec_cmd(\"one; two; three\"),"), "second line not commented:\n" + text);
-        verify(text.includes("--   {description = \"Multi\"})"), "third line not commented:\n" + text);
-        verify(text.includes(testCase.endLine()), "no end marker:\n" + text);
-        compare(testCase.entryFor("main:Multi").lines.length, 3);
+        const disabled = testCase.overlay().disabled;
+        compare(disabled.length, 2);
+        verify(disabled.includes("utilities") && disabled.includes("utilities-2"));
+        compare(DisabledKeybinds.disabled.filter(entry => entry.id === "main:Multi").length, 2,
+            "both binds must be listed under the single row id");
+        compare(testCase.fileText(testCase.mainPath), testCase.mainText());
     }
 
     function test_disable_clears_the_override_for_the_disabled_action() {
@@ -266,8 +310,7 @@ TestCase {
 
         const generation = DisabledKeybinds.loadGeneration;
         const result = DisabledKeybinds.disableBinds(
-            "main:Terminal", "Terminal",
-            [testCase.bindAt(testCase.mainPath, 2, 2, action, "Terminal")]);
+            "main:Snip", "Screen snip", [testCase.bind("utilities", action, [], "")]);
         verify(result.ok, "disableBinds failed: " + result.error);
         waitForSave(generation);
 
@@ -276,149 +319,107 @@ TestCase {
         compare(HyprlandBindOverrides.comboFor(action, "fallback"), "fallback");
     }
 
-    function test_main_and_custom_files_are_handled_independently() {
+    function test_main_and_custom_binds_are_handled_independently() {
         let generation = DisabledKeybinds.loadGeneration;
         const first = DisabledKeybinds.disableBinds(
-            "main:Terminal", "Terminal",
-            [testCase.bindAt(testCase.mainPath, 2, 2, "actionTerm", "Terminal")]);
+            "main:Snip", "Screen snip", [testCase.bind("utilities", "", [], "")]);
         verify(first.ok, "main disable failed: " + first.error);
         waitForSave(generation);
 
         generation = DisabledKeybinds.loadGeneration;
         const second = DisabledKeybinds.disableBinds(
-            "custom:Editor", "Editor",
-            [testCase.bindAt(testCase.customPath, 2, 2, "actionEdit", "Editor")]);
+            "custom:Edit", "Edit keybinds", [testCase.bind("bind-28", "", [], "")]);
         verify(second.ok, "custom disable failed: " + second.error);
         waitForSave(generation);
 
-        const mainFileText = testCase.fileText(testCase.mainPath);
-        const customFileText = testCase.fileText(testCase.customPath);
-        verify(mainFileText.includes(testCase.startLine("main:Terminal")), "main marker missing");
-        verify(!mainFileText.includes(testCase.startLine("custom:Editor")), "custom marker leaked into main");
-        verify(customFileText.includes(testCase.startLine("custom:Editor")), "custom marker missing");
-        verify(!customFileText.includes(testCase.startLine("main:Terminal")), "main marker leaked into custom");
-        compare(testCase.entryFor("main:Terminal").file, "main");
-        compare(testCase.entryFor("custom:Editor").file, "custom");
+        // Both writes are async FileView saves; a stale watch can briefly
+        // serve the previous overlay. Wait for the file to show both ids.
+        tryVerify(() => {
+            const disabled = testCase.overlay().disabled;
+            return disabled.includes("utilities") && disabled.includes("bind-28");
+        }, 5000, "the overlay must disable both the main and the custom id, file="
+            + JSON.stringify(testCase.overlay().disabled) + " mem="
+            + JSON.stringify(ManagedKeybinds.overlay?.disabled));
+        tryVerify(() => testCase.entryFor("main:Snip")?.file === "main", 5000,
+            "the main row never appeared in the Deleted section");
+        tryVerify(() => testCase.entryFor("custom:Edit")?.file === "custom", 5000,
+            "the custom row never appeared in the Deleted section");
+        compare(testCase.fileText(testCase.mainPath), testCase.mainText());
+        compare(testCase.fileText(testCase.customPath), testCase.customText());
     }
 
-    function test_grouped_files_produce_one_reload_not_one_per_file() {
-        const generation = DisabledKeybinds.loadGeneration;
-        const reloads = DisabledKeybinds.reloadCount;
-        const result = DisabledKeybinds.disableBinds(
-            "shared:bind", "Shared",
-            [
-                testCase.bindAt(testCase.mainPath, 2, 2, "", "Terminal"),
-                testCase.bindAt(testCase.customPath, 2, 2, "", "Editor")
-            ]);
-        verify(result.ok, "grouped disable failed: " + result.error);
-        waitForSave(generation);
-
-        verify(testCase.fileText(testCase.mainPath).includes(testCase.startLine("shared:bind")),
-            "the main bind was not disabled");
-        verify(testCase.fileText(testCase.customPath).includes(testCase.startLine("shared:bind")),
-            "the custom bind was not disabled");
-        compare(DisabledKeybinds.reloadCount, reloads + 1,
-            "two files in one save must trigger exactly one hyprctl reload");
-    }
-
-    function test_two_binds_in_one_file_write_once_and_restore_both() {
-        // The regression case: two binds share sourcePath and the caller's
-        // single id. They must become two blocks in one file, produced by one
-        // write and one reload, and restore must bring both lines back.
+    function test_two_binds_in_one_file_restore_together() {
         const original = testCase.mainText();
-        const generation = DisabledKeybinds.loadGeneration;
-        const writes = DisabledKeybinds.writeCount;
-        const reloads = DisabledKeybinds.reloadCount;
-
+        let generation = DisabledKeybinds.loadGeneration;
         const result = DisabledKeybinds.disableBinds(
             "main:Grouped", "Grouped",
             [
-                testCase.bindAt(testCase.mainPath, 2, 2, "actionTerm", "Terminal"),
-                testCase.bindAt(testCase.mainPath, 3, 3, "actionBrowser", "Browser")
+                testCase.bind("utilities", "actionTerm", [], ""),
+                testCase.bind("utilities-3", "actionBrowser", [], "")
             ]);
-        verify(result.ok, "two binds in one file failed: " + result.error);
+        verify(result.ok, "two binds in one row failed: " + result.error);
         waitForSave(generation);
 
-        const text = testCase.fileText(testCase.mainPath);
-        compare((text.match(/-- >>> end4-pC disabled keybind: main:Grouped/g) || []).length, 2,
-            "one marker per bind was expected");
-        verify(text.includes("-- " + testCase.terminalLine()), "the first bind was not commented");
-        verify(text.includes("-- hl.bind(\"SUPER + B\", hl.dsp.exec_cmd(\"firefox\"), {description = \"Browser\"})"),
-            "the second bind was not commented");
-        verify(text.includes("-- main head") && text.includes("-- main tail"), "a user line was lost");
+        const disabled = testCase.overlay().disabled;
+        compare(disabled.length, 2);
+        compare(DisabledKeybinds.disabled.filter(entry => entry.id === "main:Grouped").length, 2,
+            "both binds must be offered as one grouped row");
+        compare(testCase.fileText(testCase.mainPath), original);
 
-        const grouped = DisabledKeybinds.disabled.filter(entry => entry.id === "main:Grouped");
-        compare(grouped.length, 2, "both blocks must be exposed to the pane");
-        compare(grouped[0].file, "main");
-        compare(grouped[1].file, "main");
-
-        compare(DisabledKeybinds.writeCount, writes + 1,
-            "two binds in one file must produce one write, not one per bind");
-        compare(DisabledKeybinds.reloadCount, reloads + 1,
-            "two binds in one file must produce one reload, not one per bind");
-
-        const restoreGeneration = DisabledKeybinds.loadGeneration;
+        generation = DisabledKeybinds.loadGeneration;
         const restored = DisabledKeybinds.restore("main:Grouped");
         verify(restored.ok, "restore of the grouped id failed: " + restored.error);
-        waitForSave(restoreGeneration);
+        waitForSave(generation);
 
-        compare(testCase.fileText(testCase.mainPath), original,
-            "restore must return the exact original bytes with both binds back");
-        compare(testCase.entryFor("main:Grouped"), undefined);
-        verify(!DisabledKeybinds.isDisabled("main:Grouped"));
+        tryVerify(() => testCase.overlay().disabled.length === 0, 5000,
+            "restore must re-enable both ids in one save");
+        tryVerify(() => testCase.entryFor("main:Grouped") === undefined, 5000,
+            "the restored row must leave the Deleted section");
+        compare(testCase.fileText(testCase.mainPath), original);
     }
 
-    function test_unknown_source_path_is_rejected_without_writing() {
+    function test_unknown_bind_id_is_rejected_without_writing() {
+        const before = KeybindStore.renderOverlay(testCase.overlay());
         const result = DisabledKeybinds.disableBinds(
             "main:Terminal", "Terminal",
-            [testCase.bindAt(testCase.tempDir + "/elsewhere.lua", 2, 2, "", "Terminal")]);
-        verify(!result.ok, "an unowned path must be rejected");
+            [{ sourcePath: testCase.tempDir + "/elsewhere.lua", line: 2, endLine: 2,
+               action: "", comment: "Terminal" }]);
+        verify(!result.ok, "a bind without a catalog id must be rejected");
         compare(result.error, "unknown-path");
+        compare(KeybindStore.renderOverlay(testCase.overlay()), before,
+            "a rejected bind must not write to the overlay");
         compare(testCase.fileText(testCase.mainPath), testCase.mainText());
         compare(testCase.fileText(testCase.customPath), testCase.customText());
     }
 
     function test_restore_clears_a_shared_id_from_both_files_in_one_cycle() {
-        // disableBinds lets one id span both files (shell actions group their
-        // binds across the merged tree). Restore must do the same: stopping
-        // at the first file leaves the custom block disabled forever.
-        const originalMain = testCase.mainText();
-        const originalCustom = testCase.customText();
         let generation = DisabledKeybinds.loadGeneration;
         const result = DisabledKeybinds.disableBinds(
             "shared:restore", "Shared",
             [
-                testCase.bindAt(testCase.mainPath, 2, 2, "", "Terminal"),
-                testCase.bindAt(testCase.customPath, 2, 2, "", "Editor")
+                testCase.bind("utilities", "", [], ""),
+                testCase.bind("bind-28", "", [], "")
             ]);
         verify(result.ok, "grouped disable failed: " + result.error);
         waitForSave(generation);
 
-        verify(testCase.fileText(testCase.mainPath).includes(testCase.startLine("shared:restore")),
-            "the main block was not disabled");
-        verify(testCase.fileText(testCase.customPath).includes(testCase.startLine("shared:restore")),
-            "the custom block was not disabled");
         compare(DisabledKeybinds.disabled.filter(entry => entry.id === "shared:restore").length, 2,
-            "both files must be listed in the Deleted section");
+            "both binds must be listed in the Deleted section");
 
         generation = DisabledKeybinds.loadGeneration;
-        const writes = DisabledKeybinds.writeCount;
-        const reloads = DisabledKeybinds.reloadCount;
         const restored = DisabledKeybinds.restore("shared:restore");
         verify(restored.ok, "restore of the shared id failed: " + restored.error);
         waitForSave(generation);
 
-        compare(testCase.fileText(testCase.mainPath), originalMain,
-            "the main block survived restore");
-        compare(testCase.fileText(testCase.customPath), originalCustom,
-            "the custom block survived restore");
-        compare(DisabledKeybinds.disabled.length, 0,
+        // restore() rebuilds the list before the async save/reload lands, so
+        // the Deleted section can briefly still show the restored entries.
+        tryVerify(() => testCase.overlay().disabled.length === 0, 5000,
+            "one restore must re-enable the ids from both files");
+        tryVerify(() => DisabledKeybinds.disabled.length === 0, 5000,
             "one restore must empty the Deleted section");
         verify(!DisabledKeybinds.isDisabled("shared:restore"));
-        compare(DisabledKeybinds.writeCount, writes + 2,
-            "one write per file in a single restore cycle");
-        compare(DisabledKeybinds.reloadCount, reloads + 1,
-            "both files in one restore must trigger exactly one reload");
+        compare(testCase.fileText(testCase.mainPath), testCase.mainText());
+        compare(testCase.fileText(testCase.customPath), testCase.customText());
     }
 
     function test_disable_clears_a_plain_bind_override() {
@@ -430,11 +431,10 @@ TestCase {
         verify(HyprlandBindOverrides.isOverridden(overrideId),
             "the plain-bind test override was not set");
 
-        const plainBind = Object.assign(
-            testCase.bindAt(testCase.mainPath, 2, 2, "", "Terminal"),
-            { mods: ["SUPER"], key: "T" });
         const generation = DisabledKeybinds.loadGeneration;
-        const result = DisabledKeybinds.disableBinds("main:Plain", "Terminal", [plainBind]);
+        const result = DisabledKeybinds.disableBinds(
+            "main:Plain", "Terminal",
+            [testCase.bind("utilities", "", ["SUPER"], "T")]);
         verify(result.ok, "plain-bind disable failed: " + result.error);
         waitForSave(generation);
 
