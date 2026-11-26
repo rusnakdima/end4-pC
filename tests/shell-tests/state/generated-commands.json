@@ -1,0 +1,257 @@
+{
+ "bind": {
+  "command": "qs -c $qsConfig ipc call search toggle || pkill fuzzel || fuzzel",
+  "description": "Shell: Toggle search",
+  "category": ""
+ },
+ "bind-2": {
+  "command": "qs -c $qsConfig ipc call search toggle || pkill fuzzel || fuzzel",
+  "description": "SUPER + SUPER_R",
+  "category": ""
+ },
+ "bind-19": {
+  "command": "qs -c $qsConfig ipc call brightness increment || brightnessctl s 5%+",
+  "description": "XF86MonBrightnessUp",
+  "category": ""
+ },
+ "bind-20": {
+  "command": "qs -c $qsConfig ipc call brightness decrement || brightnessctl s 5%-",
+  "description": "XF86MonBrightnessDown",
+  "category": ""
+ },
+ "bind-21": {
+  "command": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%+ -l 1.5",
+  "description": "XF86AudioRaiseVolume",
+  "category": ""
+ },
+ "bind-22": {
+  "command": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%-",
+  "description": "XF86AudioLowerVolume",
+  "category": ""
+ },
+ "bind-27": {
+  "command": "pavucontrol",
+  "description": "Shell: Open mixer",
+  "category": ""
+ },
+ "utilities-2": {
+  "command": "qs -c $qsConfig ipc call TEST_ALIVE || pidof slurp || hyprshot --freeze --clipboard-only --mode region --silent",
+  "description": "Utilities: SUPER + SHIFT + S",
+  "category": "Utilities"
+ },
+ "utilities-4": {
+  "command": "qs -c $qsConfig ipc call TEST_ALIVE || pidof slurp || $HOME/.config/hypr/hyprland/scripts/snip_to_search.sh",
+  "description": "Utilities: SUPER + SHIFT + A",
+  "category": "Utilities"
+ },
+ "utilities-5": {
+  "command": "echo OCR-not-configured",
+  "description": "Utilities: OCR region >> clipboard",
+  "category": "Utilities"
+ },
+ "utilities-6": {
+  "command": "hyprpicker -a",
+  "description": "Utilities: Pick color #RRGGBB >> clipboard",
+  "category": "Utilities"
+ },
+ "utilities-7": {
+  "command": "grim -o \"$(hyprctl activeworkspace -j | jq -r '.monitor')\" - | wl-copy",
+  "description": "Utilities: Screenshot >> clipboard",
+  "category": "Utilities"
+ },
+ "utilities-8": {
+  "command": "mkdir -p $(xdg-user-dir PICTURES)/Screenshots && grim -o \"$(hyprctl activeworkspace -j | jq -r '.monitor')\" $(xdg-user-dir PICTURES)/Screenshots/Screenshot_\"$(date '+%Y-%m-%d_%H.%M.%S')\".png",
+  "description": "Utilities: Screenshot >> clipboard & file",
+  "category": "Utilities"
+ },
+ "utilities-9": {
+  "command": "grim -o \"$(hyprctl activeworkspace -j | jq -r '.monitor')\" - | wl-copy",
+  "description": "Utilities: CTRL + Print",
+  "category": "Utilities"
+ },
+ "utilities-10": {
+  "command": "$HOME/.config/hypr/hyprland/scripts/ai/primary-buffer-query.sh",
+  "description": "Utilities: Generate AI summary for selected text",
+  "category": "Utilities"
+ },
+ "media": {
+  "command": "playerctl next || playerctl position `bc <<< \"100 * $(playerctl metadata mpris:length) / 1000000 / 100\"`",
+  "description": "Media: Next track",
+  "category": "Media"
+ },
+ "media-2": {
+  "command": "playerctl next || playerctl position `bc <<< \"100 * $(playerctl metadata mpris:length) / 1000000 / 100\"`",
+  "description": "Media: XF86AudioNext",
+  "category": "Media"
+ },
+ "media-3": {
+  "command": "playerctl previous",
+  "description": "Media: XF86AudioPrev",
+  "category": "Media"
+ },
+ "media-4": {
+  "command": "playerctl previous",
+  "description": "Media: SUPER + SHIFT + ALT + mouse:275",
+  "category": "Media"
+ },
+ "media-5": {
+  "command": "playerctl next || playerctl position `bc <<< \"100 * $(playerctl metadata mpris:length) / 1000000 / 100\"`",
+  "description": "Media: SUPER + SHIFT + ALT + mouse:276",
+  "category": "Media"
+ },
+ "media-6": {
+  "command": "playerctl previous",
+  "description": "Media: Previous track",
+  "category": "Media"
+ },
+ "media-7": {
+  "command": "playerctl play-pause",
+  "description": "Media: Play/pause media",
+  "category": "Media"
+ },
+ "media-8": {
+  "command": "playerctl play-pause",
+  "description": "Media: XF86AudioPlay",
+  "category": "Media"
+ },
+ "media-9": {
+  "command": "playerctl play-pause",
+  "description": "Media: XF86AudioPause",
+  "category": "Media"
+ },
+ "media-10": {
+  "command": "wpctl set-mute @DEFAULT_SINK@ toggle",
+  "description": "Media: XF86AudioMute",
+  "category": "Media"
+ },
+ "media-11": {
+  "command": "wpctl set-mute @DEFAULT_SINK@ toggle",
+  "description": "Media: Toggle mute",
+  "category": "Media"
+ },
+ "media-12": {
+  "command": "wpctl set-mute @DEFAULT_SOURCE@ toggle",
+  "description": "Media: ALT + XF86AudioMute",
+  "category": "Media"
+ },
+ "media-13": {
+  "command": "wpctl set-mute @DEFAULT_SOURCE@ toggle",
+  "description": "Media: XF86AudioMicMute",
+  "category": "Media"
+ },
+ "media-14": {
+  "command": "wpctl set-mute @DEFAULT_SOURCE@ toggle",
+  "description": "Media: Toggle mic",
+  "category": "Media"
+ },
+ "window-16": {
+  "command": "hyprctl kill",
+  "description": "Window: Forcefully zap a window",
+  "category": "Window"
+ },
+ "virtual-machines-2": {
+  "command": "bash -c 'RANDOM_IMAGE=$(find ~/Pictures -type f | shuf -n 1); ACTION=$(notify-send \"Test notification with body image\" \"This notification should contain your user account <b>image</b> and <a href=\\\"https://discord.com/app\\\">Discord</a> <b>icon</b>. Oh and here is a random image in your Pictures folder: <img src=\\\"$RANDOM_IMAGE\\\" alt=\\\"Testing image\\\"/>\" -a \"Hyprland\" -p -h \"string:image-path:/var/lib/AccountsService/icons/$USER\" -t 6000 -i \"discord\" -A \"openImage=Profile image\" -A \"action2=Open the random image\" -A \"action3=Useless button\"); [[ $ACTION == *openImage ]] && xdg-open \"/var/lib/AccountsService/icons/$USER\"; [[ $ACTION == *action2 ]] && xdg-open \"$RANDOM_IMAGE\"'",
+  "description": "Virtual machines: SUPER + ALT + F11",
+  "category": "Virtual machines"
+ },
+ "virtual-machines-3": {
+  "command": "bash -c 'RANDOM_IMAGE=$(find ~/Pictures -type f | shuf -n 1); ACTION=$(notify-send \"Test notification\" \"This notification should contain a random image in your <b>Pictures</b> folder and <a href=\\\"https://discord.com/app\\\">Discord</a> <b>icon</b>.\n<i>Flick right to dismiss!</i>\" -a \"Discord (fake)\" -p -h \"string:image-path:$RANDOM_IMAGE\" -t 6000 -i \"discord\" -A \"openImage=Profile image\" -A \"action2=Useless button\"); [[ $ACTION == *openImage ]] && xdg-open \"/var/lib/AccountsService/icons/$USER\"'",
+  "description": "Virtual machines: SUPER + ALT + F12",
+  "category": "Virtual machines"
+ },
+ "virtual-machines-4": {
+  "command": "notify-send 'Urgent notification' 'Ah hell no' -u critical -a 'Hyprland keybind'",
+  "description": "Virtual machines: SUPER + ALT + Equal",
+  "category": "Virtual machines"
+ },
+ "session": {
+  "command": "loginctl lock-session",
+  "description": "Session: Lock",
+  "category": "Session"
+ },
+ "session-2": {
+  "command": "systemctl suspend || loginctl suspend",
+  "description": "Session: Sleep",
+  "category": "Session"
+ },
+ "session-3": {
+  "command": "systemctl poweroff || loginctl poweroff",
+  "description": "Session: Shut down",
+  "category": "Session"
+ },
+ "apps": {
+  "command": "kitty",
+  "description": "App: Terminal",
+  "category": "Apps"
+ },
+ "apps-2": {
+  "command": "kitty",
+  "description": "Apps: SUPER + T",
+  "category": "Apps"
+ },
+ "apps-3": {
+  "command": "kitty",
+  "description": "Apps: CTRL + ALT + T",
+  "category": "Apps"
+ },
+ "apps-4": {
+  "command": "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'dolphin' 'nautilus' 'nemo' 'thunar' 'kitty -1 fish -c yazi'",
+  "description": "App: File manager",
+  "category": "Apps"
+ },
+ "apps-5": {
+  "command": "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'google-chrome-stable' 'zen-browser' 'firefox' 'brave' 'chromium' 'microsoft-edge-stable' 'opera' 'librewolf'",
+  "description": "App: Browser",
+  "category": "Apps"
+ },
+ "apps-6": {
+  "command": "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'windsurf' 'antigravity' 'code' 'codium' 'cursor' 'zed' 'zedit' 'zeditor' 'kate' 'gnome-text-editor' 'emacs' 'command -v nvim && kitty -1 nvim' 'command -v micro && kitty -1 micro'",
+  "description": "App: Code editor",
+  "category": "Apps"
+ },
+ "apps-7": {
+  "command": "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'wps' 'onlyoffice-desktopeditors' 'libreoffice'",
+  "description": "App: Office software",
+  "category": "Apps"
+ },
+ "apps-8": {
+  "command": "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'kate' 'gnome-text-editor' 'emacs'",
+  "description": "App: Text editor",
+  "category": "Apps"
+ },
+ "apps-9": {
+  "command": "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'pavucontrol-qt' 'pavucontrol'",
+  "description": "App: Volume mixer",
+  "category": "Apps"
+ },
+ "apps-10": {
+  "command": "qs ipc -p ~/.config/quickshell/end4-pC call settings toggle",
+  "description": "App: Settings app",
+  "category": "Apps"
+ },
+ "apps-11": {
+  "command": "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'gnome-system-monitor' 'plasma-systemmonitor --page-name Processes' 'command -v btop && kitty -1 fish -c btop'",
+  "description": "App: Task manager",
+  "category": "Apps"
+ },
+ "bind-28": {
+  "command": "xdg-open ~/.config/hypr/custom/keybinds.lua",
+  "description": "Edit user keybinds",
+  "category": ""
+ },
+ "bind-31": {
+  "command": "waydroid show-full-ui",
+  "description": "App: Show full Waydroid UI",
+  "category": ""
+ },
+ "bind-32": {
+  "command": "$HOME/.config/quickshell/$qsConfig/scripts/waydroid-desktop-gen.sh",
+  "description": "App: Regenerate Android desktop entries",
+  "category": ""
+ },
+ "apps-13": {
+  "command": "youtube-music",
+  "description": "YTM",
+  "category": "Apps"
+ }
+}

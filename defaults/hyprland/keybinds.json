@@ -782,14 +782,17 @@
    "category": "",
    "group": "",
    "combo": "CTRL + SUPER + R",
-   "description": "Shell: Restart widgets (Ambxst)",
-   "label": "Shell: Restart widgets (Ambxst)",
+   "description": "Shell: Reload theme",
+   "label": "Shell: Reload theme",
    "options": {},
    "dispatch": {
-    "kind": "command",
-    "command": "pgrep -x qs >/dev/null || qs -p /home/dmitriy/.config/quickshell/end4-pC"
+    "kind": "global",
+    "arg": {
+     "kind": "string",
+     "value": "quickshell:shellReload"
+    }
    },
-   "code": "hl.bind(\"CTRL + SUPER + R\", hl.dsp.global(\"quickshell:runCommand:bind-26\"), { description = \"Shell: Restart widgets (Ambxst)\" })"
+   "code": "hl.bind(\"CTRL + SUPER + R\", hl.dsp.global(\"quickshell:shellReload\"), { description = \"Shell: Reload theme\" })"
   },
   {
    "id": "bind-27",
