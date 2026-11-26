@@ -81,22 +81,29 @@ Singleton {
     }
 
     function handleActionResult(code, stderrText): void {
-        if (code !== 0 && stderrText.trim())
+        // `timeout` exits 124 with no stderr when an action hangs; show a
+        // useful reason instead of leaving an empty error label.
+        if (code === 124) {
+            root.lastError = "Waydroid action timed out"
+        } else if (code !== 0 && stderrText.trim()) {
             root.lastError = stderrText.trim()
+        }
         refreshTimer.restart()
     }
 
     function start(): void {
         if (root.busy) return
         root.lastError = ""
-        actionProc.command = [root.helperPath]
+        // Bound every action: a hung start/stop would keep `busy` true and
+        // lock out every other control in the panel.
+        actionProc.command = ["timeout", "30", root.helperPath]
         actionProc.running = true
     }
 
     function stop(): void {
         if (root.busy) return
         root.lastError = ""
-        actionProc.command = ["waydroid", "session", "stop"]
+        actionProc.command = ["timeout", "30", "waydroid", "session", "stop"]
         actionProc.running = true
     }
 
@@ -158,7 +165,7 @@ Singleton {
 
     Process {
         id: uiProc
-        command: ["waydroid", "show-full-ui"]
+        command: ["timeout", "30", "waydroid", "show-full-ui"]
         stdout: StdioCollector { id: uiOut }
         stderr: StdioCollector { id: uiErr }
         onExited: (code) => root.handleActionResult(code, uiErr.text)
@@ -166,7 +173,7 @@ Singleton {
 
     Process {
         id: desktopProc
-        command: [root.desktopGenPath]
+        command: ["timeout", "30", root.desktopGenPath]
         stdout: StdioCollector { id: desktopOut }
         stderr: StdioCollector { id: desktopErr }
         onExited: (code) => root.handleActionResult(code, desktopErr.text)
