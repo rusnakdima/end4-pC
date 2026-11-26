@@ -77,6 +77,14 @@ Scope {
         sourceComponent: PanelWindow {
             id: menuWindow
 
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+            Keys.onPressed: event => {
+                if (event.key === Qt.Key_Escape) {
+                    root.openCentered(false);
+                    event.accepted = true;
+                }
+            }
+
             screen: GlobalStates.desktopMenuScreen ?? Quickshell.screens[0]
 
             color: "transparent"

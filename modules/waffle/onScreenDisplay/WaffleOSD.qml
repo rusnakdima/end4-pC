@@ -85,6 +85,15 @@ Scope {
         sourceComponent: PanelWindow {
             id: panelWindow
 
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+            Keys.onPressed: event => {
+                if (event.key === Qt.Key_Escape) {
+                    GlobalStates.osdVolumeOpen = false;
+                    GlobalStates.osdBrightnessOpen = false;
+                    event.accepted = true;
+                }
+            }
+
             Connections {
                 target: root
                 function onFocusedScreenChanged() {

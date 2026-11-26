@@ -24,8 +24,10 @@ WBarAttachedPanelContent {
 
     Keys.onPressed: event => {
         // Prevent Esc and Backspace from registering
-        if (event.key === Qt.Key_Escape)
-            return;
+        if (event.key === Qt.Key_Escape) {
+            GlobalStates.searchOpen = false;
+            event.accepted = true;
+        }
 
         // Handle Backspace: focus and delete character if not focused
         if (event.key === Qt.Key_Backspace) {

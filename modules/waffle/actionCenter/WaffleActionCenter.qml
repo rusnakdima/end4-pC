@@ -28,6 +28,12 @@ Scope {
             exclusiveZone: 0
             WlrLayershell.namespace: "quickshell:actionCenter"
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+            Keys.onPressed: event => {
+                if (event.key === Qt.Key_Escape) {
+                    content.close();
+                    event.accepted = true;
+                }
+            }
             color: "transparent"
 
             anchors {

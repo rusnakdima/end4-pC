@@ -84,6 +84,13 @@ AbstractOverlayWidget {
         maximumX: root.parent?.width - root.width
         maximumY: root.parent?.height - root.height
     }
+    focus: root.open || GlobalStates.overlayOpen
+    Keys.onPressed: event => {
+        if (event.key === Qt.Key_Escape) {
+            root.close();
+            event.accepted = true;
+        }
+    }
     opacity: (GlobalStates.overlayOpen || !clickthrough) ? 1.0 : Config.options.overlay.clickthroughOpacity
 
     // Guarded states & registration funcs
