@@ -201,5 +201,16 @@ check 'qt6ct: palette has opaque active colors' \
 check 'qt6ct: palette has 21 QPalette roles' \
     "test \"\$(grep '^active_colors=' '$QT6CT_SCHEME' | cut -d= -f2 | tr ',' '\\n' | wc -l)\" -eq 21"
 
+# --- stale QT_STYLE_OVERRIDE must be removed from systemd and D-Bus -----------
+: > "$CAPTURE/systemctl"
+: > "$CAPTURE/dbus-update-activation-environment"
+APP_THEMING_NO_EXTERNAL=0 bash "$APP_THEMING" dark >/dev/null 2>&1
+check 'systemd user environment drops stale QT_STYLE_OVERRIDE' \
+    "grep -qx -- '--user unset-environment QT_STYLE_OVERRIDE' '$CAPTURE/systemctl'"
+check 'D-Bus activation environment never receives a stale override value' \
+    "! grep -Eq 'QT_STYLE_OVERRIDE=.+' '$CAPTURE/dbus-update-activation-environment'"
+check 'D-Bus activation environment explicitly clears the stale override' \
+    "grep -qx -- '--systemd QT_STYLE_OVERRIDE=' '$CAPTURE/dbus-update-activation-environment'"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]

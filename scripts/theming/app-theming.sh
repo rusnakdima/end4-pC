@@ -513,13 +513,19 @@ signal_apps() {
 
     # import-environment would ignore unset shell variables. Pass explicit
     # values instead; systemd --user does not re-read environment.d on change.
+    # The base installer also set QT_STYLE_OVERRIDE=kvantum; that style and the
+    # Qt Quick Material style make kdeconnect-app exit immediately, and a stale
+    # override in systemd/D-Bus survives into every restarted app.
     if command -v systemctl >/dev/null 2>&1; then
+        systemctl --user unset-environment QT_STYLE_OVERRIDE >/dev/null 2>&1 || true
         systemctl --user set-environment "${qenv[@]}" >/dev/null 2>&1 || true
     fi
     # KDE Connect's daemon is D-Bus activated, not a systemd user unit, so it
-    # does not inherit the user manager's environment either.
+    # does not inherit the user manager's environment either. D-Bus has no
+    # unset operation; an empty value is treated as "no override" by Qt.
     if command -v dbus-update-activation-environment >/dev/null 2>&1; then
         dbus-update-activation-environment --systemd "${qenv[@]}" >/dev/null 2>&1 || true
+        dbus-update-activation-environment --systemd QT_STYLE_OVERRIDE= >/dev/null 2>&1 || true
     fi
     if command -v pkill >/dev/null 2>&1; then
         pkill -TERM -x kdeconnect-app >/dev/null 2>&1 || true
