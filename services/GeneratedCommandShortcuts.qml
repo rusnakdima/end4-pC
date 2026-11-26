@@ -47,6 +47,35 @@ Singleton {
     readonly property var activeShortcutIds: GlobalStates.keybindCaptureArmed
         ? [] : root.shortcutIds
 
+    // Small step commands that should keep stepping while the key is held.
+    readonly property var repeatableIds: ["bind-19", "bind-20", "bind-21", "bind-22"]
+    property string heldRepeatId: ""
+
+    Timer {
+        id: repeatDelayTimer
+        interval: 300
+        repeat: false
+        running: false
+        onTriggered: {
+            if (root.heldRepeatId !== "") repeatTimer.start();
+        }
+    }
+
+    Timer {
+        id: repeatTimer
+        interval: 100
+        repeat: true
+        running: false
+        onTriggered: root.runCommand(root.heldRepeatId)
+    }
+
+    // Capture mode destroys the delegates before they can emit released().
+    onActiveShortcutIdsChanged: {
+        repeatDelayTimer.stop();
+        repeatTimer.stop();
+        root.heldRepeatId = "";
+    }
+
     Component.onCompleted: root.reload()
 
     FileView {
@@ -93,7 +122,28 @@ Singleton {
             // generated Hyprland binds dispatch to.
             name: "runCommand:" + modelData
             description: root.commands[modelData]?.description ?? ""
-            onPressed: root.runCommand(modelData)
+            onPressed: {
+                if (!root.repeatableIds.includes(modelData)) {
+                    root.runCommand(modelData);
+                    return;
+                }
+                if (root.heldRepeatId === modelData) return; // key auto-repeat
+                root.runCommand(modelData);
+                root.heldRepeatId = modelData;
+                repeatDelayTimer.start();
+            }
+            onReleased: {
+                repeatDelayTimer.stop();
+                repeatTimer.stop();
+                root.heldRepeatId = "";
+            }
+            onPressedChanged: {
+                if (!pressed) {
+                    repeatDelayTimer.stop();
+                    repeatTimer.stop();
+                    root.heldRepeatId = "";
+                }
+            }
         }
     }
 
