@@ -26,7 +26,7 @@ Singleton {
     id: root
 
     property bool open: false
-    property string kind: "empty" // image | text | binary | empty
+    property string kind: "empty" // image | text | binary | notfound | empty
     property string sourcePath: ""
     property string displayLabel: ""
     property string content: ""
@@ -127,13 +127,13 @@ Singleton {
         });
     }
 
-    function openPath(path: string, label?: string): void {
+    function openPath(path: string, label: string): void {
         const clean = FileUtils.trimFileProtocol(String(path));
         const name = label || clean.split("/").pop();
-        const command = `test -f ${root._shellQuote(clean)} && file --mime-type -b -- ${root._shellQuote(clean)}`;
+        const command = `test -f ${root._shellQuote(clean)} && test -r ${root._shellQuote(clean)} && file --mime-type -b -- ${root._shellQuote(clean)}`;
         root._run(command, (result, code) => {
             if (code !== 0) {
-                root._show("binary", clean, name, "");
+                root._show("notfound", clean, "File not found: " + name, "");
                 return;
             }
             const mime = String(result).split("\n")[0].trim();
@@ -156,7 +156,7 @@ Singleton {
         });
     }
 
-    function openText(text: string, label?: string): void {
+    function openText(text: string, label: string): void {
         const scratch = `${root.cacheDir}/selection-${Math.floor(Date.now() / 1000)}.txt`;
         const command = `mkdir -p ${root._shellQuote(root.cacheDir)} && printf '%s' ${root._shellQuote(String(text))} > ${root._shellQuote(scratch)} && echo ok`;
         root._run(command, (result, code) => {
@@ -170,7 +170,13 @@ Singleton {
 
     function edit(): void {
         if (root.kind === "empty" || root.sourcePath === "") return;
-        root._run(`${root._shellQuote(root.editScript)} ${root._shellQuote(root.sourcePath)}`, () => {});
+        root._run(`${root._shellQuote(root.editScript)} ${root._shellQuote(root.sourcePath)}`, (result, code) => {
+            if (code !== 0) {
+                const lines = String(result).split("\n").map(line => line.trim()).filter(Boolean);
+                const message = lines.length > 0 ? lines[lines.length - 1] : "unknown error";
+                root.displayLabel = "Could not open editor: " + message;
+            }
+        });
     }
 
     function zoomIn(): void { fitMode = false; zoom = Math.min(zoom + 0.25, 8); }
@@ -183,8 +189,8 @@ Singleton {
         function toggle(): void { root.toggle() }
         function open(): void { if (!root.open) root.detect() }
         function close(): void { root.close() }
-        function openPath(path: string): void { root.openPath(path) }
-        function openText(text: string): void { root.openText(text) }
+        function openPath(path: string): void { root.openPath(path, "") }
+        function openText(text: string): void { root.openText(text, "") }
         function edit(): void { root.edit() }
     }
 

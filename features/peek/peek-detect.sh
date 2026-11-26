@@ -41,7 +41,22 @@ resolve_text() {
     case "$trimmed" in
         "~"|"~/"*) trimmed="$HOME/${trimmed#\~/}" ;;
     esac
-    trimmed="${trimmed#file://}"
+    case "$trimmed" in
+        file://*)
+            trimmed="${trimmed#file://}"
+            # text/uri-list may contain several URIs; preview the first one.
+            trimmed="${trimmed%%$'\n'*}"
+            case "$trimmed" in
+                localhost/*) trimmed="/${trimmed#localhost/}" ;;
+            esac
+            # File managers percent-encode spaces and unicode in QUrl strings.
+            if command -v python3 >/dev/null 2>&1; then
+                trimmed="$(python3 -c 'import sys, urllib.parse; sys.stdout.write(urllib.parse.unquote(sys.stdin.read().rstrip("\n")))' <<< "$trimmed")"
+            else
+                trimmed="$(printf '%b' "${trimmed//%/\\x}")"
+            fi
+            ;;
+    esac
     if [[ "$trimmed" = /* && -e "$trimmed" ]]; then
         emit path "$trimmed" "$(basename -- "$trimmed")"
     fi

@@ -65,8 +65,12 @@ check "binary kind" "$SERVICE" '_show("binary"'
 check "binary MIME classification" "$SERVICE" 'application/octet-stream'
 check "MIME probe" "$SERVICE" 'file --mime-type'
 check "capped text read" "$SERVICE" 'head -c'
-check "IPC openText exposed" "$SERVICE" 'function openText(text: string): void { root.openText(text) }'
+check "IPC openText exposed" "$SERVICE" 'function openText(text: string): void { root.openText(text, "") }'
 check "IPC edit exposed" "$SERVICE" 'function edit(): void { root.edit() }'
+check_absent "no optional QML parameters" "$SERVICE" 'label?: string'
+check "notfound kind" "$SERVICE" '_show("notfound"'
+check "notfound label" "$SERVICE" 'File not found:'
+check "edit failures surfaced" "$SERVICE" 'Could not open editor:'
 
 # Panel wiring (Task 4)
 SCOPE="$SCRIPT_DIR/modules/ii/peek/Peek.qml"
@@ -92,6 +96,8 @@ else
     fail=1
 fi
 check "panel title is Peek" "$PANEL" 'title: "Peek"'
+check_absent "panel has no Qt5-only selectByMouse" "$PANEL" 'selectByMouse'
+check "panel shows notfound hint" "$PANEL" 'Peek.kind === "notfound"'
 check "panel closes with the service" "$PANEL" 'onClosing: event => Peek.close()'
 check "panel handles Escape" "$PANEL" 'Qt.Key_Escape'
 check "panel handles E" "$PANEL" 'Qt.Key_E'

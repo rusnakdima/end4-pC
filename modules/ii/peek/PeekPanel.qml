@@ -188,7 +188,6 @@ Window {
                         font.pixelSize: Appearance.font.pixelSize.small
                         color: Appearance.colors.colOnLayer1
                         wrapMode: Text.WrapAnywhere
-                        selectByMouse: true
                     }
                 }
 
@@ -196,6 +195,14 @@ Window {
                     anchors.centerIn: parent
                     visible: Peek.kind === "empty"
                     text: "Nothing selected"
+                    font.pixelSize: Appearance.font.pixelSize.large
+                    color: Appearance.colors.colOnSurfaceVariant
+                }
+
+                StyledText {
+                    anchors.centerIn: parent
+                    visible: Peek.kind === "notfound"
+                    text: "File not found — press E to open in nvim"
                     font.pixelSize: Appearance.font.pixelSize.large
                     color: Appearance.colors.colOnSurfaceVariant
                 }

@@ -78,6 +78,14 @@ expect_line "PRIMARY path: basename label" primary-text-path "/tmp/peek dir/a b.
 
 expect_line "file:// URI normalized" primary-uri "file:///tmp/x y.txt" 2 "/tmp/x y.txt"
 
+encoded="$tmp/x y.txt"
+printf 'encoded target\n' > "$encoded"
+expect_line "encoded file:// URI normalized" primary-uri "file://$tmp/x%20y.txt" 2 "$encoded"
+expect_line "encoded file:// URI label" primary-uri "file://$tmp/x%20y.txt" 3 "x y.txt"
+expect_line "file://localhost URI normalized" primary-uri "file://localhost$tmp/x%20y.txt" 2 "$encoded"
+expect_line "uri-list first entry wins" primary-uri "file://$tmp/x%20y.txt
+file://$tmp/other.txt" 2 "$encoded"
+
 expect_line "selected text: label" primary-text "hello world" 3 "Selected text"
 expect_suffix "selected text: scratch file path" primary-text "hello world" 2 .txt
 scratch="$(run_detect primary-text 'hello world' | cut -f2)"
