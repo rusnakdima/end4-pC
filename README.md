@@ -238,6 +238,26 @@ hovers an image reference, `<leader>I` opens an image path, and `:ImagePreview
 Companion snippets live in `features/image-preview/`; the QML service is in
 `services/ImagePreview.qml` and the panel in `modules/ii/imagePreview/`.
 
+### 👀 Peek
+
+Press **Alt+Space** (fallback **Super+Shift+Space**) to preview whatever is
+selected right now — a file path in the PRIMARY selection or the clipboard, an
+image, or text selected in any app, including a terminal or IDE. `Super+Space`
+keeps switching the keyboard layout, and a bare `Space` only ever types a
+space. Images are shown in a themed preview with fit/zoom controls; text and
+binary files are shown as readable content. Press `e` to open the file in a
+floating nvim/LazyVim window titled `end4-pc-peek` and edit it there, `+`/`-`/`0`
+to zoom an image, and `Escape` to close the overlay.
+
+From a terminal: `qs ipc call peek toggle`, `qs ipc call peek openPath <file>`
+or `qs ipc call peek openText <text>`. In fish, `peek <path>` previews a file and
+`peek --text <text>` previews a string. In nvim, `<leader>p` previews the current
+file (normal mode) or the visual selection (visual mode), and `:Peek [path]`
+previews a file.
+
+Companion snippets live in `features/peek/`; the QML service is in
+`services/Peek.qml` and the panel in `modules/ii/peek/`.
+
 ### 🪟 App window theming
 
 External GTK and Qt/KDE applications follow the shell's light/dark mode and
@@ -300,9 +320,15 @@ theme yourself. See `docs/design/theme-stack.md` for the full design.
 The same keybind snippet also installs three small PowerToys-style shortcuts:
 
 - `Super + Shift + F` — **Find My Mouse**: highlights the pointer with animated rings for a couple of seconds.
-- `Super + Shift + U` — **Screen Ruler**: a draggable, resizable strip showing pixels and centimetres (`Esc` closes it).
+- `Super + Shift + U` — **Screen Ruler**: a draggable, resizable strip showing pixels and centimetres (`Esc` or its close button dismisses it; length and position are remembered).
 - **Keep Awake** (Caffeine) is the existing `Idle` service — toggle it from the quick toggles, or with `qs -c end4-pC ipc call awake toggle`.
 - **Always On Top** is Hyprland's window pin (`Super + P` by default), also available as `qs -c end4-pC ipc call utilities alwaysOnTop`.
+
+### 🔁 Overview Windows
+
+Hold ``Alt + ` `` to open an Alt+Tab-style deck showing only windows whose class matches the focused window's class; keep pressing it to cycle, and use ``Alt + Shift + ` `` to go backward. Releasing Alt focuses the highlighted window, and Esc cancels. With fewer than two matching windows nothing opens. Normal `Alt + Tab` is unchanged.
+
+Both shortcuts are rebindable in Settings → Keyboard, and the feature can be switched off in Settings → Interface → Overview Windows.
 
 Extras: OCR from the screen-snip tool now feeds directly into Advanced Paste (toggle in its settings), and the color picker offers HEX / RGB / CSS rgba() / HSL / Flutter formats in the same popup.
 
