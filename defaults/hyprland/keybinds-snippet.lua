@@ -54,7 +54,7 @@ hl.window_rule({ match = { class = "org.quickshell", title = "Image Preview" }, 
 -- Keep Peek floating with the theme's rounding; the nvim editor launched by
 -- Peek opens as a floating terminal so the selected text stays readable.
 hl.window_rule({ match = { class = "org.quickshell", title = "Peek" }, float = true, rounding = 18 })
-hl.window_rule({ match = { title = "end4-pc-peek" }, float = true, size = "1100 700" })
+hl.window_rule({ match = { title = "end4-pc-peek" }, float = true, size = { "monitor_w * 0.75", "monitor_h * 0.75" } })
 -- <<< end4-pC peek window rules
 
 -- >>> end4-pC tap-super launcher keybinds (managed by end4-pC)

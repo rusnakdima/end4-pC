@@ -29,10 +29,8 @@ Window {
     width: root.screen ? root.screen.geometry.width : 1280
     height: root.screen ? root.screen.geometry.height : 800
 
-    readonly property int maxWidth: Config.options?.imagePreview?.maxWidth ?? 1280
-    readonly property int maxHeight: Config.options?.imagePreview?.maxHeight ?? 900
-    readonly property int imageWidth: Math.max(previewImage.sourceSize.width, 1)
-    readonly property int imageHeight: Math.max(previewImage.sourceSize.height, 1)
+    readonly property int previewWidth: Math.round(root.width * 0.75)
+    readonly property int previewHeight: Math.round(root.height * 0.75)
 
     onClosing: event => ImagePreview.close()
 
@@ -66,8 +64,8 @@ Window {
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: 640
-        height: 480
+        width: previewWidth
+        height: previewHeight
         radius: Appearance.rounding.verylarge
         color: Appearance.colors.colUiPopupBackground
         border.width: 1
@@ -150,6 +148,7 @@ Window {
                     anchors.fill: parent
                     source: ImagePreview.imagePath
                     fillMode: Image.PreserveAspectFit
+                    scale: ImagePreview.fitMode ? 1 : ImagePreview.zoom
                     asynchronous: true
                     cache: false
                     smooth: true
@@ -164,15 +163,10 @@ Window {
         }
     }
 
-    // Scale the card (not the window) to fit the image, macOS Quick Look style.
+    // The image card fills 75% of the screen; zoom scales the image within it.
     function resizeToContent(): void {
-        const scale = ImagePreview.fitMode
-            ? Math.min((maxWidth - 48) / imageWidth, (maxHeight - 140) / imageHeight, 1)
-            : ImagePreview.zoom;
-        const w = Math.min(Math.max(Math.round(imageWidth * scale), 420), maxWidth);
-        const h = Math.min(Math.max(Math.round(imageHeight * scale) + 110, 260), maxHeight);
-        card.width = w;
-        card.height = h;
+        card.width = previewWidth;
+        card.height = previewHeight;
     }
 
     Item {

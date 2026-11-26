@@ -72,6 +72,11 @@ check_absent "no optional QML parameters" "$SERVICE" 'label?: string'
 check "notfound kind" "$SERVICE" '_show("notfound"'
 check "notfound label" "$SERVICE" 'File not found:'
 check "edit failures surfaced" "$SERVICE" 'Could not open editor:'
+check "selected paths auto-open in nvim" "$SERVICE" 'root.openPath(fields[1], fields[2], autoEdit)'
+check "selected text still previews instead of opening nvim" "$SERVICE" 'fields[2] !== "Selected text"'
+check_in_function "editable paths auto-open the editor" "$SERVICE" 'openPath' 'if (autoEdit)'
+check "IPC openPath disables auto-edit" "$SERVICE" 'function openPath(path: string): void { root.openPath(path, "", false) }'
+check_in_function "editor success closes the overlay" "$SERVICE" '_openInEditor' 'root.close()'
 
 # Panel wiring (Task 4)
 SCOPE="$SCRIPT_DIR/modules/ii/peek/Peek.qml"

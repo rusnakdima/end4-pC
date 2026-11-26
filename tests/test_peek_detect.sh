@@ -78,6 +78,11 @@ expect_line "PRIMARY path: basename label" primary-text-path "/tmp/peek dir/a b.
 
 expect_line "file:// URI normalized" primary-uri "file:///tmp/x y.txt" 2 "/tmp/x y.txt"
 
+expect_line "quoted path from terminal or IDE" primary-text-path "'/tmp/peek dir/a b.png'" 2 "/tmp/peek dir/a b.png"
+expect_line "IDE path with line and column" primary-text-path "/tmp/x y.txt:42:7" 2 "/tmp/x y.txt"
+expect_line "path on a later selected line" primary-text-path "const path = 1
+/tmp/x y.txt" 2 "/tmp/x y.txt"
+
 encoded="$tmp/x y.txt"
 printf 'encoded target\n' > "$encoded"
 expect_line "encoded file:// URI normalized" primary-uri "file://$tmp/x%20y.txt" 2 "$encoded"

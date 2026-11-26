@@ -65,6 +65,7 @@ class PeekKeybindTests(unittest.TestCase):
         self.assertIn("end4-pc peek window rules", preamble.lower())
         self.assertIn('title = "Peek"', preamble)
         self.assertIn("end4-pc-peek", preamble)
+        self.assertIn("monitor_w * 0.75", preamble)
 
     def test_snippet_declares_binds_and_window_rules(self):
         with open(SNIPPET, encoding="utf-8") as fh:
@@ -73,6 +74,7 @@ class PeekKeybindTests(unittest.TestCase):
         self.assertIn('hl.bind("SUPER + SHIFT + SPACE"', snippet)
         self.assertIn('title = "Peek"', snippet)
         self.assertIn("end4-pc-peek", snippet)
+        self.assertIn("monitor_w * 0.75", snippet)
         self.assertIn("end4-pc peek window rules", snippet.lower())
 
 

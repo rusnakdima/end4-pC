@@ -244,10 +244,13 @@ Press **Alt+Space** (fallback **Super+Shift+Space**) to preview whatever is
 selected right now — a file path in the PRIMARY selection or the clipboard, an
 image, or text selected in any app, including a terminal or IDE. `Super+Space`
 keeps switching the keyboard layout, and a bare `Space` only ever types a
-space. Images are shown in a themed preview with fit/zoom controls; text and
-binary files are shown as readable content. Press `e` to open the file in a
-floating nvim/LazyVim window titled `end4-pc-peek` and edit it there, `+`/`-`/`0`
-to zoom an image, and `Escape` to close the overlay.
+space. A path selected in a file manager, terminal or IDE is detected even when
+it is quoted or followed by `:line:column`: images open in a themed preview at
+**75% of the screen**, while text and other editable files open directly in a
+floating nvim/LazyVim window at **75% of the screen** (title `end4-pc-peek`).
+Selected text without a file path is shown as readable content; press `e` to
+edit it in nvim. Use `+`/`-`/`0` to zoom an image and `Escape` to close the
+overlay.
 
 From a terminal: `qs ipc call peek toggle`, `qs ipc call peek openPath <file>`
 or `qs ipc call peek openText <text>`. In fish, `peek <path>` previews a file and

@@ -27,10 +27,8 @@ Window {
     width: root.screen ? root.screen.geometry.width : 1280
     height: root.screen ? root.screen.geometry.height : 800
 
-    readonly property int maxWidth: Config.options?.peek?.maxWidth ?? 1100
-    readonly property int maxHeight: Config.options?.peek?.maxHeight ?? 760
-    readonly property int imageWidth: Math.max(previewImage.sourceSize.width, 1)
-    readonly property int imageHeight: Math.max(previewImage.sourceSize.height, 1)
+    readonly property int previewWidth: Math.round(root.width * 0.75)
+    readonly property int previewHeight: Math.round(root.height * 0.75)
 
     onClosing: event => Peek.close()
 
@@ -64,8 +62,8 @@ Window {
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: 760
-        height: 540
+        width: previewWidth
+        height: previewHeight
         radius: Appearance.rounding.verylarge
         color: Appearance.colors.colUiPopupBackground
         border.width: 1
@@ -167,6 +165,7 @@ Window {
                     visible: Peek.kind === "image"
                     source: Peek.sourcePath
                     fillMode: Image.PreserveAspectFit
+                    scale: Peek.fitMode ? 1 : Peek.zoom
                     asynchronous: true
                     cache: false
                     smooth: true
@@ -210,20 +209,15 @@ Window {
         }
     }
 
-    // Scale the card to fit an image; fixed, readable size for other targets.
+    // Images fill 75% of the screen; other targets keep a readable fixed size.
     function resizeToContent(): void {
         if (Peek.kind !== "image") {
             card.width = Math.min(760, Math.max(420, root.width - 80));
             card.height = Math.min(540, Math.max(280, root.height - 120));
             return;
         }
-        const scale = Peek.fitMode
-            ? Math.min((maxWidth - 48) / imageWidth, (maxHeight - 140) / imageHeight, 1)
-            : Peek.zoom;
-        const w = Math.min(Math.max(Math.round(imageWidth * scale), 420), maxWidth);
-        const h = Math.min(Math.max(Math.round(imageHeight * scale) + 110, 260), maxHeight);
-        card.width = w;
-        card.height = h;
+        card.width = previewWidth;
+        card.height = previewHeight;
     }
 
     Item {

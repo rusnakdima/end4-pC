@@ -33,6 +33,23 @@ probe_text() {
     [ -s "$text_probe" ]
 }
 
+normalize_candidate() {
+    local c="$1"
+    c="${c#"${c%%[![:space:]]*}"}"
+    c="${c%"${c##*[![:space:]]}"}"
+    case "$c" in
+        \"*\") c="${c#\"}"; c="${c%\"}" ;;
+        "'"*"'") c="${c#\'}"; c="${c%\'}" ;;
+        \`*\`) c="${c#\`}"; c="${c%\`}" ;;
+    esac
+    # IDE selections often append :line or :line:column to a path.
+    printf '%s' "$c" | sed -E 's/:[0-9]+(:[0-9]+)?$//; s/[,;:]+$//'
+}
+
+candidate_is_path() {
+    [[ "$1" = /* && -e "$1" ]]
+}
+
 resolve_text() {
     local label="$1" raw trimmed
     raw="$(cat "$text_probe")"
@@ -57,9 +74,19 @@ resolve_text() {
             fi
             ;;
     esac
-    if [[ "$trimmed" = /* && -e "$trimmed" ]]; then
-        emit path "$trimmed" "$(basename -- "$trimmed")"
+    local candidate
+    candidate="$(normalize_candidate "$trimmed")"
+    if candidate_is_path "$candidate"; then
+        emit path "$candidate" "$(basename -- "$candidate")"
     fi
+    # Terminal and IDE selections may be multi-line; find the first real path.
+    while IFS= read -r line; do
+        [ "$line" = "$trimmed" ] && continue
+        candidate="$(normalize_candidate "$line")"
+        if candidate_is_path "$candidate"; then
+            emit path "$candidate" "$(basename -- "$candidate")"
+        fi
+    done <<< "$trimmed"
     if [ -z "$trimmed" ]; then
         return 1
     fi

@@ -123,11 +123,12 @@ Singleton {
                 root._showEmpty();
                 return;
             }
-            root.openPath(fields[1], fields[2]);
+            const autoEdit = fields[2] !== "Selected text" && fields[2] !== "Clipboard text";
+            root.openPath(fields[1], fields[2], autoEdit);
         });
     }
 
-    function openPath(path: string, label: string): void {
+    function openPath(path: string, label: string, autoEdit: bool): void {
         const clean = FileUtils.trimFileProtocol(String(path));
         const name = label || clean.split("/").pop();
         const command = `test -f ${root._shellQuote(clean)} && test -r ${root._shellQuote(clean)} && file --mime-type -b -- ${root._shellQuote(clean)}`;
@@ -139,6 +140,12 @@ Singleton {
             const mime = String(result).split("\n")[0].trim();
             if (mime.indexOf("image/") === 0) {
                 root._show("image", clean, name, "");
+                return;
+            }
+            // A path selected in a file manager, terminal or IDE opens in nvim
+            // when it is editable; only images get the overlay preview.
+            if (autoEdit) {
+                root._openInEditor(clean, name);
                 return;
             }
             const textish = mime.indexOf("text/") === 0
@@ -164,19 +171,27 @@ Singleton {
                 root._showEmpty();
                 return;
             }
-            root.openPath(scratch, label || "Selected text");
+            root.openPath(scratch, label || "Selected text", false);
+        });
+    }
+
+    function _openInEditor(path: string, label: string): void {
+        root.sourcePath = path;
+        root.displayLabel = label;
+        root._run(`${root._shellQuote(root.editScript)} ${root._shellQuote(path)}`, (result, code) => {
+            if (code !== 0) {
+                const lines = String(result).split("\n").map(line => line.trim()).filter(Boolean);
+                const message = lines.length > 0 ? lines[lines.length - 1] : "unknown error";
+                root._show("notfound", path, "Could not open editor: " + message, "");
+                return;
+            }
+            root.close();
         });
     }
 
     function edit(): void {
         if (root.kind === "empty" || root.sourcePath === "") return;
-        root._run(`${root._shellQuote(root.editScript)} ${root._shellQuote(root.sourcePath)}`, (result, code) => {
-            if (code !== 0) {
-                const lines = String(result).split("\n").map(line => line.trim()).filter(Boolean);
-                const message = lines.length > 0 ? lines[lines.length - 1] : "unknown error";
-                root.displayLabel = "Could not open editor: " + message;
-            }
-        });
+        root._openInEditor(root.sourcePath, root.displayLabel);
     }
 
     function zoomIn(): void { fitMode = false; zoom = Math.min(zoom + 0.25, 8); }
@@ -189,7 +204,7 @@ Singleton {
         function toggle(): void { root.toggle() }
         function open(): void { if (!root.open) root.detect() }
         function close(): void { root.close() }
-        function openPath(path: string): void { root.openPath(path, "") }
+        function openPath(path: string): void { root.openPath(path, "", false) }
         function openText(text: string): void { root.openText(text, "") }
         function edit(): void { root.edit() }
     }
