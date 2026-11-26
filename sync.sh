@@ -230,7 +230,8 @@ qs_diff_keep=(--exclude=dots --exclude=.omp --exclude='file:'
 hypr_diff_keep=(--exclude=custom --exclude=monitors.lua --exclude=profiles
                 --exclude=shellOverrides --exclude=colors.lua --exclude=colors.conf
                 --exclude=hypridle.conf --exclude=hyprland.lua --exclude=hyprland
-                --exclude=hyprlock)
+                --exclude=hyprlock --exclude=hyprlock.conf
+                --exclude='hyprlock.conf.*' --exclude=scripts)
 
 # ---------------------------------------------------------------------------
 # install.sh writes into the deployed copy of a few scripts, so the checkout
@@ -498,6 +499,8 @@ write_manifest() {
     while IFS= read -r -d '' live; do
         rel="${live#"$qs_dest"/}"
         [[ "$rel" == .sync/* ]] && continue
+        # A stale .git copy left by an old install is not user config.
+        [[ "$rel" == .git/* ]] && continue
         [[ -f "$live" ]] || continue
         srcfile="$src/$rel"
         pv=$(project_sha_of "quickshell" "$rel" "$srcfile" 2>/dev/null || true)
@@ -553,6 +556,7 @@ snapshot_user_edits() {
         [[ -d "$user_layer/$ns" ]] || continue
         while IFS= read -r -d '' f; do
             rel="${f#"$user_layer/$ns"/}"
+            [[ "$rel" == .git/* ]] && { rm -f "$f"; continue; }
             if [[ "$ns" == "quickshell" ]]; then live="$qs_dest/$rel"; else live="$hypr_dest/$rel"; fi
             if [[ ! -f "$live" ]]; then rm -f "$f"; continue; fi
             if [[ "$ns" == "quickshell" ]]; then project_sha=$(project_sha_of "quickshell" "$rel" "$src/$rel" 2>/dev/null || true)
@@ -570,6 +574,7 @@ snapshot_user_edits() {
     while IFS= read -r -d '' live; do
         rel="${live#"$qs_dest"/}"
         [[ "$rel" == .sync/* ]] && continue
+        [[ "$rel" == .git/* ]] && continue
         [[ -r "$live" ]] || continue
         srcfile="$src/$rel"
         [[ -f "$srcfile" ]] || continue
