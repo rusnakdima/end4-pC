@@ -37,6 +37,13 @@ printf '{}\n' > "$SHELL_CONFIG_FILE"
 cat > "$XDG_STATE_HOME/quickshell/user/generated/material_colors.scss" <<'SCSS'
 $darkmode: true;
 $primary: #00ff00;
+$onPrimary: #003300;
+$background: #101410;
+$surface: #181c18;
+$onSurface: #e0e2e0;
+$surfaceContainer: #202420;
+$outline: #8a918a;
+$error: #ff0000;
 SCSS
 
 export APP_THEMING_THEME_ROOTS="$XDG_DATA_HOME/themes"
@@ -153,6 +160,19 @@ check 'broken qt6ct symlink is skipped with a clear warning' \
     "grep -qF 'broken symlink' '$err' && ! grep -q 'cannot create directory' '$err'"
 check 'other app settings are still written with a broken qt6ct symlink' \
     "grep -q '^ColorScheme=Matugen' '$XDG_CONFIG_HOME/kdeglobals'"
+
+# --- KDE ColorScheme must exist, otherwise Dolphin falls back to Breeze ------
+KDE_SCHEME="$XDG_DATA_HOME/color-schemes/Matugen.colors"
+check 'KDE: Matugen.colors is generated from the palette' \
+    "test -f '$KDE_SCHEME'"
+check 'KDE: scheme name matches kdeglobals' \
+    "grep -q '^ColorScheme=Matugen$' '$KDE_SCHEME'"
+check 'KDE: view background follows palette background' \
+    "grep -q '^BackgroundNormal=#101410$' '$KDE_SCHEME'"
+check 'KDE: selection accent follows palette primary' \
+    "grep -q '^BackgroundNormal=#ff00ff$' '$KDE_SCHEME'"
+check 'KDE: no false claim that matugen generates the scheme' \
+    "! grep -q 'matugen generates' '$APP_THEMING'"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]

@@ -156,8 +156,8 @@ check 'qtquick: material theme exported to apps' \
     "grep -qF 'hl.env(\"QT_QUICK_CONTROLS_MATERIAL_THEME\", \"Dark\")' '$ENV_LUA'"
 check 'qtquick: Qt platform theme exported for Fusion fallback' \
     "grep -qF 'hl.env(\"QT_QPA_PLATFORMTHEME\", \"qt6ct\")' '$ENV_LUA'"
-check 'qtquick: existing env.lua entries preserved' \
-    "grep -qF 'hl.env(\"QT_STYLE_OVERRIDE\", \"kvantum\")' '$ENV_LUA'"
+check 'qtquick: conflicting QT_STYLE_OVERRIDE removed from env.lua' \
+    "! grep -qF 'QT_STYLE_OVERRIDE' '$ENV_LUA'"
 cp "$QQC_CONF" "$TMP_DIR/qqc-1.conf"
 cp "$LIGHT_CSS" "$TMP_DIR/dark-1.css"
 bash "$APP_THEMING" dark
