@@ -16,6 +16,7 @@ import qs.modules.ii.notificationPopup
 import qs.modules.ii.onScreenDisplay
 import qs.modules.ii.onScreenKeyboard
 import qs.modules.ii.overview
+import qs.modules.ii.peek
 import qs.modules.ii.windowSwitcher
 import qs.modules.ii.polkit
 import qs.modules.ii.settings
@@ -38,6 +39,7 @@ Scope {
     PanelLoader { extraCondition: !Config.options.bar.vertical; component: Bar {} }
     PanelLoader { component: AdvancedPaste {} }
     PanelLoader { component: ImagePreview {} }
+    PanelLoader { component: Peek {} }
     PanelLoader { component: Background {} }
     PanelLoader { extraCondition: Config.options.dock.enable; component: Dock {} }
     PanelLoader { component: EqualizerPopup {} }

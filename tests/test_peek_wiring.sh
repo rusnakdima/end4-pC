@@ -68,4 +68,44 @@ check "capped text read" "$SERVICE" 'head -c'
 check "IPC openText exposed" "$SERVICE" 'function openText(text: string): void { root.openText(text) }'
 check "IPC edit exposed" "$SERVICE" 'function edit(): void { root.edit() }'
 
+# Panel wiring (Task 4)
+SCOPE="$SCRIPT_DIR/modules/ii/peek/Peek.qml"
+PANEL="$SCRIPT_DIR/modules/ii/peek/PeekPanel.qml"
+FAMILY_II="$SCRIPT_DIR/panelFamilies/IllogicalImpulseFamily.qml"
+FAMILY_WAFFLE="$SCRIPT_DIR/panelFamilies/WaffleFamily.qml"
+
+check_absent_re() {
+    local label="$1" file="$2" pattern="$3"
+    if grep -qE -- "$pattern" "$file" 2>/dev/null; then
+        printf 'FAIL: %s (unexpected pattern %q in %s)\n' "$label" "$pattern" "$file" >&2
+        fail=1
+    else
+        printf '  OK   %s\n' "$label"
+    fi
+}
+
+check "scope Loader gated on peekOpen" "$SCOPE" 'active: Config.ready && GlobalStates.peekOpen'
+if sed -n '/Component.onCompleted:/,/^    }/p' "$SCOPE" | grep -qF 'GlobalStates.peekOpen = false'; then
+    printf '  OK   scope resets stuck overlay\n'
+else
+    printf 'FAIL: scope resets stuck overlay (missing reset in Component.onCompleted)\n' >&2
+    fail=1
+fi
+check "panel title is Peek" "$PANEL" 'title: "Peek"'
+check "panel closes with the service" "$PANEL" 'onClosing: event => Peek.close()'
+check "panel handles Escape" "$PANEL" 'Qt.Key_Escape'
+check "panel handles E" "$PANEL" 'Qt.Key_E'
+check "panel has an edit action" "$PANEL" 'Peek.edit()'
+check "panel handles plus/equal" "$PANEL" 'Qt.Key_Plus'
+check "panel handles equal" "$PANEL" 'Qt.Key_Equal'
+check "panel handles minus" "$PANEL" 'Qt.Key_Minus'
+check "panel handles zero" "$PANEL" 'Qt.Key_0'
+check "scope imports peek module" "$SCOPE" 'import qs.modules.ii.peek'
+check "family II imports peek module" "$FAMILY_II" 'import qs.modules.ii.peek'
+check "family waffle imports peek module" "$FAMILY_WAFFLE" 'import qs.modules.ii.peek'
+check "family II registers Peek" "$FAMILY_II" 'PanelLoader { component: Peek {} }'
+check "family waffle registers Peek" "$FAMILY_WAFFLE" 'PanelLoader { component: Peek {} }'
+check_absent_re "scope has no hardcoded hex colours" "$SCOPE" '#[0-9a-fA-F]{3,8}'
+check_absent_re "panel has no hardcoded hex colours" "$PANEL" '#[0-9a-fA-F]{3,8}'
+
 exit "$fail"

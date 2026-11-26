@@ -22,6 +22,7 @@ import qs.modules.ii.imagePreview
 import qs.modules.ii.cheatsheet
 import qs.modules.ii.onScreenKeyboard
 import qs.modules.ii.overlay
+import qs.modules.ii.peek
 import qs.modules.ii.screenTranslator
 import qs.modules.ii.utilities
 import qs.modules.ii.wallpaperSelector
@@ -30,6 +31,7 @@ import qs.modules.ii.windowSwitcher
 Scope {
     PanelLoader { component: AdvancedPaste {} }
     PanelLoader { component: ImagePreview {} }
+    PanelLoader { component: Peek {} }
     PanelLoader { component: WaffleActionCenter {} }
     PanelLoader { component: WaffleBar {} }
     PanelLoader { component: WaffleBackground {} }

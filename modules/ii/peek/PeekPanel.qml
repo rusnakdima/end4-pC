@@ -1,0 +1,244 @@
+pragma ComponentBehavior: Bound
+
+import qs
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Window
+import Quickshell
+import qs.modules.common
+import qs.modules.common.widgets
+import qs.services
+
+/**
+ * Quick Look style preview for a file, image or selected text.
+ * Frameless, screen-filling, with a dimmed backdrop and a centered card.
+ * All state and IPC logic lives in services/Peek; this file is only the view.
+ */
+Window {
+    id: root
+    title: "Peek"
+    flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+    color: "transparent"
+    visible: false
+
+    x: root.screen ? root.screen.geometry.x : 0
+    y: root.screen ? root.screen.geometry.y : 0
+    width: root.screen ? root.screen.geometry.width : 1280
+    height: root.screen ? root.screen.geometry.height : 800
+
+    readonly property int maxWidth: Config.options?.peek?.maxWidth ?? 1100
+    readonly property int maxHeight: Config.options?.peek?.maxHeight ?? 760
+    readonly property int imageWidth: Math.max(previewImage.sourceSize.width, 1)
+    readonly property int imageHeight: Math.max(previewImage.sourceSize.height, 1)
+
+    onClosing: event => Peek.close()
+
+    Connections {
+        target: Peek
+        function onClosed(): void { root.hide(); }
+        function onZoomChanged(): void { root.resizeToContent(); }
+        function onFitModeChanged(): void { root.resizeToContent(); }
+        function onSourcePathChanged(): void { Qt.callLater(root.resizeToContent); }
+        function onKindChanged(): void { Qt.callLater(root.resizeToContent); }
+    }
+
+    Component.onCompleted: {
+        root.show();
+        Qt.callLater(root.resizeToContent);
+        root.requestActivate();
+        keyHandler.forceActiveFocus();
+    }
+
+    // Dims the desktop; clicking outside the card closes the preview.
+    Rectangle {
+        id: backdrop
+        anchors.fill: parent
+        color: Appearance.colors.colScrim
+        MouseArea {
+            anchors.fill: parent
+            onClicked: Peek.close()
+        }
+    }
+
+    Rectangle {
+        id: card
+        anchors.centerIn: parent
+        width: 760
+        height: 540
+        radius: Appearance.rounding.verylarge
+        color: Appearance.colors.colUiPopupBackground
+        border.width: 1
+        border.color: Appearance.colors.colOutlineVariant
+        StyledRectangularShadow { target: card }
+
+        ColumnLayout {
+            anchors { fill: parent; margins: 10 }
+            spacing: 8
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 32
+                spacing: 8
+
+                MaterialSymbol {
+                    text: Peek.kind === "image" ? "image" : "description"
+                    iconSize: Appearance.font.pixelSize.larger
+                    color: Appearance.colors.colPrimary
+                }
+                StyledText {
+                    Layout.fillWidth: true
+                    text: Peek.displayLabel || "Peek"
+                    font.pixelSize: Appearance.font.pixelSize.normal
+                    font.bold: true
+                    color: Appearance.colors.colOnLayer1
+                    elide: Text.ElideMiddle
+                }
+                StyledText {
+                    text: Peek.kind
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.colors.colOnSurfaceVariant
+                }
+                MaterialSymbol {
+                    visible: Peek.kind === "image"
+                    text: "fit_screen"
+                    iconSize: Appearance.font.pixelSize.larger
+                    color: Appearance.colors.colOnSurfaceVariant
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Peek.resetZoom()
+                    }
+                }
+                MaterialSymbol {
+                    visible: Peek.kind === "image"
+                    text: "zoom_in"
+                    iconSize: Appearance.font.pixelSize.larger
+                    color: Appearance.colors.colOnSurfaceVariant
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Peek.zoomIn()
+                    }
+                }
+                MaterialSymbol {
+                    visible: Peek.kind === "image"
+                    text: "zoom_out"
+                    iconSize: Appearance.font.pixelSize.larger
+                    color: Appearance.colors.colOnSurfaceVariant
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Peek.zoomOut()
+                    }
+                }
+                MaterialSymbol {
+                    text: "edit"
+                    iconSize: Appearance.font.pixelSize.larger
+                    color: Appearance.colors.colOnSurfaceVariant
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Peek.edit()
+                    }
+                }
+                MaterialSymbol {
+                    text: "close"
+                    iconSize: Appearance.font.pixelSize.larger
+                    color: Appearance.colors.colOnSurfaceVariant
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Peek.close()
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                radius: Appearance.rounding.normal
+                color: Appearance.colors.colLayer1
+                clip: true
+
+                Image {
+                    id: previewImage
+                    anchors.fill: parent
+                    visible: Peek.kind === "image"
+                    source: Peek.sourcePath
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    cache: false
+                    smooth: true
+                }
+
+                Flickable {
+                    id: textArea
+                    anchors.fill: parent
+                    visible: Peek.kind === "text" || Peek.kind === "binary"
+                    contentWidth: textContent.width
+                    contentHeight: textContent.height
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    Text {
+                        id: textContent
+                        width: textArea.width
+                        text: Peek.content
+                        font.family: Appearance.font.family.monospace
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        color: Appearance.colors.colOnLayer1
+                        wrapMode: Text.WrapAnywhere
+                        selectByMouse: true
+                    }
+                }
+
+                StyledText {
+                    anchors.centerIn: parent
+                    visible: Peek.kind === "empty"
+                    text: "Nothing selected"
+                    font.pixelSize: Appearance.font.pixelSize.large
+                    color: Appearance.colors.colOnSurfaceVariant
+                }
+            }
+        }
+    }
+
+    // Scale the card to fit an image; fixed, readable size for other targets.
+    function resizeToContent(): void {
+        if (Peek.kind !== "image") {
+            card.width = Math.min(760, Math.max(420, root.width - 80));
+            card.height = Math.min(540, Math.max(280, root.height - 120));
+            return;
+        }
+        const scale = Peek.fitMode
+            ? Math.min((maxWidth - 48) / imageWidth, (maxHeight - 140) / imageHeight, 1)
+            : Peek.zoom;
+        const w = Math.min(Math.max(Math.round(imageWidth * scale), 420), maxWidth);
+        const h = Math.min(Math.max(Math.round(imageHeight * scale) + 110, 260), maxHeight);
+        card.width = w;
+        card.height = h;
+    }
+
+    Item {
+        id: keyHandler
+        focus: true
+        Keys.onPressed: event => {
+            if (event.key === Qt.Key_Escape) {
+                Peek.close();
+                event.accepted = true;
+            } else if (event.key === Qt.Key_E) {
+                Peek.edit();
+                event.accepted = true;
+            } else if (event.key === Qt.Key_Plus || event.key === Qt.Key_Equal) {
+                Peek.zoomIn();
+                event.accepted = true;
+            } else if (event.key === Qt.Key_Minus) {
+                Peek.zoomOut();
+                event.accepted = true;
+            } else if (event.key === Qt.Key_0) {
+                Peek.resetZoom();
+                event.accepted = true;
+            }
+        }
+    }
+}
