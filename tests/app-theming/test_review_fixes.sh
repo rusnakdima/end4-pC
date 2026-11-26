@@ -184,5 +184,22 @@ check 'XDG_DATA_HOME unset: no unbound-variable error' \
 check 'XDG_DATA_HOME unset: scheme written to ~/.local/share' \
     "test -f '$HOME/.local/share/color-schemes/Matugen.colors'"
 
+# --- qt6ct needs a real palette file and correct keys, otherwise QtWidgets ---
+# falls back to a light palette (white alternating rows in Dolphin).
+QT6CT_CONF="$XDG_CONFIG_HOME/qt6ct/qt6ct.conf"
+QT6CT_SCHEME="$XDG_CONFIG_HOME/qt6ct/colors/Matugen.conf"
+check 'qt6ct: broken config symlink is replaced so config can be written' \
+    "test -f '$QT6CT_CONF'"
+check 'qt6ct: config points at the generated palette file' \
+    "grep -q '^color_scheme_path=$QT6CT_SCHEME$' '$QT6CT_CONF'"
+check 'qt6ct: custom palette is enabled' \
+    "grep -q '^custom_palette=true$' '$QT6CT_CONF'"
+check 'qt6ct: Matugen palette file is generated' \
+    "test -f '$QT6CT_SCHEME'"
+check 'qt6ct: palette has opaque active colors' \
+    "grep -q '^active_colors=#ffe0e2e0,' '$QT6CT_SCHEME' && grep -q '#ff101410,' '$QT6CT_SCHEME'"
+check 'qt6ct: palette has 21 QPalette roles' \
+    "test \"\$(grep '^active_colors=' '$QT6CT_SCHEME' | cut -d= -f2 | tr ',' '\\n' | wc -l)\" -eq 21"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]

@@ -326,6 +326,44 @@ write_kde_scheme() {
     } > "$path"
 }
 
+# A broken symlink in place of a config directory (left by another theme
+# package) makes every qt6ct write fail silently. Replace it with a real dir.
+ensure_real_dir() {
+    local dir="$1"
+    if [[ -L "$dir" && ! -d "$dir" ]]; then
+        echo "[app-theming] WARN: $dir is a broken symlink; replacing it with a real directory." >&2
+        rm -f "$dir" || return 1
+    fi
+    mkdir -p "$dir"
+}
+
+# qt6ct needs an actual palette file plus [Appearance] pointers to it; writing
+# `color_scheme=matugen` alone leaves QtWidgets on a light palette (white rows
+# in Dolphin). QPalette roles are 21 comma-separated #AARRGGBB colors.
+write_qt6ct_scheme() {
+    local primary="${TOKENS[primary]:-3daee9}"
+    local on_primary="${TOKENS[onPrimary]:-ffffff}"
+    local surface="${TOKENS[surface]:-1e1e1e}"
+    local background="${TOKENS[background]:-}"
+    local on_surface="${TOKENS[onSurface]:-eff0f1}"
+    local container="${TOKENS[surfaceContainer]:-$surface}"
+    local outline="${TOKENS[outline]:-7f7f7f}"
+    [[ -n "$background" ]] || background="$surface"
+
+    local dir="$XDG_CONFIG_HOME/qt6ct/colors"
+    ensure_real_dir "$dir" || return 0
+    local path="$dir/Matugen.conf"
+    local colors
+    colors=$(printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s' \
+        "#ff$on_surface" "#ff$container" "#ff$container" "#ff$container" \
+        "#ff$background" "#ff$surface" "#ff$on_surface" "#ff$on_primary" \
+        "#ff$on_surface" "#ff$background" "#ff$surface" "#ff$background" \
+        "#ff$primary" "#ff$on_primary" "#ff$primary" "#ff$primary" \
+        "#ff$container" "#ff$on_surface" "#ff$on_surface" "#ff$surface" "#ff$outline")
+    printf '[ColorScheme]\nactive_colors=%s\ninactive_colors=%s\ndisabled_colors=%s\n' \
+        "$colors" "$colors" "$colors" > "$path"
+}
+
 # ---------------------------------------------------------------------------
 # Sinks
 # ---------------------------------------------------------------------------
@@ -384,7 +422,11 @@ apply_qt() {
     if enabled '.appearance.appTheming.manageQtStyle' 'true'; then
         set_config_key "$XDG_CONFIG_HOME/Kvantum/kvantum.kvconfig" General theme \
             "${RESOLVED_KVANTUM_THEME:-MaterialAdw}"
-        set_config_key "$XDG_CONFIG_HOME/qt6ct/qt6ct.conf" Appearance color_scheme matugen
+        ensure_real_dir "$XDG_CONFIG_HOME/qt6ct" || return 0
+        write_qt6ct_scheme
+        set_config_key "$XDG_CONFIG_HOME/qt6ct/qt6ct.conf" Appearance color_scheme_path \
+            "$XDG_CONFIG_HOME/qt6ct/colors/Matugen.conf"
+        set_config_key "$XDG_CONFIG_HOME/qt6ct/qt6ct.conf" Appearance custom_palette true
     fi
 
     # Generate the scheme ourselves from the active palette, then point

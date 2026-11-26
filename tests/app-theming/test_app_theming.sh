@@ -109,7 +109,7 @@ check 'light: kde colour scheme set' \
 check 'light: kvantum theme driven by app-theming' \
     "grep -q '^theme=MaterialAdw$' '$XDG_CONFIG_HOME/Kvantum/kvantum.kvconfig'"
 check 'light: qt6ct colour scheme set' \
-    "grep -q '^color_scheme=matugen$' '$XDG_CONFIG_HOME/qt6ct/qt6ct.conf'"
+    "grep -q '^color_scheme_path=.*/qt6ct/colors/Matugen.conf$' '$XDG_CONFIG_HOME/qt6ct/qt6ct.conf' && grep -q '^custom_palette=true$' '$XDG_CONFIG_HOME/qt6ct/qt6ct.conf'"
 check 'thunar: toolbar border and shadow removed' \
     "grep -qF '.thunar toolbar,' '$LIGHT_CSS' && grep -qF 'border: none;' '$LIGHT_CSS' && grep -qF 'box-shadow: none;' '$LIGHT_CSS'"
 check 'thunar: path bar border removed' \
