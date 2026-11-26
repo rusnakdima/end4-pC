@@ -241,17 +241,18 @@ Companion snippets live in `features/image-preview/`; the QML service is in
 ### 👀 Peek
 
 Press **Alt+Space** (fallback **Super+Shift+Space**) to preview whatever is
-selected right now — a file path in the PRIMARY selection or the clipboard, an
-image, or text selected in any app, including a terminal or IDE. `Super+Space`
-keeps switching the keyboard layout, and a bare `Space` only ever types a
-space. A path selected in a file manager, terminal or IDE is detected even when
-it is quoted or followed by `:line:column`: images open in a themed preview at
-**75% of the screen**, while text and other editable files open directly in a
-floating nvim/LazyVim window at **75% of the screen** (title `end4-pc-peek`).
-Selected text without a file path is shown as readable content; press `e` to
-edit it in nvim. The image window keeps its full button bar: Copy image puts
-the displayed image on the clipboard as PNG, Copy path copies the source path,
-then fit, zoom, edit and close; click outside or press `Escape` to dismiss. Use
+selected right now — a file path in the PRIMARY selection or the clipboard, or
+an image selected in any app, including a file manager, terminal or IDE.
+`Super+Space` keeps switching the keyboard layout, and a bare `Space` only ever
+types a space. A path is detected even when it is quoted or followed by
+`:line:column`: images open as a frameless preview at **75% of the screen**,
+while text and other editable files open directly in a floating nvim/LazyVim
+window at **75% of the screen** (title `end4-pc-peek`). Plain selected text
+without a file path is skipped — there is no text preview card. Press `e` on an
+image to open it in **swappy** (any image format); press `e` on an editable file
+to open nvim. The image window keeps its full button bar: Copy image puts the
+displayed image on the clipboard as PNG, Copy path copies the source path, then
+fit, zoom, edit and close; click outside or press `Escape` to dismiss. Use
 `+`/`-`/`0` to zoom.
 
 From a terminal: `qs ipc call peek toggle`, `qs ipc call peek openPath <file>`

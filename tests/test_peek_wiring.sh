@@ -81,7 +81,7 @@ check "notfound kind" "$SERVICE" '_show("notfound"'
 check "notfound label" "$SERVICE" 'File not found:'
 check "edit failures surfaced" "$SERVICE" 'Could not open editor:'
 check "selected paths auto-open in nvim" "$SERVICE" 'root.openPath(fields[1], fields[2], autoEdit)'
-check "selected text still previews instead of opening nvim" "$SERVICE" 'fields[2] !== "Selected text"'
+check_in_function "selected text does not preview" "$SERVICE" detect 'fields[2] === "Selected text"'
 check_in_function "editable paths auto-open the editor" "$SERVICE" 'openPath' 'if (autoEdit)'
 check "IPC openPath disables auto-edit" "$SERVICE" 'function openPath(path: string): void { root.openPath(path, "", false) }'
 check_in_function "editor success closes the overlay" "$SERVICE" '_openInEditor' 'root.close()'
@@ -133,5 +133,13 @@ check "family II registers Peek" "$FAMILY_II" 'PanelLoader { component: Peek {} 
 check "family waffle registers Peek" "$FAMILY_WAFFLE" 'PanelLoader { component: Peek {} }'
 check_absent_re "scope has no hardcoded hex colours" "$SCOPE" '#[0-9a-fA-F]{3,8}'
 check_absent_re "panel has no hardcoded hex colours" "$PANEL" '#[0-9a-fA-F]{3,8}'
+
+check "image viewer helper wired via shellPath" "$SERVICE" 'features/peek/peek-image.sh'
+check "image viewer function defined" "$SERVICE" 'function _openInViewer(path: string, label: string): void'
+check_in_function "edit() sends images to swappy" "$SERVICE" edit 'root._openInViewer(root.sourcePath, root.displayLabel)'
+check_in_function "edit() keeps nvim for files" "$SERVICE" edit 'root._openInEditor(root.sourcePath, root.displayLabel)'
+check_in_function "plain selected text is skipped" "$SERVICE" detect 'fields[2] === "Selected text"'
+check_in_function "plain clipboard text is skipped" "$SERVICE" detect 'fields[2] === "Clipboard text"'
+check_in_function "skipped selections close the overlay" "$SERVICE" detect 'root.close()'
 
 exit "$fail"

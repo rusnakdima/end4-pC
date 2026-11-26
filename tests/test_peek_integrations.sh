@@ -60,6 +60,7 @@ check 'Alt+Space' "$readme" 'README documents Alt+Space'
 check 'PRIMARY' "$readme" 'README documents PRIMARY selection'
 check 'clipboard' "$readme" 'README documents clipboard behaviour'
 check 'nvim' "$readme" 'README documents nvim editing'
+check 'swappy' "$readme" 'README documents swappy for images'
 
 if [[ $failures -gt 0 ]]; then
     printf '%d Peek integration check(s) failed\n' "$failures"

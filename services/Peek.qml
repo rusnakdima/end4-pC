@@ -19,8 +19,9 @@ import qs.services
  *   qs ipc call peek openText "some selected text"
  *   qs ipc call peek edit
  *
- * Images are shown as images; text is shown in a capped, readable card; other
- * files are labelled as binary. `e` opens any of them in nvim via peek-edit.sh.
+ * Images are shown as frameless previews; `e` opens them in swappy via
+ * peek-image.sh. Selected file paths open in nvim via peek-edit.sh. Plain
+ * selected text has no preview and is skipped.
  */
 Singleton {
     id: root
@@ -37,6 +38,7 @@ Singleton {
     readonly property string cacheDir: FileUtils.trimFileProtocol(`${Directories.cache}/peek`)
     readonly property string detectScript: Quickshell.shellPath("features/peek/peek-detect.sh")
     readonly property string editScript: Quickshell.shellPath("features/peek/peek-edit.sh")
+    readonly property string imageScript: Quickshell.shellPath("features/peek/peek-image.sh")
     readonly property string copyScript: Quickshell.shellPath("features/peek/peek-copy.sh")
 
     Timer {
@@ -132,7 +134,13 @@ Singleton {
                 root._showEmpty();
                 return;
             }
-            const autoEdit = fields[2] !== "Selected text" && fields[2] !== "Clipboard text";
+            if (fields[2] === "Selected text" || fields[2] === "Clipboard text") {
+                // Plain text is not a preview target: file paths go to nvim,
+                // images to swappy, and raw text has nothing to show.
+                root.close();
+                return;
+            }
+            const autoEdit = true;
             root.openPath(fields[1], fields[2], autoEdit);
         });
     }
@@ -198,8 +206,26 @@ Singleton {
         });
     }
 
+    function _openInViewer(path: string, label: string): void {
+        root.sourcePath = path;
+        root.displayLabel = label;
+        root._run(`${root._shellQuote(root.imageScript)} ${root._shellQuote(path)}`, (result, code) => {
+            if (code !== 0) {
+                const lines = String(result).split("\n").map(line => line.trim()).filter(Boolean);
+                const message = lines.length > 0 ? lines[lines.length - 1] : "unknown error";
+                root._show("notfound", path, "Could not open image viewer: " + message, "");
+                return;
+            }
+            root.close();
+        });
+    }
+
     function edit(): void {
         if (root.kind === "empty" || root.sourcePath === "") return;
+        if (root.kind === "image") {
+            root._openInViewer(root.sourcePath, root.displayLabel);
+            return;
+        }
         root._openInEditor(root.sourcePath, root.displayLabel);
     }
 
