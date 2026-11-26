@@ -31,6 +31,17 @@ case "${STUB_WL_PASTE_MODE:-none}" in
             "-p -n") printf '%s\n' "${STUB_WL_PASTE_TEXT:-}" ;;
         esac
         ;;
+    primary-text-clipboard-path)
+        case "$args" in
+            "-p -n") printf '%s\n' "${STUB_WL_PASTE_TEXT:-}" ;;
+            "-n") printf '%s\r\n' "${STUB_CLIPBOARD_TEXT:-}" ;;
+        esac
+        ;;
+    clipboard-text)
+        case "$args" in
+            "-n") printf '%s\n' "${STUB_CLIPBOARD_TEXT:-}" ;;
+        esac
+        ;;
     primary-image)
         case "$args" in
             "-p -t image/png") printf '\211PNG\r\n\032\nstub-image' ;;
@@ -51,13 +62,13 @@ ok()   { printf '  OK   %s\n' "$1"; }
 bad()  { printf 'FAIL: %s (%s)\n' "$1" "$2" >&2; fail=1; }
 
 run_detect() {
-    STUB_WL_PASTE_MODE="$1" STUB_WL_PASTE_TEXT="${2:-}" \
+    STUB_WL_PASTE_MODE="$1" STUB_WL_PASTE_TEXT="${2:-}" STUB_CLIPBOARD_TEXT="${3:-}" \
         bash "$DETECT" 2>"$tmp/stderr"
 }
 
 expect_line() {
-    local label="$1" mode="$2" text="$3" field="$4" want="$5" got
-    got="$(run_detect "$mode" "$text")"
+    local label="$1" mode="$2" text="$3" field="$4" want="$5" clipboard="${6:-}" got
+    got="$(run_detect "$mode" "$text" "$clipboard")"
     got="$(printf '%s' "$got" | cut -f"$field")"
     if [ "$got" = "$want" ]; then ok "$label"; else bad "$label" "field $field: got <$got>, want <$want>"; fi
 }
@@ -90,6 +101,11 @@ expect_line "encoded file:// URI label" primary-uri "file://$tmp/x%20y.txt" 3 "x
 expect_line "file://localhost URI normalized" primary-uri "file://localhost$tmp/x%20y.txt" 2 "$encoded"
 expect_line "uri-list first entry wins" primary-uri "file://$tmp/x%20y.txt
 file://$tmp/other.txt" 2 "$encoded"
+
+expect_line "clipboard file URI wins over PRIMARY text" primary-text-clipboard-path "random primary words" 2 "/tmp/x y.txt" "file:///tmp/x%20y.txt"
+expect_line "plain clipboard path wins over PRIMARY text" primary-text-clipboard-path "random primary words" 2 "/tmp/x y.txt" "/tmp/x y.txt"
+expect_line "file URI on a later clipboard line" clipboard-text "notes" 2 "/tmp/x y.txt" "some notes
+file:///tmp/x%20y.txt"
 
 expect_line "selected text: label" primary-text "hello world" 3 "Selected text"
 expect_suffix "selected text: scratch file path" primary-text "hello world" 2 .txt

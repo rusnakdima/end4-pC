@@ -46,69 +46,102 @@ normalize_candidate() {
     printf '%s' "$c" | sed -E 's/:[0-9]+(:[0-9]+)?$//; s/[,;:]+$//'
 }
 
-candidate_is_path() {
-    [[ "$1" = /* && -e "$1" ]]
-}
-
-resolve_text() {
-    local label="$1" raw trimmed
-    raw="$(cat "$text_probe")"
-    trimmed="${raw#"${raw%%[![:space:]]*}"}"
-    trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
-    case "$trimmed" in
-        "~"|"~/"*) trimmed="$HOME/${trimmed#\~/}" ;;
-    esac
-    case "$trimmed" in
+# Accept absolute paths, ~/ paths and file:// URIs (including percent-encoded
+# ones from file managers) as the same kind of target.
+decode_candidate() {
+    local c="$1"
+    case "$c" in
         file://*)
-            trimmed="${trimmed#file://}"
-            # text/uri-list may contain several URIs; preview the first one.
-            trimmed="${trimmed%%$'\n'*}"
-            case "$trimmed" in
-                localhost/*) trimmed="/${trimmed#localhost/}" ;;
+            c="${c#file://}"
+            case "$c" in
+                localhost/*) c="/${c#localhost/}" ;;
             esac
-            # File managers percent-encode spaces and unicode in QUrl strings.
             if command -v python3 >/dev/null 2>&1; then
-                trimmed="$(python3 -c 'import sys, urllib.parse; sys.stdout.write(urllib.parse.unquote(sys.stdin.read().rstrip("\n")))' <<< "$trimmed")"
+                c="$(python3 -c 'import sys, urllib.parse; sys.stdout.write(urllib.parse.unquote(sys.stdin.read().rstrip("\n")))' <<< "$c")"
             else
-                trimmed="$(printf '%b' "${trimmed//%/\\x}")"
+                c="$(printf '%b' "${c//%/\\x}")"
             fi
             ;;
     esac
-    local candidate
-    candidate="$(normalize_candidate "$trimmed")"
-    if candidate_is_path "$candidate"; then
-        emit path "$candidate" "$(basename -- "$candidate")"
-    fi
-    # Terminal and IDE selections may be multi-line; find the first real path.
-    while IFS= read -r line; do
-        [ "$line" = "$trimmed" ] && continue
-        candidate="$(normalize_candidate "$line")"
+    case "$c" in
+        "~"|"~/"*) c="$HOME/${c#\~/}" ;;
+    esac
+    normalize_candidate "$c"
+}
+
+candidate_is_path() {
+    [[ "$1" = /* && -f "$1" && -r "$1" ]]
+}
+
+# Fills RESULT_IS_PATH, RESULT_PATH, RESULT_LABEL and RESULT_HAS_TEXT from the
+# current text probe. A real path anywhere in the selection beats plain text.
+resolve_text() {
+    local label="$1" raw trimmed line candidate
+    RESULT_IS_PATH=0
+    RESULT_PATH=""
+    RESULT_LABEL=""
+    RESULT_HAS_TEXT=0
+    raw="$(cat "$text_probe")"
+    trimmed="${raw#"${raw%%[![:space:]]*}"}"
+    trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+    [ -n "$trimmed" ] || return 0
+    RESULT_HAS_TEXT=1
+    while IFS= read -r line || [ -n "$line" ]; do
+        [ -n "$line" ] || continue
+        candidate="$(decode_candidate "$line")"
         if candidate_is_path "$candidate"; then
-            emit path "$candidate" "$(basename -- "$candidate")"
+            RESULT_IS_PATH=1
+            RESULT_PATH="$candidate"
+            RESULT_LABEL="$(basename -- "$candidate")"
+            return 0
         fi
     done <<< "$trimmed"
-    if [ -z "$trimmed" ]; then
-        return 1
-    fi
-    local scratch="$cache/selection-$(date +%s).txt"
-    cp "$text_probe" "$scratch"
-    emit path "$scratch" "$label"
+    RESULT_PATH="$cache/selection-$(date +%s)-$$-$RANDOM.txt"
+    cp "$text_probe" "$RESULT_PATH"
+    RESULT_LABEL="$label"
 }
+
+# Examine both selections before deciding: PRIMARY may hold stale plain text
+# while an explicit copy put a file URI on the clipboard.
+primary_is_path=0 primary_path="" primary_label="" primary_has_text=0
+clipboard_is_path=0 clipboard_path="" clipboard_label="" clipboard_has_text=0
 
 if [ "${PEEK_NO_PRIMARY:-0}" != 1 ]; then
     if probe_image "$cache/primary.png" -p; then
         emit path "$cache/primary.png" "Primary selection (image)"
     fi
-    if probe_text -p && resolve_text "Selected text"; then
-        :
+    if probe_text -p; then
+        resolve_text "Selected text"
+        primary_is_path="$RESULT_IS_PATH"
+        primary_path="$RESULT_PATH"
+        primary_label="$RESULT_LABEL"
+        primary_has_text="$RESULT_HAS_TEXT"
     fi
 fi
 
 if probe_image "$cache/clipboard.png"; then
     emit path "$cache/clipboard.png" "Clipboard image"
 fi
-if probe_text && resolve_text "Clipboard text"; then
-    :
+if probe_text; then
+    resolve_text "Clipboard text"
+    clipboard_is_path="$RESULT_IS_PATH"
+    clipboard_path="$RESULT_PATH"
+    clipboard_label="$RESULT_LABEL"
+    clipboard_has_text="$RESULT_HAS_TEXT"
+fi
+
+# An explicit copy is a stronger signal than a stale PRIMARY selection.
+if [ "$clipboard_is_path" = 1 ]; then
+    emit path "$clipboard_path" "$clipboard_label"
+fi
+if [ "$primary_is_path" = 1 ]; then
+    emit path "$primary_path" "$primary_label"
+fi
+if [ "$clipboard_has_text" = 1 ]; then
+    emit path "$clipboard_path" "$clipboard_label"
+fi
+if [ "$primary_has_text" = 1 ]; then
+    emit path "$primary_path" "$primary_label"
 fi
 
 emit empty - "Nothing selected"
