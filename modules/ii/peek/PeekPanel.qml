@@ -30,6 +30,7 @@ Window {
 
     readonly property int previewWidth: Math.round(root.width * 0.75)
     readonly property int previewHeight: Math.round(root.height * 0.75)
+    readonly property bool imageMode: Peek.kind === "image"
 
     onClosing: event => Peek.close()
 
@@ -65,174 +66,183 @@ Window {
         anchors.centerIn: parent
         width: previewWidth
         height: previewHeight
-        radius: Appearance.rounding.verylarge
-        color: Appearance.colors.colUiPopupBackground
-        border.width: 1
+        radius: imageMode ? 0 : Appearance.rounding.verylarge
+        color: imageMode ? "transparent" : Appearance.colors.colUiPopupBackground
+        border.width: imageMode ? 0 : 1
         border.color: Appearance.colors.colOutlineVariant
-        StyledRectangularShadow { target: card }
+        StyledRectangularShadow { target: card; visible: !imageMode }
 
-        ColumnLayout {
-            anchors { fill: parent; margins: 0 }
-            spacing: 8
+        // The content fills the whole card. The button bar floats above it so
+        // an image has no framing, background, border or margins of its own.
+        Rectangle {
+            id: body
+            anchors.fill: parent
+            anchors.margins: imageMode ? 0 : 10
+            anchors.topMargin: imageMode ? 0 : 50
+            radius: imageMode ? 0 : Appearance.rounding.normal
+            color: imageMode ? "transparent" : Appearance.colors.colLayer1
+            clip: true
 
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 32
-                Layout.leftMargin: 10
-                Layout.rightMargin: 10
-                Layout.topMargin: 6
-                spacing: 8
+            Image {
+                id: previewImage
+                anchors.fill: parent
+                visible: imageMode
+                source: Peek.sourcePath
+                fillMode: Image.PreserveAspectFit
+                scale: Peek.fitMode ? 1 : Peek.zoom
+                asynchronous: true
+                cache: false
+                smooth: true
+            }
 
-                MaterialSymbol {
-                    text: Peek.kind === "image" ? "image" : "description"
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.colors.colPrimary
-                }
-                StyledText {
-                    Layout.fillWidth: true
-                    text: Peek.actionMessage || Peek.displayLabel || "Peek"
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                    font.bold: true
-                    color: Peek.actionMessage ? Appearance.colors.colPrimary : Appearance.colors.colOnLayer1
-                    elide: Text.ElideMiddle
-                }
-                StyledText {
-                    text: Peek.kind
+            Flickable {
+                id: textArea
+                anchors.fill: parent
+                visible: Peek.kind === "text" || Peek.kind === "binary"
+                contentWidth: textContent.width
+                contentHeight: textContent.height
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                Text {
+                    id: textContent
+                    width: textArea.width
+                    text: Peek.content
+                    font.family: Appearance.font.family.monospace
                     font.pixelSize: Appearance.font.pixelSize.small
-                    color: Appearance.colors.colOnSurfaceVariant
-                }
-                MaterialSymbol {
-                    visible: Peek.kind === "image"
-                    text: "content_copy"
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.colors.colOnSurfaceVariant
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Peek.copyImage()
-                    }
-                }
-                MaterialSymbol {
-                    visible: Peek.sourcePath !== ""
-                    text: "link"
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.colors.colOnSurfaceVariant
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Peek.copyPath()
-                    }
-                }
-                MaterialSymbol {
-                    visible: Peek.kind === "image"
-                    text: "fit_screen"
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.colors.colOnSurfaceVariant
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Peek.resetZoom()
-                    }
-                }
-                MaterialSymbol {
-                    visible: Peek.kind === "image"
-                    text: "zoom_in"
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.colors.colOnSurfaceVariant
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Peek.zoomIn()
-                    }
-                }
-                MaterialSymbol {
-                    visible: Peek.kind === "image"
-                    text: "zoom_out"
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.colors.colOnSurfaceVariant
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Peek.zoomOut()
-                    }
-                }
-                MaterialSymbol {
-                    text: "edit"
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.colors.colOnSurfaceVariant
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Peek.edit()
-                    }
-                }
-                MaterialSymbol {
-                    text: "close"
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.colors.colOnSurfaceVariant
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Peek.close()
-                    }
+                    color: Appearance.colors.colOnLayer1
+                    wrapMode: Text.WrapAnywhere
                 }
             }
 
+            StyledText {
+                anchors.centerIn: parent
+                visible: Peek.kind === "empty"
+                text: "Nothing selected"
+                font.pixelSize: Appearance.font.pixelSize.large
+                color: Appearance.colors.colOnSurfaceVariant
+            }
+
+            StyledText {
+                anchors.centerIn: parent
+                visible: Peek.kind === "notfound"
+                text: "File not found — press E to open in nvim"
+                font.pixelSize: Appearance.font.pixelSize.large
+                color: Appearance.colors.colOnSurfaceVariant
+            }
+        }
+
+        RowLayout {
+            id: header
+            z: 2
+            anchors {
+                left: parent.left
+                right: parent.right
+                top: parent.top
+                margins: 10
+            }
+            height: 32
+            spacing: 8
+
             Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.leftMargin: 10
-                Layout.rightMargin: 10
-                Layout.bottomMargin: 10
+                anchors.fill: parent
+                anchors.margins: -6
                 radius: Appearance.rounding.normal
-                color: Appearance.colors.colLayer1
-                clip: true
+                color: Appearance.colors.colUiPopupBackground
+                opacity: 0.8
+                z: -1
+            }
 
-                Image {
-                    id: previewImage
+            MaterialSymbol {
+                text: imageMode ? "image" : "description"
+                iconSize: Appearance.font.pixelSize.larger
+                color: Appearance.colors.colPrimary
+            }
+            StyledText {
+                Layout.fillWidth: true
+                text: Peek.actionMessage || Peek.displayLabel || "Peek"
+                font.pixelSize: Appearance.font.pixelSize.normal
+                font.bold: true
+                color: Peek.actionMessage ? Appearance.colors.colPrimary : Appearance.colors.colOnLayer1
+                elide: Text.ElideMiddle
+            }
+            StyledText {
+                text: Peek.kind
+                font.pixelSize: Appearance.font.pixelSize.small
+                color: Appearance.colors.colOnSurfaceVariant
+            }
+            MaterialSymbol {
+                visible: imageMode
+                text: "content_copy"
+                iconSize: Appearance.font.pixelSize.larger
+                color: Appearance.colors.colOnSurfaceVariant
+                MouseArea {
                     anchors.fill: parent
-                    visible: Peek.kind === "image"
-                    source: Peek.sourcePath
-                    fillMode: Image.PreserveAspectFit
-                    scale: Peek.fitMode ? 1 : Peek.zoom
-                    asynchronous: true
-                    cache: false
-                    smooth: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Peek.copyImage()
                 }
-
-                Flickable {
-                    id: textArea
+            }
+            MaterialSymbol {
+                visible: Peek.sourcePath !== ""
+                text: "link"
+                iconSize: Appearance.font.pixelSize.larger
+                color: Appearance.colors.colOnSurfaceVariant
+                MouseArea {
                     anchors.fill: parent
-                    visible: Peek.kind === "text" || Peek.kind === "binary"
-                    contentWidth: textContent.width
-                    contentHeight: textContent.height
-                    clip: true
-                    boundsBehavior: Flickable.StopAtBounds
-                    Text {
-                        id: textContent
-                        width: textArea.width
-                        text: Peek.content
-                        font.family: Appearance.font.family.monospace
-                        font.pixelSize: Appearance.font.pixelSize.small
-                        color: Appearance.colors.colOnLayer1
-                        wrapMode: Text.WrapAnywhere
-                    }
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Peek.copyPath()
                 }
-
-                StyledText {
-                    anchors.centerIn: parent
-                    visible: Peek.kind === "empty"
-                    text: "Nothing selected"
-                    font.pixelSize: Appearance.font.pixelSize.large
-                    color: Appearance.colors.colOnSurfaceVariant
+            }
+            MaterialSymbol {
+                visible: imageMode
+                text: "fit_screen"
+                iconSize: Appearance.font.pixelSize.larger
+                color: Appearance.colors.colOnSurfaceVariant
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Peek.resetZoom()
                 }
-
-                StyledText {
-                    anchors.centerIn: parent
-                    visible: Peek.kind === "notfound"
-                    text: "File not found — press E to open in nvim"
-                    font.pixelSize: Appearance.font.pixelSize.large
-                    color: Appearance.colors.colOnSurfaceVariant
+            }
+            MaterialSymbol {
+                visible: imageMode
+                text: "zoom_in"
+                iconSize: Appearance.font.pixelSize.larger
+                color: Appearance.colors.colOnSurfaceVariant
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Peek.zoomIn()
+                }
+            }
+            MaterialSymbol {
+                visible: imageMode
+                text: "zoom_out"
+                iconSize: Appearance.font.pixelSize.larger
+                color: Appearance.colors.colOnSurfaceVariant
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Peek.zoomOut()
+                }
+            }
+            MaterialSymbol {
+                text: "edit"
+                iconSize: Appearance.font.pixelSize.larger
+                color: Appearance.colors.colOnSurfaceVariant
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Peek.edit()
+                }
+            }
+            MaterialSymbol {
+                text: "close"
+                iconSize: Appearance.font.pixelSize.larger
+                color: Appearance.colors.colOnSurfaceVariant
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Peek.close()
                 }
             }
         }

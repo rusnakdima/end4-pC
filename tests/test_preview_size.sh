@@ -40,13 +40,21 @@ for panel in "$PEEK_PANEL" "$IMAGE_PANEL"; do
     check "$name window height uses ShellScreen.height" "$panel" 'root.screen.height !== undefined ? root.screen.height : 800'
 done
 
-# The preview is a floating 75% card with its full button bar, not a dimmed
-# full-screen overlay. Clicking outside still closes it.
-check_absent "Peek has no frameless image-only mode" "$PEEK_PANEL" 'imageOnly'
+# The preview is a floating 75% image window with its full button bar floating
+# over it: no dim scrim, no card background, border, shadow or outer margins.
+# Clicking outside still closes it. Text previews keep a framed card.
 check_absent "Peek has no dimming scrim" "$PEEK_PANEL" 'colScrim'
 check "Peek keeps a click-to-close backdrop" "$PEEK_PANEL" 'id: backdrop'
-check "Peek card has no outer margins" "$PEEK_PANEL" 'anchors { fill: parent; margins: 0 }'
-check "Peek header stays visible" "$PEEK_PANEL" 'Layout.preferredHeight: 32'
+check "Peek has an image mode flag" "$PEEK_PANEL" 'readonly property bool imageMode: Peek.kind === "image"'
+check "Peek card is transparent for images" "$PEEK_PANEL" 'color: imageMode ? "transparent" : Appearance.colors.colUiPopupBackground'
+check "Peek card has no border for images" "$PEEK_PANEL" 'border.width: imageMode ? 0 : 1'
+check "Peek card has no shadow for images" "$PEEK_PANEL" 'StyledRectangularShadow { target: card; visible: !imageMode }'
+check "Peek body has no margins for images" "$PEEK_PANEL" 'anchors.margins: imageMode ? 0 : 10'
+check "Peek body starts at the top for images" "$PEEK_PANEL" 'anchors.topMargin: imageMode ? 0 : 50'
+check "Peek body is transparent for images" "$PEEK_PANEL" 'color: imageMode ? "transparent" : Appearance.colors.colLayer1'
+check "Peek header floats over the image" "$PEEK_PANEL" 'z: 2'
+check "Peek header has a translucent background" "$PEEK_PANEL" 'opacity: 0.8'
+check "Peek header stays visible" "$PEEK_PANEL" 'height: 32'
 check "Peek has a copy-image button" "$PEEK_PANEL" 'text: "content_copy"'
 check "Peek copy-image button is wired" "$PEEK_PANEL" 'Peek.copyImage()'
 check "Peek has a copy-path button" "$PEEK_PANEL" 'text: "link"'
