@@ -63,6 +63,32 @@ treeview.view:selected {
     color: @md3_on_primary;
 }
 
+/* Thunar chrome: drop the separated-toolbar outline so the header bar and
+   path bar read as one MD3 surface. Radius tokens are literal here because
+   CSS cannot read shell QML tokens. */
+.thunar toolbar,
+.thunar .toolbar,
+.thunar headerbar {
+    border: none;
+    box-shadow: none;
+    border-radius: 12px;
+    background-color: @md3_surface_container;
+}
+
+.thunar .path-bar,
+.thunar pathbar,
+.thunar .location-entry {
+    border: none;
+    box-shadow: none;
+}
+
+.thunar entry,
+.thunar .linked entry {
+    border: none;
+    box-shadow: none;
+    border-radius: 8px;
+}
+
 entry.error,
 .error {
     border-color: @md3_error;

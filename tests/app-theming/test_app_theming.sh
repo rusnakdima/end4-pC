@@ -110,6 +110,16 @@ check 'light: kvantum theme driven by app-theming' \
     "grep -q '^theme=MaterialAdw$' '$XDG_CONFIG_HOME/Kvantum/kvantum.kvconfig'"
 check 'light: qt6ct colour scheme set' \
     "grep -q '^color_scheme=matugen$' '$XDG_CONFIG_HOME/qt6ct/qt6ct.conf'"
+check 'thunar: toolbar border and shadow removed' \
+    "grep -qF '.thunar toolbar,' '$LIGHT_CSS' && grep -qF 'border: none;' '$LIGHT_CSS' && grep -qF 'box-shadow: none;' '$LIGHT_CSS'"
+check 'thunar: path bar border removed' \
+    "grep -qF '.thunar .path-bar,' '$LIGHT_CSS'"
+check 'thunar: linked entries borderless with shell radius' \
+    "grep -qF '.thunar .linked entry {' '$LIGHT_CSS' && grep -qF 'border-radius: 8px;' '$LIGHT_CSS'"
+check 'thunar: toolbar radius uses shell token literal' \
+    "grep -qF 'border-radius: 12px;' '$LIGHT_CSS'"
+check 'thunar: every rule sits inside the guard markers' \
+    "awk '/end4-pC MD3 app theming:begin/{in_guard=1; next} /end4-pC MD3 app theming:end/{in_guard=0} in_guard && /\\.thunar toolbar,/{found=1} END{exit !found}' '$LIGHT_CSS' && ! awk '/end4-pC MD3 app theming:begin/{in_guard=1; next} /end4-pC MD3 app theming:end/{in_guard=0} !in_guard && /\\.thunar toolbar,/{found=1} END{exit !found}' '$LIGHT_CSS'"
 
 # --- idempotency -----------------------------------------------------------
 cp "$LIGHT_CSS" "$TMP_DIR/light-1.css"
