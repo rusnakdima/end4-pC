@@ -100,6 +100,15 @@ Scope {
         sourceComponent: PanelWindow {
             id: osdRoot
             color: "transparent"
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+            // Escape dismisses the OSD without changing the displayed value.
+            Keys.onPressed: event => {
+                if (event.key === Qt.Key_Escape) {
+                    GlobalStates.osdVolumeOpen = false;
+                    GlobalStates.osdBrightnessOpen = false;
+                    event.accepted = true;
+                }
+            }
 
             Connections {
                 target: root
