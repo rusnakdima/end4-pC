@@ -102,11 +102,16 @@ Scope {
             color: "transparent"
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
             // Escape dismisses the OSD without changing the displayed value.
-            Keys.onPressed: event => {
-                if (event.key === Qt.Key_Escape) {
-                    GlobalStates.osdVolumeOpen = false;
-                    GlobalStates.osdBrightnessOpen = false;
-                    event.accepted = true;
+            // Keys belong on an Item, not on the PanelWindow QObject.
+            Item {
+                anchors.fill: parent
+                focus: true
+                Keys.onPressed: event => {
+                    if (event.key === Qt.Key_Escape) {
+                        GlobalStates.osdVolumeOpen = false;
+                        GlobalStates.osdBrightnessOpen = false;
+                        event.accepted = true;
+                    }
                 }
             }
 

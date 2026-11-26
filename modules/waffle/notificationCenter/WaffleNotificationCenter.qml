@@ -27,12 +27,6 @@ Scope {
             exclusiveZone: 0
             WlrLayershell.namespace: "quickshell:wNotificationCenter"
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
-            Keys.onPressed: event => {
-                if (event.key === Qt.Key_Escape) {
-                    content.close();
-                    event.accepted = true;
-                }
-            }
             color: "transparent"
 
             anchors {
@@ -61,6 +55,13 @@ Scope {
             NotificationCenterContent {
                 id: content
                 anchors.fill: parent
+                focus: true
+                Keys.onPressed: event => {
+                    if (event.key === Qt.Key_Escape) {
+                        content.close();
+                        event.accepted = true;
+                    }
+                }
 
                 onClosed: {
                     GlobalStates.waffleSidebarRightOpen = false;

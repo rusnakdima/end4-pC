@@ -78,10 +78,16 @@ Scope {
             id: menuWindow
 
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
-            Keys.onPressed: event => {
-                if (event.key === Qt.Key_Escape) {
-                    root.openCentered(false);
-                    event.accepted = true;
+
+            // Keys must be attached to an Item; PanelWindow is a QObject.
+            Item {
+                anchors.fill: parent
+                focus: true
+                Keys.onPressed: event => {
+                    if (event.key === Qt.Key_Escape) {
+                        root.openCentered(false);
+                        event.accepted = true;
+                    }
                 }
             }
 

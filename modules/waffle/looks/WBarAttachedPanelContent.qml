@@ -31,7 +31,8 @@ Item {
     focus: true
     Keys.onPressed: event => { // Esc to close
         if (event.key === Qt.Key_Escape) {
-            content.close();
+            root.close();
+            event.accepted = true;
         }
     }
 

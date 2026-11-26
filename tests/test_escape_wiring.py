@@ -21,6 +21,21 @@ def escape_branch(path):
     return "" if pos == -1 else text[pos:pos + 400]
 
 
+def keys_depths_relative_to_window(path):
+    """Brace depth of every Keys.onPressed relative to the PanelWindow."""
+    depth = 0
+    window_depth = None
+    depths = []
+    for line in path.read_text().splitlines():
+        code = line.split("//")[0]
+        if window_depth is None and "PanelWindow {" in code:
+            window_depth = depth
+        if "Keys.onPressed" in code:
+            depths.append(depth - window_depth)
+        depth += code.count("{") - code.count("}")
+    return depths
+
+
 class EscapeWiringTest(unittest.TestCase):
     def test_desktop_menu_escape_closes(self):
         self.assertIn("Qt.Key_Escape", escape_branch(FILES["desktop"]))
@@ -46,6 +61,19 @@ class EscapeWiringTest(unittest.TestCase):
         branch = escape_branch(FILES["start"])
         self.assertIn("GlobalStates.searchOpen = false", branch)
         self.assertNotIn("\n            return;", branch)
+
+    def test_escape_keys_are_attached_to_items_not_windows(self):
+        for key in ("desktop", "osd_ii", "osd_waffle", "action", "notifications"):
+            with self.subTest(key=key):
+                depths = keys_depths_relative_to_window(FILES[key])
+                self.assertTrue(depths, "expected a Keys.onPressed handler")
+                self.assertTrue(all(d > 1 for d in depths),
+                                f"Keys.onPressed must be on a child Item, got depths {depths}")
+
+    def test_sidebar_base_escape_closes_itself(self):
+        text = (ROOT / "modules/waffle/looks/WBarAttachedPanelContent.qml").read_text()
+        self.assertIn("root.close()", text)
+        self.assertNotIn("content.close()", text)
 
     def test_settings_escape_still_cancel_first(self):
         helper = (ROOT / "modules/common/functions/SettingsEscape.js").read_text()
