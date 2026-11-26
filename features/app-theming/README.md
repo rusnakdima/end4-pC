@@ -64,7 +64,7 @@ Under `appearance.appTheming` in `~/.config/illogical-impulse/config.json`
 | `refreshRunningApps` | `true` | Signal running apps to re-read settings (also restarts KDE Connect) |
 | `qtQuick` | `true` | Write `qtquickcontrols2.conf` and the Qt Quick environment variables |
 | `provision` | `true` | Re-detect the compatible theme stack on every mode change |
-| `preferredFamily` | `auto` | Theme family preference: `auto`, `adwaita`, or `colloid` |
+| `preferredFamily` | `auto` | Theme family preference: `auto`, `adw-gtk3`, or `Colloid` |
 
 Toggles are read at the next mode/palette change. Some applications (notably
 GTK3 ones) only re-read their CSS at startup, so restart them if a change does

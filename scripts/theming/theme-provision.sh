@@ -111,17 +111,32 @@ detect() {
         done
     done
 
+    # A pinned family overrides auto-detection (including a deliberate user
+    # selection); "auto" keeps the existing precedence rules.
+    local family="${APP_THEMING_PREFERRED_FAMILY:-auto}" name filtered=()
+    if [[ "$family" == "adw-gtk3" ]]; then
+        for name in "${gtk_dirs[@]}"; do
+            [[ "$name" == adw-gtk3* ]] && filtered+=("$name")
+        done
+        gtk_dirs=("${filtered[@]}")
+    elif [[ "$family" == "Colloid" ]]; then
+        for name in "${kv_dirs[@]}"; do
+            [[ "$name" == Colloid* ]] && filtered+=("$name")
+        done
+        kv_dirs=("${filtered[@]}")
+    fi
+
     # Preserve a deliberate user selection when the theme actually exists.
     local user_gtk user_kv gtk_base kv_source
     user_gtk="$(ini_value "$XDG_CONFIG_HOME/gtk-3.0/settings.ini" gtk-theme-name)"
     user_kv="$(ini_value "$XDG_CONFIG_HOME/Kvantum/kvantum.kvconfig" theme)"
-    if [[ -n "$user_gtk" ]] && [[ " ${gtk_dirs[*]} " == *" $user_gtk "* ]]; then
+    if [[ "$family" == "auto" && -n "$user_gtk" ]] && [[ " ${gtk_dirs[*]} " == *" $user_gtk "* ]]; then
         gtk_base="$user_gtk"
     else
         gtk_base="$(best_name "$gtk_patterns" "${gtk_dirs[@]}")"
     fi
     [[ -n "$gtk_base" ]] || gtk_base="Adwaita"
-    if [[ -n "$user_kv" ]] && [[ " ${kv_dirs[*]} " == *" $user_kv "* ]]; then
+    if [[ "$family" == "auto" && -n "$user_kv" ]] && [[ " ${kv_dirs[*]} " == *" $user_kv "* ]]; then
         kv_source="$user_kv"
     else
         kv_source="$(best_name "$kv_patterns" "${kv_dirs[@]}")"

@@ -600,7 +600,7 @@ apply_app_theming() {
 
     local provisioner="$SOURCE_DIR/scripts/theming/theme-provision.sh"
     if [[ $APP_THEME_PACKAGES -eq 1 && -f "$provisioner" ]]; then
-        echo "[install] Provisioning compatible app themes..."
+        echo "[install] Detecting compatible app themes..."
         if [[ $(id -u) -eq 0 ]] && id "$TARGET_USER" &>/dev/null; then
             sudo -u "$TARGET_USER" env HOME="$TARGET_HOME" \
                 XDG_CONFIG_HOME="$TARGET_HOME/.config" \

@@ -157,7 +157,7 @@ fi
 CATALOG="modules/ii/settings/DashboardSettingsCatalog.qml"
 for key in \
     "interface:Theme Qt Quick apps" \
-    "interface:Auto-install themes" \
+    "interface:Detect installed themes" \
     "interface:Preferred theme family" \
     "interface:Re-detect themes"
 do

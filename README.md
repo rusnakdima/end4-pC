@@ -290,10 +290,10 @@ path unchanged; Thunar's toolbar and path-bar borders are removed by the
 guarded MD3 CSS block.
 
 New opt-outs: `--no-theme-packages` (`APP_THEME_PACKAGES=0`) skips installing
-theme packages, and the **Auto-install themes**, **Theme Qt Quick apps**, and
+theme packages, and the **Detect installed themes**, **Theme Qt Quick apps**, and
 **Preferred theme family** switches in Settings control detection, Qt Quick
-theming, and theme preference. **Re-detect themes** re-provisions after you
-install a theme yourself. See `docs/design/theme-stack.md` for the full design.
+theming, and theme preference. **Re-detect themes** re-scans after you install a
+theme yourself. See `docs/design/theme-stack.md` for the full design.
 
 ### 🛠️ Desktop utilities
 

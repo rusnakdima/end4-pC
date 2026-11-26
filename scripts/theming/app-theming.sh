@@ -265,7 +265,8 @@ apply_gtk() {
     enabled '.appearance.appTheming.gtk' 'true' || return 0
 
     local theme prefer family
-    family="$(cfg '.appearance.appTheming.preferredFamily' 'adw-gtk3')"
+    family="$(cfg '.appearance.appTheming.preferredFamily' 'auto')"
+    [[ "$family" == "auto" ]] && family="adw-gtk3"
     theme="${RESOLVED_GTK_THEME:-$family}"
     if [[ "$MODE" == "dark" ]]; then
         [[ "$theme" == *-dark ]] || theme="${theme}-dark"
@@ -379,15 +380,34 @@ signal_apps() {
         dbus-send --session --type=signal /KGlobalSettings \
             org.kde.KGlobalSettings.notifyChange int32:4 int32:0 >/dev/null 2>&1 || true
     fi
-    # Qt Quick apps started by systemd --user (KDE Connect, its daemon) cache
-    # their style at startup. Push the new environment into the user manager and
-    # restart only the KDE Connect processes when the user allowed it.
+
+    # Qt Quick apps (KDE Connect, EasyEffects) cache their style at startup.
+    # --refresh only repaints with the new palette; the environment must not be
+    # pushed and apps must not be killed on every wallpaper change.
+    if [[ "$REFRESH" == "1" ]]; then
+        return 0
+    fi
+    enabled '.appearance.appTheming.qtQuick' 'true' || return 0
+
+    local qqc_conf="$XDG_CONFIG_HOME/qtquickcontrols2.conf"
+    local qqc_theme="Light"
+    [[ "$MODE" == "dark" ]] && qqc_theme="Dark"
+    local -a qenv=(
+        "QT_QPA_PLATFORMTHEME=qt6ct"
+        "QT_QUICK_CONTROLS_STYLE=Material"
+        "QT_QUICK_CONTROLS_CONF=$qqc_conf"
+        "QT_QUICK_CONTROLS_MATERIAL_THEME=$qqc_theme"
+    )
+
+    # import-environment would ignore unset shell variables. Pass explicit
+    # values instead; systemd --user does not re-read environment.d on change.
     if command -v systemctl >/dev/null 2>&1; then
-        systemctl --user import-environment \
-            QT_QPA_PLATFORMTHEME \
-            QT_QUICK_CONTROLS_STYLE \
-            QT_QUICK_CONTROLS_CONF \
-            QT_QUICK_CONTROLS_MATERIAL_THEME >/dev/null 2>&1 || true
+        systemctl --user set-environment "${qenv[@]}" >/dev/null 2>&1 || true
+    fi
+    # KDE Connect's daemon is D-Bus activated, not a systemd user unit, so it
+    # does not inherit the user manager's environment either.
+    if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+        dbus-update-activation-environment --systemd "${qenv[@]}" >/dev/null 2>&1 || true
     fi
     if command -v pkill >/dev/null 2>&1; then
         pkill -TERM -x kdeconnect-app >/dev/null 2>&1 || true
@@ -410,15 +430,19 @@ fi
 if enabled '.appearance.appTheming.provision' 'true'; then
     PROVISIONER_SCRIPT="$BASE_DIR/scripts/theming/theme-provision.sh"
     if [[ -f "$PROVISIONER_SCRIPT" ]]; then
+        APP_THEMING_PREFERRED_FAMILY="$(cfg '.appearance.appTheming.preferredFamily' 'auto')"
+        export APP_THEMING_PREFERRED_FAMILY
         bash "$PROVISIONER_SCRIPT" "$MODE" --detect >/dev/null 2>&1 || true
     fi
 fi
 load_resolved
 
 apply_gtk
+# The QQC2 Accent comes from the live palette, so a --refresh must rewrite it
+# too; only the one-shot settings/style writes are skipped in refresh mode.
+apply_qtquick
 if [[ "$REFRESH" != "1" ]]; then
     apply_qt
-    apply_qtquick
 fi
 signal_apps
 
