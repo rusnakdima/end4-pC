@@ -18,16 +18,18 @@ class KeybindReloadTest(unittest.TestCase):
         self.assertEqual(bind["combo"], "CTRL + SUPER + R")
         self.assertEqual(bind["description"], "Shell: Reload theme")
         self.assertEqual(bind["label"], "Shell: Reload theme")
-        self.assertEqual(bind["dispatch"], {
-            "kind": "global",
-            "arg": {"kind": "string", "value": "quickshell:shellReload"},
-        })
-        self.assertNotIn("command", bind)
-        self.assertEqual(
-            bind["code"],
-            'hl.bind("CTRL + SUPER + R", hl.dsp.global("quickshell:shellReload"), '
-            '{ description = "Shell: Reload theme" })',
+        # The bind must live in Hyprland, not in a shortcut Quickshell registers
+        # for itself: a shell that is not running has no global shortcuts at all.
+        expected = (
+            'hl.bind("CTRL + SUPER + R", hl.dsp.exec_cmd(qsIpcCall .. '
+            '" wallpapers reloadShell || qs -p $HOME/.config/quickshell/$qsConfig"), '
+            '{ description = "Shell: Reload theme" })'
         )
+        self.assertEqual(bind["dispatch"]["kind"], "raw")
+        self.assertEqual(bind["dispatch"].get("code"), expected)
+        self.assertNotIn("command", bind)
+        self.assertEqual(bind["code"], expected)
+        self.assertNotIn("shellReload", bind["code"])
 
     def test_generator_omits_bind_26_command(self):
         with tempfile.TemporaryDirectory() as d:
@@ -42,7 +44,10 @@ class KeybindReloadTest(unittest.TestCase):
             with open(commands) as commands_file:
                 self.assertNotIn("bind-26", json.load(commands_file))
             with open(os.path.join(d, "main.lua")) as main_file:
-                self.assertIn("shellReload", main_file.read())
+                main = main_file.read()
+            self.assertIn("wallpapers reloadShell", main)
+            self.assertIn("qs -p $HOME/.config/quickshell/$qsConfig", main)
+            self.assertNotIn('hl.dsp.global("quickshell:shellReload")', main)
 
 
 if __name__ == "__main__":

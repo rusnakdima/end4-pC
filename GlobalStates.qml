@@ -125,12 +125,6 @@ Singleton {
         Quickshell.reload(true);
     }
 
-    CompositorGlobalShortcut {
-        name: "shellReload"
-        description: "Reload the theme"
-        onPressed: root.requestShellReload()
-    }
-
     // Lock with the theme's own lock screen. hyprlock remains an opt-in
     // fallback (Settings > Use Hyprlock), but the theme lock is the default.
     function lock(): void {

@@ -795,13 +795,10 @@
    "label": "Shell: Reload theme",
    "options": {},
    "dispatch": {
-    "kind": "global",
-    "arg": {
-     "kind": "string",
-     "value": "quickshell:shellReload"
-    }
+    "kind": "raw",
+    "code": "hl.bind(\"CTRL + SUPER + R\", hl.dsp.exec_cmd(qsIpcCall .. \" wallpapers reloadShell || qs -p $HOME/.config/quickshell/$qsConfig\"), { description = \"Shell: Reload theme\" })"
    },
-   "code": "hl.bind(\"CTRL + SUPER + R\", hl.dsp.global(\"quickshell:shellReload\"), { description = \"Shell: Reload theme\" })"
+   "code": "hl.bind(\"CTRL + SUPER + R\", hl.dsp.exec_cmd(qsIpcCall .. \" wallpapers reloadShell || qs -p $HOME/.config/quickshell/$qsConfig\"), { description = \"Shell: Reload theme\" })"
   },
   {
    "id": "bind-27",
