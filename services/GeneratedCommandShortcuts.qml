@@ -172,15 +172,10 @@ Singleton {
         }
 
         const expanded = root.expand(root.commands[id].command);
-        const proc = runnerComponent.createObject(root, {
-            commandId: id,
-            command: ["bash", "-lc", expanded],
-            running: true
-        });
-        if (proc === null) {
-            console.log("[gen-cmds] could not create a process for " + id);
-            return false;
-        }
+        // Detached on purpose: a tracked Process is killed by
+        // Quickshell.reload(true), so a theme reload would close the app this
+        // keybind just opened (YTM, terminal, browser, ...).
+        Quickshell.execDetached(["bash", "-lc", expanded]);
         console.log("[gen-cmds] run " + id + ": " + expanded);
         return true;
     }
@@ -188,27 +183,5 @@ Singleton {
     // Public entry point for manual/probe runs. Same guard as onPressed.
     function testRun(id) {
         return root.runCommand(id);
-    }
-
-    // Each invocation gets its own process so a long running command cannot
-    // block or replace another one. The process removes itself on exit.
-    property Component runnerComponent: Component {
-        Process {
-            id: runner
-            required property string commandId
-            property string errorText: ""
-
-            stderr: StdioCollector {
-                onStreamFinished: runner.errorText += text
-            }
-
-            onExited: (exitCode, exitStatus) => {
-                if (exitCode !== 0) {
-                    console.log("[gen-cmds] " + runner.commandId + " exited with "
-                        + exitCode + ": " + runner.errorText.trim());
-                }
-                runner.destroy();
-            }
-        }
     }
 }

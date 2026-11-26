@@ -38,8 +38,8 @@ Singleton {
     }
 
     function open(id) {
-        openProc.command = ["bash", root.scriptPath, "open", id];
-        openProc.running = true;
+        // Detached so the webapp window survives a theme reload.
+        Quickshell.execDetached(["bash", root.scriptPath, "open", id]);
     }
 
     Component.onCompleted: root.refresh()
@@ -73,9 +73,5 @@ Singleton {
     Process {
         id: removeProc
         onExited: root.refresh()
-    }
-
-    Process {
-        id: openProc
     }
 }

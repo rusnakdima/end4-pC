@@ -109,7 +109,10 @@ Singleton {
 
     function openFullUI(): void {
         if (root.busy) return
-        uiProc.running = true
+        // Detached so the Waydroid window survives a theme reload. The
+        // declarative `uiProc.command` still pins the timeout-bound command.
+        uiProc.startDetached()
+        refreshTimer.restart()
     }
 
     function regenerateDesktops(): void {
@@ -163,12 +166,11 @@ Singleton {
         onExited: (code) => root.handleActionResult(code, actionErr.text)
     }
 
+    // Template for the detached full-UI launch only: startDetached() leaves
+    // running false and emits no exited signal, so no collectors are needed.
     Process {
         id: uiProc
         command: ["timeout", "30", "waydroid", "show-full-ui"]
-        stdout: StdioCollector { id: uiOut }
-        stderr: StdioCollector { id: uiErr }
-        onExited: (code) => root.handleActionResult(code, uiErr.text)
     }
 
     Process {
