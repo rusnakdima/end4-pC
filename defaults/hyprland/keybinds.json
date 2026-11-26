@@ -203,7 +203,22 @@
   "--##! Apps",
   "",
   "--# Cursed stuff",
-  "--## Make window not amogus large"
+  "--## Make window not amogus large",
+  "",
+  "-- >>> end4-pC PiP LMB grab (managed by end4-pC)",
+  "hl.config({ binds = { drag_threshold = 10 } })",
+  "local end4pcPipLmbBound = false",
+  "hl.on(\"window.active\", function(w)",
+  "    local end4pcIsPip = w ~= nil and w.class == \"zen\" and w.title == \"Picture-in-Picture\"",
+  "    if end4pcIsPip and not end4pcPipLmbBound then",
+  "        hl.bind(\"mouse:272\", hl.dsp.window.drag(), { mouse = true })",
+  "        end4pcPipLmbBound = true",
+  "    elseif not end4pcIsPip and end4pcPipLmbBound then",
+  "        hl.unbind(\"mouse:272\")",
+  "        end4pcPipLmbBound = false",
+  "    end",
+  "end)",
+  "-- <<< end4-pC PiP LMB grab"
  ],
  "customPreamble": [
   "",
