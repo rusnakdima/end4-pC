@@ -174,5 +174,15 @@ check 'KDE: selection accent follows palette primary' \
 check 'KDE: no false claim that matugen generates the scheme' \
     "! grep -q 'matugen generates' '$APP_THEMING'"
 
+# XDG_DATA_HOME is optional in the XDG spec; live shell sessions may not export it
+unset_err="$TMP_DIR/unset-xdg-data.err"
+env -u XDG_DATA_HOME APP_THEMING_NO_EXTERNAL=1 \
+    HOME="$HOME" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" XDG_STATE_HOME="$XDG_STATE_HOME" \
+    bash "$APP_THEMING" dark 2>"$unset_err" >/dev/null
+check 'XDG_DATA_HOME unset: no unbound-variable error' \
+    "! grep -q 'unbound variable' '$unset_err'"
+check 'XDG_DATA_HOME unset: scheme written to ~/.local/share' \
+    "test -f '$HOME/.local/share/color-schemes/Matugen.colors'"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]
