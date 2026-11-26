@@ -32,7 +32,7 @@ TestCase {
     name: "ManagedKeybindsOverlay"
     when: true
 
-    readonly property string tempDir: "/tmp/opencode/tst_managed_keybinds_overlay"
+    readonly property string tempDir: "/tmp/end4pc-shell-tests/tst_managed_keybinds_overlay"
     readonly property string tempPath: tempDir + "/keybind-overlay.json"
 
     property string originalPath: ""

@@ -21,7 +21,7 @@ TestCase {
     name: "DisabledKeybinds"
     when: true
 
-    readonly property string tempDir: "/tmp/opencode/tst_disabled_keybinds"
+    readonly property string tempDir: "/tmp/end4pc-shell-tests/tst_disabled_keybinds"
     readonly property string mainPath: tempDir + "/hyprland-keybinds.lua"
     readonly property string customPath: tempDir + "/custom-keybinds.lua"
 
