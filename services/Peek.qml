@@ -32,10 +32,18 @@ Singleton {
     property string content: ""
     property bool fitMode: true
     property real zoom: 1.0
+    property string actionMessage: ""
 
     readonly property string cacheDir: FileUtils.trimFileProtocol(`${Directories.cache}/peek`)
     readonly property string detectScript: Quickshell.shellPath("features/peek/peek-detect.sh")
     readonly property string editScript: Quickshell.shellPath("features/peek/peek-edit.sh")
+    readonly property string copyScript: Quickshell.shellPath("features/peek/peek-copy.sh")
+
+    Timer {
+        id: actionMessageTimer
+        interval: 2000
+        onTriggered: root.actionMessage = ""
+    }
     readonly property int maxPreviewBytes: Config.options?.peek?.maxPreviewBytes ?? 262144
 
     signal opened()
@@ -94,6 +102,7 @@ Singleton {
         GlobalStates.peekOpen = false;
         root.fitMode = true;
         root.zoom = 1.0;
+        root.actionMessage = "";
         root.closed();
     }
 
@@ -194,6 +203,38 @@ Singleton {
         root._openInEditor(root.sourcePath, root.displayLabel);
     }
 
+    function _flash(message: string): void {
+        root.actionMessage = message;
+        actionMessageTimer.restart();
+    }
+
+    function _copyError(result: string, fallback: string): string {
+        const lines = String(result).split("\n").map(line => line.trim()).filter(Boolean);
+        return lines.length > 0 ? lines[lines.length - 1] : fallback;
+    }
+
+    function copyImage(): void {
+        if (root.kind !== "image" || root.sourcePath === "") return;
+        root._run(`${root._shellQuote(root.copyScript)} image ${root._shellQuote(root.sourcePath)}`, (result, code) => {
+            if (code !== 0) {
+                root._flash("Copy failed: " + root._copyError(result, "unknown error"));
+                return;
+            }
+            root._flash("Image copied");
+        });
+    }
+
+    function copyPath(): void {
+        if (root.sourcePath === "") return;
+        root._run(`${root._shellQuote(root.copyScript)} path ${root._shellQuote(root.sourcePath)}`, (result, code) => {
+            if (code !== 0) {
+                root._flash("Copy failed: " + root._copyError(result, "unknown error"));
+                return;
+            }
+            root._flash("Path copied");
+        });
+    }
+
     function zoomIn(): void { fitMode = false; zoom = Math.min(zoom + 0.25, 8); }
     function zoomOut(): void { fitMode = false; zoom = Math.max(zoom - 0.25, 0.25); }
     function resetZoom(): void { fitMode = true; zoom = 1.0; }
@@ -207,6 +248,8 @@ Singleton {
         function openPath(path: string): void { root.openPath(path, "", false) }
         function openText(text: string): void { root.openText(text, "") }
         function edit(): void { root.edit() }
+        function copyImage(): void { root.copyImage() }
+        function copyPath(): void { root.copyPath() }
     }
 
     CompositorGlobalShortcut {

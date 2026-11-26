@@ -40,13 +40,18 @@ for panel in "$PEEK_PANEL" "$IMAGE_PANEL"; do
     check "$name window height uses ShellScreen.height" "$panel" 'root.screen ? root.screen.height : 800'
 done
 
-# An image preview is a bare 75% image block: no header, no inner margins, no
-# card chrome. Other Peek kinds keep the normal labelled card.
-check "Peek image-only mode follows the image kind" "$PEEK_PANEL" 'property bool imageOnly: Peek.kind === "image"'
-check "Peek image-only card has no margins" "$PEEK_PANEL" 'margins: imageOnly ? 0 : 10'
-check "Peek hides the header in image-only mode" "$PEEK_PANEL" 'visible: !imageOnly'
-check "Peek image-only card has no radius" "$PEEK_PANEL" 'radius: imageOnly ? 0 : Appearance.rounding.verylarge'
-check "Peek image-only card has no border" "$PEEK_PANEL" 'border.width: imageOnly ? 0 : 1'
+# The preview is a floating 75% card with its full button bar, not a dimmed
+# full-screen overlay. Clicking outside still closes it.
+check_absent "Peek has no frameless image-only mode" "$PEEK_PANEL" 'imageOnly'
+check_absent "Peek has no dimming scrim" "$PEEK_PANEL" 'colScrim'
+check "Peek keeps a click-to-close backdrop" "$PEEK_PANEL" 'id: backdrop'
+check "Peek card has no outer margins" "$PEEK_PANEL" 'anchors { fill: parent; margins: 0 }'
+check "Peek header stays visible" "$PEEK_PANEL" 'Layout.preferredHeight: 32'
+check "Peek has a copy-image button" "$PEEK_PANEL" 'text: "content_copy"'
+check "Peek copy-image button is wired" "$PEEK_PANEL" 'Peek.copyImage()'
+check "Peek has a copy-path button" "$PEEK_PANEL" 'text: "link"'
+check "Peek copy-path button is wired" "$PEEK_PANEL" 'Peek.copyPath()'
+check "Peek shows copy feedback in the header" "$PEEK_PANEL" 'Peek.actionMessage'
 
 check "Peek card width is 75% of the screen" "$PEEK_PANEL" 'Math.round(root.width * 0.75)'
 check "Peek card height is 75% of the screen" "$PEEK_PANEL" 'Math.round(root.height * 0.75)'

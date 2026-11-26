@@ -249,8 +249,10 @@ it is quoted or followed by `:line:column`: images open in a themed preview at
 **75% of the screen**, while text and other editable files open directly in a
 floating nvim/LazyVim window at **75% of the screen** (title `end4-pc-peek`).
 Selected text without a file path is shown as readable content; press `e` to
-edit it in nvim. Use `+`/`-`/`0` to zoom an image and `Escape` to close the
-overlay.
+edit it in nvim. The image window keeps its full button bar: Copy image puts
+the displayed image on the clipboard as PNG, Copy path copies the source path,
+then fit, zoom, edit and close; click outside or press `Escape` to dismiss. Use
+`+`/`-`/`0` to zoom.
 
 From a terminal: `qs ipc call peek toggle`, `qs ipc call peek openPath <file>`
 or `qs ipc call peek openText <text>`. In fish, `peek <path>` previews a file and

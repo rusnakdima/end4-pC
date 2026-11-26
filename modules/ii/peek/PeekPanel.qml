@@ -12,7 +12,8 @@ import qs.services
 
 /**
  * Quick Look style preview for a file, image or selected text.
- * Frameless, screen-filling, with a dimmed backdrop and a centered card.
+ * Frameless, screen-filling, with a transparent click-to-close backdrop and a
+ * floating 75% card. The header keeps zoom, copy and edit actions available.
  * All state and IPC logic lives in services/Peek; this file is only the view.
  */
 Window {
@@ -29,7 +30,6 @@ Window {
 
     readonly property int previewWidth: Math.round(root.width * 0.75)
     readonly property int previewHeight: Math.round(root.height * 0.75)
-    readonly property bool imageOnly: Peek.kind === "image"
 
     onClosing: event => Peek.close()
 
@@ -49,11 +49,11 @@ Window {
         keyHandler.forceActiveFocus();
     }
 
-    // Dims the desktop; clicking outside the card closes the preview.
+    // Transparent click-to-close area; the desktop stays undimmed.
     Rectangle {
         id: backdrop
         anchors.fill: parent
-        color: Appearance.colors.colScrim
+        color: "transparent"
         MouseArea {
             anchors.fill: parent
             onClicked: Peek.close()
@@ -65,20 +65,22 @@ Window {
         anchors.centerIn: parent
         width: previewWidth
         height: previewHeight
-        radius: imageOnly ? 0 : Appearance.rounding.verylarge
+        radius: Appearance.rounding.verylarge
         color: Appearance.colors.colUiPopupBackground
-        border.width: imageOnly ? 0 : 1
+        border.width: 1
         border.color: Appearance.colors.colOutlineVariant
-        StyledRectangularShadow { target: card; visible: !imageOnly }
+        StyledRectangularShadow { target: card }
 
         ColumnLayout {
-            anchors { fill: parent; margins: imageOnly ? 0 : 10 }
+            anchors { fill: parent; margins: 0 }
             spacing: 8
 
             RowLayout {
-                visible: !imageOnly
                 Layout.fillWidth: true
                 Layout.preferredHeight: 32
+                Layout.leftMargin: 10
+                Layout.rightMargin: 10
+                Layout.topMargin: 6
                 spacing: 8
 
                 MaterialSymbol {
@@ -88,16 +90,38 @@ Window {
                 }
                 StyledText {
                     Layout.fillWidth: true
-                    text: Peek.displayLabel || "Peek"
+                    text: Peek.actionMessage || Peek.displayLabel || "Peek"
                     font.pixelSize: Appearance.font.pixelSize.normal
                     font.bold: true
-                    color: Appearance.colors.colOnLayer1
+                    color: Peek.actionMessage ? Appearance.colors.colPrimary : Appearance.colors.colOnLayer1
                     elide: Text.ElideMiddle
                 }
                 StyledText {
                     text: Peek.kind
                     font.pixelSize: Appearance.font.pixelSize.small
                     color: Appearance.colors.colOnSurfaceVariant
+                }
+                MaterialSymbol {
+                    visible: Peek.kind === "image"
+                    text: "content_copy"
+                    iconSize: Appearance.font.pixelSize.larger
+                    color: Appearance.colors.colOnSurfaceVariant
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Peek.copyImage()
+                    }
+                }
+                MaterialSymbol {
+                    visible: Peek.sourcePath !== ""
+                    text: "link"
+                    iconSize: Appearance.font.pixelSize.larger
+                    color: Appearance.colors.colOnSurfaceVariant
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Peek.copyPath()
+                    }
                 }
                 MaterialSymbol {
                     visible: Peek.kind === "image"
@@ -157,7 +181,10 @@ Window {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                radius: imageOnly ? 0 : Appearance.rounding.normal
+                Layout.leftMargin: 10
+                Layout.rightMargin: 10
+                Layout.bottomMargin: 10
+                radius: Appearance.rounding.normal
                 color: Appearance.colors.colLayer1
                 clip: true
 
