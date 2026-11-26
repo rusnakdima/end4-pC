@@ -20,10 +20,13 @@ class KeybindReloadTest(unittest.TestCase):
         self.assertEqual(bind["label"], "Shell: Reload theme")
         # The bind must live in Hyprland, not in a shortcut Quickshell registers
         # for itself: a shell that is not running has no global shortcuts at all.
+        # Hyprland 0.57.2 treats a bare hl.dsp.exec_cmd() bind as a no-op, so
+        # the dispatch must be made from a function with hl.dispatch().
         expected = (
-            'hl.bind("CTRL + SUPER + R", hl.dsp.exec_cmd(qsIpcCall .. '
-            '" wallpapers reloadShell || qs -p $HOME/.config/quickshell/$qsConfig"), '
-            '{ description = "Shell: Reload theme" })'
+            'hl.bind("CTRL + SUPER + R", function() '
+            'hl.dispatch(hl.dsp.exec_cmd(qsIpcCall .. '
+            '" wallpapers reloadShell || qs -p $HOME/.config/quickshell/$qsConfig")) '
+            'end, { description = "Shell: Reload theme" })'
         )
         self.assertEqual(bind["dispatch"]["kind"], "raw")
         self.assertEqual(bind["dispatch"].get("code"), expected)
@@ -47,6 +50,7 @@ class KeybindReloadTest(unittest.TestCase):
                 main = main_file.read()
             self.assertIn("wallpapers reloadShell", main)
             self.assertIn("qs -p $HOME/.config/quickshell/$qsConfig", main)
+            self.assertIn("function() hl.dispatch(hl.dsp.exec_cmd(", main)
             self.assertNotIn('hl.dsp.global("quickshell:shellReload")', main)
 
 

@@ -796,9 +796,9 @@
    "options": {},
    "dispatch": {
     "kind": "raw",
-    "code": "hl.bind(\"CTRL + SUPER + R\", hl.dsp.exec_cmd(qsIpcCall .. \" wallpapers reloadShell || qs -p $HOME/.config/quickshell/$qsConfig\"), { description = \"Shell: Reload theme\" })"
+    "code": "hl.bind(\"CTRL + SUPER + R\", function() hl.dispatch(hl.dsp.exec_cmd(qsIpcCall .. \" wallpapers reloadShell || qs -p $HOME/.config/quickshell/$qsConfig\")) end, { description = \"Shell: Reload theme\" })"
    },
-   "code": "hl.bind(\"CTRL + SUPER + R\", hl.dsp.exec_cmd(qsIpcCall .. \" wallpapers reloadShell || qs -p $HOME/.config/quickshell/$qsConfig\"), { description = \"Shell: Reload theme\" })"
+   "code": "hl.bind(\"CTRL + SUPER + R\", function() hl.dispatch(hl.dsp.exec_cmd(qsIpcCall .. \" wallpapers reloadShell || qs -p $HOME/.config/quickshell/$qsConfig\")) end, { description = \"Shell: Reload theme\" })"
   },
   {
    "id": "bind-27",
