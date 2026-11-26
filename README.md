@@ -245,12 +245,12 @@ selected right now — a file path in the PRIMARY selection or the clipboard, or
 an image selected in any app, including a file manager, terminal or IDE.
 `Super+Space` keeps switching the keyboard layout, and a bare `Space` only ever
 types a space. A path is detected even when it is quoted or followed by
-`:line:column`: images open as a frameless preview at **75% of the screen**,
-while text and other editable files open directly in a floating nvim/LazyVim
-window at **75% of the screen** (title `end4-pc-peek`). Plain selected text
-without a file path is skipped — there is no text preview card. Press `e` on an
-image to open it in **swappy** (any image format); press `e` on an editable file
-to open nvim. The image window keeps its full button bar: Copy image puts the
+`:line:column`: Peek automatically opens swappy for detected images (any image
+format), while text and other editable files open directly in a floating
+nvim/LazyVim window at **75% of the screen** (title `end4-pc-peek`). Plain
+selected text without a file path is skipped — there is no text preview card.
+An explicit `peek openPath <image>` IPC call still shows a frameless preview at
+**75% of the screen** with a full button bar: Copy image puts the
 displayed image on the clipboard as PNG, Copy path copies the source path, then
 fit, zoom, edit and close; click outside or press `Escape` to dismiss. Use
 `+`/`-`/`0` to zoom.

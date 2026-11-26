@@ -137,6 +137,8 @@ check_absent_re "panel has no hardcoded hex colours" "$PANEL" '#[0-9a-fA-F]{3,8}
 check "image viewer helper wired via shellPath" "$SERVICE" 'features/peek/peek-image.sh'
 check "image viewer function defined" "$SERVICE" 'function _openInViewer(path: string, label: string): void'
 check_in_function "edit() sends images to swappy" "$SERVICE" edit 'root._openInViewer(root.sourcePath, root.displayLabel)'
+check_in_function "detected images auto-open in swappy" "$SERVICE" openPath 'if (autoEdit) { root._openInViewer(clean, name); return; }'
+check_in_function "IPC image preview stays available" "$SERVICE" openPath 'root._show("image", clean, name, "")'
 check_in_function "edit() keeps nvim for files" "$SERVICE" edit 'root._openInEditor(root.sourcePath, root.displayLabel)'
 check_in_function "plain selected text is skipped" "$SERVICE" detect 'fields[2] === "Selected text"'
 check_in_function "plain clipboard text is skipped" "$SERVICE" detect 'fields[2] === "Clipboard text"'

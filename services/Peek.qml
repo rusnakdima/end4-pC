@@ -156,11 +156,13 @@ Singleton {
             }
             const mime = String(result).split("\n")[0].trim();
             if (mime.indexOf("image/") === 0) {
+                if (autoEdit) { root._openInViewer(clean, name); return; }
+                // Explicit IPC requests keep the frameless 75% preview.
                 root._show("image", clean, name, "");
                 return;
             }
             // A path selected in a file manager, terminal or IDE opens in nvim
-            // when it is editable; only images get the overlay preview.
+            // when editable; detected images go straight to swappy.
             if (autoEdit) {
                 root._openInEditor(clean, name);
                 return;
