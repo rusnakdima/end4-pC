@@ -22,10 +22,13 @@ import generate_keybinds as gen  # noqa: E402
 MODMASK = {'SHIFT': 1, 'CTRL': 4, 'ALT': 8, 'SUPER': 64, 'META': 16}
 RUNTIME_ONLY_IDS = frozenset({'bind', 'bind-2'})
 UNSAFE_TOKENS = (
-    'lock screen', 'lock session', 'shutdown', 'reboot', 'poweroff',
-    'power off', 'sleep', 'suspend', 'hibernate', 'logout', 'log out',
-    'reload theme', 'reload shell',
+    'lock screen', 'lock session', 'session: lock', 'shutdown', 'shut down',
+    'reboot', 'poweroff', 'power off', 'sleep', 'suspend', 'hibernate',
+    'logout', 'log out', 'reload theme', 'reload shell',
 )
+DANGEROUS_CMD = re.compile(
+    r'\b(loginctl\s+lock-session|systemctl\s+(poweroff|suspend|hibernate|reboot)'
+    r'|loginctl\s+(poweroff|suspend|hibernate|reboot)|hyprctl\s+reload)\b', re.I)
 SHELL_BUILTINS = frozenset({'true', 'false', 'command', 'echo', 'printf', 'test', '['})
 
 
@@ -48,7 +51,9 @@ def live_key(bind):
 
 def _is_unsafe(bind):
     text = (bind.get('description') or '').lower()
-    return any(token in text for token in UNSAFE_TOKENS)
+    command = (bind.get('dispatch') or {}).get('command') or ''
+    return (any(token in text for token in UNSAFE_TOKENS)
+            or bool(DANGEROUS_CMD.search(command)))
 
 
 def classify_binds(catalog, overlay, live_binds, runtime_only_ids=RUNTIME_ONLY_IDS):
@@ -257,7 +262,8 @@ def audit(args=None):
             issues.append(f'hyprctl configerrors: {errors[:200]}')
 
     lua = (_read_text(opts.main_lua, issues) + '\n' + _read_text(opts.custom_lua, issues))
-    issues.extend(audit_global_targets(lua, registered))
+    if not opts.skip_live:
+        issues.extend(audit_global_targets(lua, registered))
     for cid in commands:
         target = f'quickshell:runCommand:{cid}'
         if not opts.skip_live and target not in registered:

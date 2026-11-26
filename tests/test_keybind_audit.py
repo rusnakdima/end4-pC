@@ -1,8 +1,11 @@
 """Unit tests for the read-only keybind audit (no live Hyprland calls)."""
 import importlib.util
+import io
+import json
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -84,6 +87,31 @@ class AuditTests(unittest.TestCase):
         issues = self.ka.audit_live_binds(effective, [])
         self.assertTrue(any('x' in i and 'SUPER + A' in i for i in issues), issues)
         self.assertEqual(self.ka.audit_live_binds([], LIVE_BINDS), [])
+
+    def test_real_session_binds_are_unsafe_to_test(self):
+        catalog = json.loads((ROOT / 'defaults/hyprland/keybinds.json').read_text())
+        result = self.ka.classify_binds(catalog, {}, None)
+        for bid in ('session', 'session-2', 'session-3', 'bind-26'):
+            self.assertEqual(result[bid]['category'], 'unsafe-to-test', bid)
+
+    def test_offline_mode_does_not_report_unregistered_targets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = {name: os.path.join(tmp, name + '.json') for name in ('catalog', 'overlay', 'commands')}
+            Path(paths['catalog']).write_text(json.dumps(CATALOG))
+            Path(paths['overlay']).write_text('{}')
+            Path(paths['commands']).write_text('{}')
+            lua = os.path.join(tmp, 'keybinds.lua')
+            Path(lua).write_text('hl.bind("SUPER + D", hl.dsp.global("quickshell:foo"), nil)\n')
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = self.ka.audit([
+                    '--catalog', paths['catalog'], '--overlay', paths['overlay'],
+                    '--commands', paths['commands'], '--main-lua', lua,
+                    '--custom-lua', lua, '--home', tmp, '--repo', str(ROOT),
+                    '--skip-live',
+                ])
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertNotIn('unregistered global shortcut target', out.getvalue())
 
     def test_combo_key_matches_keycode_binds(self):
         self.assertEqual(self.ka.combo_key('SUPER + code:82'), (64, 82))
