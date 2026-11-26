@@ -201,7 +201,11 @@ Singleton {
     readonly property var commandActionIndex: {
         const out = [];
         const seen = new Set();
-        for (const entry of KeybindCommands.commandEntries(root.effectiveBinds)) {
+        // A disabled catalog bind is hidden from effectiveBinds, but its
+        // command must stay in the picker so the user can bind it again.
+        // Read the frozen catalog and the overlay adds directly instead.
+        const sources = (root.catalog?.binds ?? []).concat(root.overlay?.adds ?? []);
+        for (const entry of KeybindCommands.commandEntries(sources)) {
             const key = entry.command + "\u0000" + entry.label;
             if (seen.has(key)) continue;
             seen.add(key);

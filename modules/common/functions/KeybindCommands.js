@@ -28,6 +28,18 @@ function commandEntries(binds) {
     return out;
 }
 
+// An effective bind from KeybindStore has no sourcePath for an overlay add,
+// so the service's source lookup cannot find it. Match the overlay entry by
+// id first; only catalog binds need the source-path lookup.
+function sourceEntryFor(bind, entries, entryForSource) {
+    const id = String(bind?.id ?? "");
+    if (id !== "") {
+        const entry = (entries ?? []).find(item => String(item?.id ?? "") === id) ?? null;
+        if (entry !== null) return entry;
+    }
+    return entryForSource(bind) ?? null;
+}
+
 // An overlay add owns its generated command entry: removing the add drops the
 // command too. A catalog bind is frozen, so only its bind can be disabled;
 // the generated command stays and can be reused by a new bind.

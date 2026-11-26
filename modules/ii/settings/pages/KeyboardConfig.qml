@@ -778,8 +778,10 @@ ContentPage {
     // their generated command entry, so removing the add drops both; a frozen
     // catalog bind can only be disabled, leaving its command in the picker.
     function deleteCommandBind(bind) {
-        const plan = KeybindCommands.deletePlan(
-            bind, candidate => ManagedKeybinds.entryForSource(candidate));
+        const entry = KeybindCommands.sourceEntryFor(
+            bind, ManagedKeybinds.entries,
+            candidate => ManagedKeybinds.entryForSource(candidate));
+        const plan = KeybindCommands.deletePlan(bind, () => entry);
         if (plan === null || plan.id === "") {
             page.captureError = page.formErrorMessage("not-found");
             return false;
