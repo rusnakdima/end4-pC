@@ -16,12 +16,14 @@ TestCase {
     property var savedStyle: ""
     property var savedTarget: null
     property var savedPageInstance: null
+    property var savedSettingsOpen: false
     property var content: null
 
     function init() {
         testCase.savedStyle = Config.options.settings.style;
         testCase.savedTarget = GlobalStates.settingsTarget;
         testCase.savedPageInstance = GlobalStates.currentPageInstance;
+        testCase.savedSettingsOpen = GlobalStates.settingsOpen;
         Config.options.settings.style = "categories";
         const component = Qt.createComponent("modules/ii/settings/CategoriesSettingsContent.qml");
         compare(component.status, Component.Ready, "CategoriesSettingsContent failed to load: " + component.errorString());
@@ -34,6 +36,7 @@ TestCase {
         Config.options.settings.style = testCase.savedStyle;
         GlobalStates.settingsTarget = testCase.savedTarget;
         GlobalStates.currentPageInstance = testCase.savedPageInstance;
+        GlobalStates.settingsOpen = testCase.savedSettingsOpen;
     }
 
     function test_category_rail_has_five_entries() {
@@ -81,5 +84,23 @@ TestCase {
         compare(testCase.content.activeLoaderCount, 1);
         testCase.content.back();
         compare(testCase.content.activeLoaderCount, 0);
+    }
+
+    function test_search_breadcrumb_shows_category_path() {
+        const component = Qt.createComponent("modules/ii/settings/SettingsSearchPane.qml");
+        compare(component.status, Component.Ready, "SettingsSearchPane failed to load: " + component.errorString());
+        const pane = component.createObject(null);
+        verify(pane !== null, "SettingsSearchPane could not be created");
+        pane.query = "keyboard";
+        pane.runSearch();
+        const result = pane.results.find(r => r.pageId === "keyboard" && r.kind === "page");
+        verify(result !== undefined, "keyboard page search result is missing");
+        compare(pane.breadcrumbOf(result), "System › Keyboard");
+        verify(pane.accept(result), "accepting the keyboard result failed");
+        // The already-open content consumes and clears settingsTarget, so
+        // assert the resulting page selection instead of the transient target.
+        tryVerify(() => testCase.content.selectedPageId === "keyboard", 3000);
+        compare(testCase.content.selectedCategory, "System");
+        pane.destroy();
     }
 }

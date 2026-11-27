@@ -80,10 +80,21 @@ Rectangle {
     function breadcrumbOf(result) {
         if (!result)
             return "";
+        // Show where the hit lives in the categorized layout: category › page,
+        // then section/subsection for option and keybind rows. Derived at
+        // display time from SettingsPages so the index stays flat and the
+        // other styles' search rows keep their data unchanged.
+        const page = SettingsPages.byId(result.pageId);
+        const pageName = result.pageName ?? page?.name ?? "";
+        const useCategories = Config.options.settings.style === "categories";
+        const category = useCategories ? (page?.category ?? "") : "";
+        const categoryPath = category
+            ? category + " › " + pageName
+            : (pageName || Translation.tr("Settings"));
         if (result.kind === "page")
-            return Translation.tr("Settings");
+            return categoryPath;
         const withSection = result.kind === "option" || result.kind === "keybind";
-        return [result.pageName, withSection ? result.section : "", withSection ? result.subsection : ""]
+        return [categoryPath, withSection ? result.section : "", withSection ? result.subsection : ""]
             .filter(part => part).join(" › ");
     }
 
