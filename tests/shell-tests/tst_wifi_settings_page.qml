@@ -49,4 +49,11 @@ TestCase {
         verify(typeof testCase.page.disconnectNetwork === "function",
             "the page has no disconnect action");
     }
+
+    function test_available_rows_use_the_full_network_item() {
+        // The right-pane item owns the password prompt and failure state;
+        // the settings page must reuse it instead of a bare connect button.
+        verify(String(testCase.page.availableRowSource).indexOf("WifiNetworkItem.qml") >= 0,
+            "available networks must use the full WifiNetworkItem delegate");
+    }
 }

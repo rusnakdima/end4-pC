@@ -18,26 +18,45 @@ ContentPage {
     readonly property var nearbySectionItem: nearbySection
     readonly property var enabledSwitchItem: enabledSwitch
     readonly property var emptyStateItem: emptyState
+    readonly property var errorLabelItem: errorLabel
+
+    // Writable so the hosted tests can exercise the empty/error states without
+    // talking to a real adapter. Defaults follow the service in production.
+    property var connectedDevices: BluetoothStatus.connectedDevices
+    property var pairedDevices: BluetoothStatus.pairedButNotConnectedDevices
+    property var nearbyDevices: BluetoothStatus.unpairedDevices
+    property string actionError: ""
+
+    Connections {
+        target: BluetoothStatus
+        function onLastActionErrorChanged() {
+            page.actionError = BluetoothStatus.lastActionError;
+        }
+    }
 
     // Thin wrappers keep the page testable and give every row the same write
     // path the right-pane dialog uses.
     function connectDevice(device) {
         if (device === null || device === undefined) return;
+        page.actionError = "";
         BluetoothStatus.runAction("connect", device.address);
     }
 
     function disconnectDevice(device) {
         if (device === null || device === undefined) return;
+        page.actionError = "";
         BluetoothStatus.runAction("disconnect", device.address);
     }
 
     function pairDevice(device) {
         if (device === null || device === undefined) return;
+        page.actionError = "";
         BluetoothStatus.runAction("pair", device.address);
     }
 
     function forgetDevice(device) {
         if (device === null || device === undefined) return;
+        page.actionError = "";
         BluetoothStatus.runAction("forget", device.address);
     }
 
@@ -94,10 +113,20 @@ ContentPage {
                 spacing: 6
 
                 StyledText {
+                    id: errorLabel
+                    objectName: "bluetoothActionError"
+                    Layout.fillWidth: true
+                    visible: page.actionError !== ""
+                    text: page.actionError
+                    color: Appearance.colors.colError
+                    font.pixelSize: Appearance.font.pixelSize.small
+                }
+
+                StyledText {
                     id: emptyState
                     objectName: "bluetoothEmptyState"
                     Layout.fillWidth: true
-                    visible: BluetoothStatus.friendlyDeviceList.length === 0
+                    visible: page.connectedDevices.length + page.pairedDevices.length === 0
                     text: BluetoothStatus.enabled
                         ? Translation.tr("No paired devices. Discover devices to pair one.")
                         : Translation.tr("Bluetooth is off. Turn it on to see devices.")
@@ -106,17 +135,14 @@ ContentPage {
                 }
 
                 Repeater {
-                    model: [
-                        ...BluetoothStatus.connectedDevices,
-                        ...BluetoothStatus.pairedButNotConnectedDevices
-                    ]
+                    model: [...page.connectedDevices, ...page.pairedDevices]
                     delegate: RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
 
                         MaterialSymbol {
                             iconSize: 20
-                            text: modelData.icon !== "" ? modelData.icon : "bluetooth"
+                            text: (modelData.icon ?? "") !== "" ? modelData.icon : "bluetooth"
                             color: Appearance.colors.colOnSurface
                         }
                         ColumnLayout {
@@ -124,14 +150,14 @@ ContentPage {
                             spacing: 2
                             StyledText {
                                 Layout.fillWidth: true
-                                text: modelData.name !== "" ? modelData.name : modelData.address
+                                text: (modelData.name ?? "") !== "" ? modelData.name : (modelData.address ?? "")
                                 color: Appearance.colors.colOnSurface
                                 font.pixelSize: Appearance.font.pixelSize.normal
                                 elide: Text.ElideRight
                             }
                             StyledText {
-                                visible: modelData.batteryAvailable
-                                text: modelData.battery + "%"
+                                visible: !!modelData.batteryAvailable
+                                text: (modelData.battery ?? 0) + "%"
                                 color: Appearance.colors.colOnSurfaceVariant
                                 font.pixelSize: Appearance.font.pixelSize.small
                             }
@@ -184,25 +210,25 @@ ContentPage {
 
                 StyledText {
                     Layout.fillWidth: true
-                    visible: BluetoothStatus.unpairedDevices.length === 0
+                    visible: page.nearbyDevices.length === 0
                     text: Translation.tr("No nearby devices found")
                     color: Appearance.colors.colOnSurfaceVariant
                     font.pixelSize: Appearance.font.pixelSize.small
                 }
 
                 Repeater {
-                    model: BluetoothStatus.unpairedDevices
+                    model: page.nearbyDevices
                     delegate: RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
                         MaterialSymbol {
                             iconSize: 20
-                            text: modelData.icon !== "" ? modelData.icon : "bluetooth"
+                            text: (modelData.icon ?? "") !== "" ? modelData.icon : "bluetooth"
                             color: Appearance.colors.colOnSurface
                         }
                         StyledText {
                             Layout.fillWidth: true
-                            text: modelData.name !== "" ? modelData.name : modelData.address
+                            text: (modelData.name ?? "") !== "" ? modelData.name : (modelData.address ?? "")
                             color: Appearance.colors.colOnSurface
                             font.pixelSize: Appearance.font.pixelSize.normal
                             elide: Text.ElideRight

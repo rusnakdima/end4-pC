@@ -19,6 +19,10 @@ ContentPage {
     readonly property var enabledSwitchItem: enabledSwitch
     readonly property var emptyStateItem: emptyState
 
+    // The right-pane item already owns the password prompt and the failure
+    // state; the settings rows reuse it rather than duplicating that logic.
+    readonly property url availableRowSource: Qt.resolvedUrl("../../sidebarRight/wifiNetworks/WifiNetworkItem.qml")
+
     // Thin wrappers keep the page testable without touching NetworkManager and
     // give every row the same write path the right-pane dialog uses.
     function connectNetwork(ap) {
@@ -93,41 +97,11 @@ ContentPage {
 
                 Repeater {
                     model: Network.friendlyWifiNetworks
-                    delegate: RippleButton {
+                    delegate: Loader {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 42
-                        buttonRadius: Appearance.rounding.small
-                        colBackground: ColorUtils.transparentize(Appearance.colors.colLayer2, 0.7)
-                        enabled: !Network.wifiConnecting
-                        onClicked: page.connectNetwork(modelData)
-                        contentItem: RowLayout {
-                            spacing: 10
-                            MaterialSymbol {
-                                Layout.preferredWidth: 22
-                                iconSize: 20
-                                text: modelData.active ? "wifi" : "wifi_2_bar"
-                                color: Appearance.colors.colOnSurface
-                            }
-                            StyledText {
-                                Layout.fillWidth: true
-                                text: modelData.ssid ?? Translation.tr("Hidden network")
-                                color: Appearance.colors.colOnSurface
-                                font.pixelSize: Appearance.font.pixelSize.normal
-                                elide: Text.ElideRight
-                            }
-                            MaterialSymbol {
-                                iconSize: 18
-                                visible: !!modelData.protected || !!modelData.secured
-                                text: "lock"
-                                color: Appearance.colors.colOnSurfaceVariant
-                            }
-                            MaterialSymbol {
-                                iconSize: 18
-                                visible: !!modelData.active
-                                text: "check"
-                                color: Appearance.colors.colPrimary
-                            }
-                        }
+                        Layout.preferredHeight: 48
+                        source: page.availableRowSource
+                        onLoaded: item.wifiNetwork = modelData
                     }
                 }
             }

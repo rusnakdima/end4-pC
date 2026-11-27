@@ -24,6 +24,10 @@ Singleton {
     property var shapedFallbackDevices: []
     property var deviceCache: ({})
     property string fallbackSignature: ""
+    // Failures of connect/pair/forget/power actions, surfaced in Settings and
+    // the right pane. The polling state process must stay separate so an
+    // action error never overwrites the device list.
+    property string lastActionError: ""
     // The helper has been heard from at least once. Availability must not
     // depend on a successful query: when BlueZ is fully down the BT toggle is
     // still shown, just off (the agreed tradeoff), so the user can act on it.
@@ -131,8 +135,10 @@ Singleton {
             default: break;
             }
         }
-        if (args.length > 0)
-            stateProc.exec(["python3", "-I", root.helperScript, ...args]);
+        if (args.length > 0) {
+            root.lastActionError = "";
+            actionProc.exec(["python3", "-I", root.helperScript, ...args]);
+        }
     }
 
     function runAction(action, address) {
@@ -183,6 +189,24 @@ Singleton {
 
     function togglePower() {
         root.setPower(!root.enabled);
+    }
+
+    Process {
+        id: actionProc
+        stdout: SplitParser {
+            onRead: line => {
+                if (line.trim().length > 0) root.lastActionError = line.trim();
+            }
+        }
+        stderr: SplitParser {
+            onRead: line => {
+                if (line.trim().length > 0) root.lastActionError = line.trim();
+            }
+        }
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode !== 0 && root.lastActionError === "")
+                root.lastActionError = "Bluetooth action failed.";
+        }
     }
 
     Process {

@@ -46,4 +46,26 @@ TestCase {
         verify(typeof testCase.page.pairDevice === "function", "no pair action");
         verify(typeof testCase.page.forgetDevice === "function", "no forget action");
     }
+
+    function test_paired_empty_state_ignores_nearby_only_devices() {
+        const nearby = [{ address: "AA:BB", name: "Nearby", paired: false, connected: false }];
+        testCase.page.connectedDevices = [];
+        testCase.page.pairedDevices = [];
+        testCase.page.nearbyDevices = nearby;
+        verify(testCase.page.emptyStateItem.visible,
+            "a nearby-only device must not leave the paired card blank");
+        testCase.page.pairedDevices = [{ address: "CC:DD", name: "Paired", paired: true, connected: false }];
+        verify(!testCase.page.emptyStateItem.visible,
+            "a paired device must hide the paired empty state");
+    }
+
+    function test_action_errors_are_surfaced() {
+        verify(typeof BluetoothStatus.lastActionError === "string",
+            "the Bluetooth service must expose action errors");
+        const label = testCase.page.errorLabelItem;
+        verify(label !== null, "the page has no action-error label");
+        testCase.page.actionError = "Pair failed";
+        verify(label.visible, "a failed action must show an error");
+        compare(label.text, "Pair failed");
+    }
 }
