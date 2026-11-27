@@ -1,5 +1,7 @@
 # PiP LMB grab and working theme reload Implementation Plan
 
+> **Superseded (2026-11-27):** The PiP plain-LMB grab described here was removed by user request. Hyprland/browser native hold-LMB-to-move is now the only behavior; see `2026-11-27-pip-lmb-removal.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make plain LMB grab/move the PiP window without breaking LMB elsewhere, and make CTRL+SUPER+R actually reload the live shell.

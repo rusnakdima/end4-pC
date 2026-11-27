@@ -1,5 +1,7 @@
 # PiP LMB grab and theme-reload bind — short design
 
+> **Superseded (2026-11-27):** The PiP plain-LMB grab described here was removed by user request. Hyprland/browser native hold-LMB-to-move is now the only behavior; see `2026-11-27-pip-lmb-removal.md`.
+
 ## Intent
 Make a plain left-button press grab/move the PiP window, and make `CTRL+SUPER+R` actually reload the running theme. Keep normal LMB selection and clicks everywhere else.
 
