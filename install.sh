@@ -59,6 +59,8 @@ Options:
   --no-app-theming-qt-env    Do not set QT_STYLE_OVERRIDE=kvantum.
   --no-app-theming-hook      Do not install matugen post-hooks.
   --no-theme-packages        Do not install compatible GTK/Qt theme packages.
+  --reload-sddm              Ask to restart SDDM after deploying the greeter
+                             (interactive only; ends active sessions).
   --                         Stop option parsing.
 
 Environment (flags take precedence; binary variables must be 0 or 1):
@@ -70,6 +72,7 @@ Environment (flags take precedence; binary variables must be 0 or 1):
   APP_THEMING_QT_ENV=0       Same as --no-app-theming-qt-env.
   APP_THEMING_MATUGEN_HOOK=0 Same as --no-app-theming-hook.
   APP_THEME_PACKAGES=0       Same as --no-theme-packages.
+  RELOAD_SDDM=1              Same as --reload-sddm.
   VNC_MODE / VNC_AUDIO / VNC_AUTOLOGIN  Same as the matching flags.
 
 Examples:
@@ -104,6 +107,7 @@ APP_THEMING="${APP_THEMING:-1}"
 APP_THEMING_QT_ENV="${APP_THEMING_QT_ENV:-1}"
 APP_THEMING_MATUGEN_HOOK="${APP_THEMING_MATUGEN_HOOK:-1}"
 APP_THEME_PACKAGES="${APP_THEME_PACKAGES:-1}"
+RELOAD_SDDM="${RELOAD_SDDM:-0}"
 OFFLINE="${OFFLINE:-0}"
 OFFLINE_WHEELHOUSE="${OFFLINE_WHEELHOUSE:-}"
 SKIP_STT_MODEL_DOWNLOAD="${SKIP_STT_MODEL_DOWNLOAD:-0}"
@@ -133,6 +137,7 @@ while (($#)); do
         --no-app-theming-qt-env) APP_THEMING_QT_ENV=0 ;;
         --no-app-theming-hook) APP_THEMING_MATUGEN_HOOK=0 ;;
         --no-theme-packages) APP_THEME_PACKAGES=0 ;;
+        --reload-sddm) RELOAD_SDDM=1 ;;
         --) shift; break ;;
         -*) die "unknown option: $1 (try --help)" ;;
         *) die "unexpected argument: $1 (try --help)" ;;
@@ -148,6 +153,7 @@ check_01 APP_THEMING "$APP_THEMING"
 check_01 APP_THEMING_QT_ENV "$APP_THEMING_QT_ENV"
 check_01 APP_THEMING_MATUGEN_HOOK "$APP_THEMING_MATUGEN_HOOK"
 check_01 APP_THEME_PACKAGES "$APP_THEME_PACKAGES"
+check_01 RELOAD_SDDM "$RELOAD_SDDM"
 check_01 VNC_AUTOLOGIN "$VNC_AUTOLOGIN"
 case "$VNC_MODE" in full|mirror) ;; *) die "invalid --vnc-mode '$VNC_MODE' (expected full or mirror)" ;; esac
 case "$VNC_AUDIO" in sunshine|none) ;; *) die "invalid --vnc-audio '$VNC_AUDIO' (expected sunshine or none)" ;; esac
@@ -908,53 +914,19 @@ JSONEOF
 # SDDM greeter
 # ---------------------------------------------------------------------------
 install_sddm_theme() {
-    echo "[install] Installing SDDM greeter..."
-    local theme_src="$SOURCE_DIR/sddm/ii-sddm-theme"
-    local theme_dest="/usr/share/sddm/themes/ii-sddm-theme"
     require_sudo "the SDDM greeter" || return 0
-    if [[ ! -f "$theme_src/Components/Input.qml" ]]; then
-        echo "[install] ERROR: sddm/ii-sddm-theme is an uninitialized git submodule." >&2
-        echo "[install]        Run: git submodule update --init --recursive" >&2
-        return 0
-    fi
-
-    if [[ ! -d "$theme_dest" ]]; then
-        $ELEVATE cp -r "$theme_src" "$theme_dest"
-        # A submodule keeps its .git as a *file* pointing at the parent repo's
-        # modules dir; never install that pointer into the system theme.
-        $ELEVATE rm -f "$theme_dest/.git"
-    else
-        # Update code in place, but keep each device's generated state.
-        local PRESERVE_GENERATED=1
-        while IFS= read -r -d '' src; do
-            local rel="${src#"$theme_src"/}"
-            if [[ "$PRESERVE_GENERATED" == "1" ]]; then
-                case "$rel" in
-                    Components/Settings.qml|iiMatugen/Settings.qml|noMatugen/Settings.qml|Matugen/Settings.qml|Themes/ii-sddm.conf|Backgrounds/*)
-                        continue
-                        ;;
-                esac
-            fi
-            $ELEVATE mkdir -p "$theme_dest/$(dirname "$rel")"
-            $ELEVATE cp -f "$src" "$theme_dest/$rel"
-        done < <(find "$theme_src" -type f \
-            \( -name '*.qml' -o -name 'qmldir' -o -name '*.js' \
-               -o -name '*.sh' -o -name '*.py' \
-               -o -name 'PATCHES.md' \) -print0)
-    fi
-
-    # Ensure backgrounds dir exists
-    $ELEVATE mkdir -p "$theme_dest/Backgrounds"
-
-    # Copy current wallpaper to SDDM backgrounds if not already synced
-    if [[ -f "$TARGET_HOME/.config/ii-sddm-theme/last_static_wallpaper" ]]; then
-        local cur_wp
-        cur_wp=$(cat "$TARGET_HOME/.config/ii-sddm-theme/last_static_wallpaper" 2>/dev/null || echo "")
-        if [[ -n "$cur_wp" && -f "$cur_wp" ]]; then
-            local ext="${cur_wp##*.}"
-            $ELEVATE cp --preserve=mode,timestamps "$cur_wp" "$theme_dest/Backgrounds/background.${ext}"
-        fi
-    fi
+    echo "[install] Installing SDDM greeter..."
+    # The shared helper also registers the theme in /etc/sddm.conf.d, which
+    # the old installer never did. It merges that drop-in instead of
+    # overwriting it, so per-machine keys survive a reinstall.
+    local args=()
+    [[ $RELOAD_SDDM -eq 1 ]] && args+=(--reload-sddm)
+    env END4PC_SOURCE_DIR="$SOURCE_DIR" \
+        END4PC_TARGET_HOME="$TARGET_HOME" \
+        END4PC_TARGET_USER="$TARGET_USER" \
+        END4PC_ELEVATE="$ELEVATE" \
+        "$SOURCE_DIR/scripts/sddm/deploy-theme.sh" "${args[@]}" \
+        || echo "[install] WARN: SDDM theme deployment failed" >&2
 }
 
 # ---------------------------------------------------------------------------
@@ -965,13 +937,10 @@ install_wallpaper_sync() {
     local sync_dest="$TARGET_HOME/.config/ii-sddm-theme/sddm-wallpaper-sync.sh"
     mkdir -p "$(dirname "$sync_dest")"
 
-    # Use the sddm-wallpaper-sync.sh from current user's home if it exists,
-    # otherwise embed the known good version.
-    if [[ -f "$TARGET_HOME/.config/ii-sddm-theme/sddm-wallpaper-sync.sh" ]]; then
-        # Skip if source and destination are the same (already deployed)
-        if [[ "$TARGET_HOME/.config/ii-sddm-theme/sddm-wallpaper-sync.sh" != "$sync_dest" ]]; then
-            cp "$TARGET_HOME/.config/ii-sddm-theme/sddm-wallpaper-sync.sh" "$sync_dest"
-        fi
+    # An already deployed hook is user-owned state (it may carry local edits),
+    # so never overwrite it with the embedded copy.
+    if [[ -f "$sync_dest" ]]; then
+        echo "[install] Keeping existing wallpaper sync hook: $sync_dest"
     else
         # Write the known-good version directly, but atomically: the script is
         # executed by the wallpaper switch, so it must never be observed
@@ -982,15 +951,9 @@ install_wallpaper_sync() {
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ -n "${SUDO_USER:-}" ]; then
-    USER_HOME="$(eval echo "~$SUDO_USER")"
-elif [ -n "${XDG_RUNTIME_DIR:-}" ]; then
-    runtime_uid=$(basename "$XDG_RUNTIME_DIR")
-    USER_HOME="$(getent passwd "$runtime_uid" | cut -d: -f6)" || true
-    [ -z "$USER_HOME" ] || [ ! -d "$USER_HOME" ] && USER_HOME="/home/dmitriy"
-else
-    USER_HOME="/home/dmitriy"
-fi
+# The installer injects the resolved target home below. Deriving it at
+# runtime from sudo/XDG used to fall back to a developer-specific path.
+USER_HOME="__END4PC_TARGET_HOME__"
 CONFIG_FILE="$USER_HOME/.config/illogical-impulse/config.json"
 LAST_STATIC_MARKER="$USER_HOME/.config/ii-sddm-theme/last_static_wallpaper"
 SDDM_THEME="/usr/share/sddm/themes/ii-sddm-theme"
@@ -1059,6 +1022,11 @@ main() {
 
 main "$@"
 SYNC_EOF
+        # Inline the resolved target home; escaping keeps unusual paths safe.
+        escaped_home=${TARGET_HOME//\\/\\\\}
+        escaped_home=${escaped_home//&/\\&}
+        escaped_home=${escaped_home//|/\\|}
+        sed -i "s|__END4PC_TARGET_HOME__|$escaped_home|" "$tmp"
         chmod 755 "$tmp"
         mv -f "$tmp" "$sync_dest"
     fi

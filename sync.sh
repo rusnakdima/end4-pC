@@ -51,6 +51,10 @@ Options:
                        files and the command bridge, then reload.
   --user NAME          Target NAME's config instead of the detected user.
   --user=NAME          Same, single-token form.
+  --sddm               Also deploy the SDDM greeter and register it as the
+                       current theme (opt-in: rewrites /etc/sddm.conf.d).
+  --reload-sddm        With a TTY, ask to restart SDDM after --sddm. This ends
+                       active graphical sessions; opt-in.
   --                   Stop option parsing.
 
 User edits in the live tree are saved to <qs_dest>/.sync/user/ and restored
@@ -71,6 +75,8 @@ do_reload=1
 do_check=0
 force=0
 keybinds_only=0
+do_sddm=0
+reload_sddm=0
 target_user_override=""
 while (($#)); do
     case "$1" in
@@ -81,6 +87,8 @@ while (($#)); do
         --check)      do_check=1 ;;
         --force)      force=1 ;;
         --keybinds-only) keybinds_only=1 ;;
+        --sddm) do_sddm=1 ;;
+        --reload-sddm) reload_sddm=1 ;;
         --user=*) target_user_override="${1#*=}" ;;
         --user) need_value "$@"; target_user_override="$2"; shift ;;
         --) shift; break ;;
@@ -160,12 +168,6 @@ session_locked() {
     local st=""
     if command -v qs >/dev/null 2>&1; then
         # qs needs the compositor env to discover the running instance;
-        # sync.sh is often run from bare/ssh shells, so fill the gaps
-        # (the mid-lock incident happened exactly that way).
-        st=$(env HYPRLAND_INSTANCE_SIGNATURE="${HYPRLAND_INSTANCE_SIGNATURE:-$(ls -t /run/user/"$(id -u)"/hypr/ 2>/dev/null | head -1)}" \
-                 WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}" \
-                 XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" \
-                 qs -c end4-pC ipc call lock status 2>/dev/null) || st=""
     fi
     [[ "$st" == "locked" ]] && return 0
     pgrep -x hyprlock >/dev/null 2>&1 && return 0
@@ -974,6 +976,20 @@ fi
 if [[ $dry_run -eq 1 ]]; then
     echo "-- dry run finished --"
     exit $fail
+fi
+
+# Greeter deployment is opt-in: syncing the desktop theme must not silently
+# rewrite a system config. The helper merges the drop-in and never clobbers
+# unrelated SDDM keys.
+if [[ $do_sddm -eq 1 ]]; then
+    echo "== SDDM greeter =="
+    local_args=()
+    [[ $reload_sddm -eq 1 ]] && local_args+=(--reload-sddm)
+    env END4PC_SOURCE_DIR="$src" \
+        END4PC_TARGET_HOME="$TARGET_HOME" \
+        END4PC_TARGET_USER="$TARGET_USER" \
+        "$src/scripts/sddm/deploy-theme.sh" "${local_args[@]}" \
+        || { echo "  !! SDDM deployment failed" >&2; fail=1; }
 fi
 
 if [[ $do_reload -eq 1 ]]; then
