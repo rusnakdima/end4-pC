@@ -35,6 +35,16 @@ Item {
         if (SettingsPages.pagesInCategory(category).length === 0) return;
         root.selectedCategory = category;
         root.back();
+        root.ensureWidePage();
+    }
+
+    // A wide three-pane window has nowhere to show an empty selection, so it
+    // always opens the first page of the category. Narrow windows keep the
+    // page list until a page is tapped, then drill down with a back button.
+    function ensureWidePage() {
+        if (root.narrow || root.selectedPageId !== "") return;
+        const pages = SettingsPages.pagesInCategory(root.selectedCategory);
+        if (pages.length > 0) root.selectedPageId = pages[0].id;
     }
 
     function openPage(pageId) {
@@ -78,7 +88,10 @@ Item {
             root.goToTarget(pendingTarget);
             GlobalStates.settingsTarget = null;
         }
+        root.ensureWidePage();
     }
+
+    onNarrowChanged: root.ensureWidePage()
 
     Connections {
         target: GlobalStates

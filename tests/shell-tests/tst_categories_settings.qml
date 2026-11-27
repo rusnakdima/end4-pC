@@ -71,6 +71,15 @@ TestCase {
         verify(field !== null && field.visible, "the categories style needs a search field");
     }
 
+    function test_wide_layout_opens_the_first_page_of_the_selected_category() {
+        compare(testCase.content.selectedCategory, "Network & internet");
+        compare(testCase.content.selectedPageId, "wifi",
+            "a wide window must not leave the content pane blank");
+        verify(testCase.content.contentLoader.active, "the first page must be loaded");
+        testCase.content.selectCategory("Connected devices");
+        compare(testCase.content.selectedPageId, "bluetooth");
+    }
+
     function test_network_category_lists_and_loads_wifi() {
         testCase.content.selectCategory("Network & internet");
         compare(testCase.content.pageRepeater.count, 1);
