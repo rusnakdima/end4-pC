@@ -27,6 +27,8 @@ Singleton {
             { id: "general",    name: Translation.tr("General"),    icon: "browse",         file: "GeneralConfig.qml" },
             { id: "default-apps", name: Translation.tr("Default apps"), icon: "apps",        file: "DefaultAppsConfig.qml" },
             { id: "keyboard",   name: Translation.tr("Keyboard"),   icon: "keyboard",       file: "KeyboardConfig.qml" },
+            { id: "wifi",       name: Translation.tr("Wi-Fi"),      icon: "wifi",           file: "WifiConfig.qml" },
+            { id: "bluetooth",  name: Translation.tr("Bluetooth"),  icon: "bluetooth",      file: "BluetoothConfig.qml" },
             { id: "services",   name: Translation.tr("Services"),   icon: "settings",       file: "ServicesConfig.qml" },
             { id: "vnc",        name: Translation.tr("VNC"),        icon: "screen_share",   file: "VncConfig.qml" },
             { id: "cast",       name: Translation.tr("Cast"),       icon: "cast",           file: "CastConfig.qml" },

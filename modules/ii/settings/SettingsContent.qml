@@ -7,9 +7,9 @@ import Qt5Compat.GraphicalEffects
 import qs
 import qs.services
 import qs.modules.common
-import qs.modules.ii.settings.pages
 import qs.modules.common.widgets
 import qs.modules.common.functions as CF
+import "."
 
 Item {
     id: root

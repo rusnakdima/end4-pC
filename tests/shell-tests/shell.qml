@@ -52,7 +52,7 @@ ShellRoot {
         "tst_directories.qml", "tst_window_mode.qml", "tst_window_controls.qml",
         "tst_app_window_rules.qml", "tst_bind_overrides.qml",
         "tst_default_apps.qml", "tst_DefaultApps.qml",
-        "tst_default_apps_rows.qml",
+        "tst_default_apps_rows.qml", "tst_settings_deeplink.qml",
         "tst_managed_keybinds.qml",
         "tst_keybind_disable_store.qml",
         "tst_disabled_keybinds.qml",
