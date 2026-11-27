@@ -12,6 +12,13 @@ Singleton {
 
     property var entriesByPage: ({})
 
+    // Extra search words for pages whose visible title does not contain the
+    // terms people actually type ("wireless", "pair", ...).
+    readonly property var pageKeywords: ({
+        wifi: ["network", "wireless", "wifi"],
+        bluetooth: ["bluetooth", "pair"]
+    })
+
     readonly property var labelledTypes: [
         "ConfigSwitch", "ConfigSpinBox", "ConfigTextArea", "ConfigSelectionArray",
         "ConfigComboBox", "ConfigSlider", "ConfigSelectionShapeArray", "ConfigRow",
@@ -97,7 +104,8 @@ Singleton {
             for (const entry of (root.entriesByPage[page.id] ?? [])) {
                 const label = Translation.tr(entry.label);
                 const section = Translation.tr(entry.section);
-                const haystack = (label + " " + entry.label + " " + section + " " + pageName).toLowerCase();
+                const keywords = (root.pageKeywords[page.id] ?? []).join(" ");
+                const haystack = (label + " " + entry.label + " " + section + " " + pageName + " " + keywords).toLowerCase();
                 if (!tokens.every(t => haystack.includes(t))) continue;
                 const labelScore = Math.max(
                     root.scoreText(label.toLowerCase(), tokens),
