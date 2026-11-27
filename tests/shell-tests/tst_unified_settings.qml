@@ -128,4 +128,10 @@ TestCase {
         compare(testCase.content.categoryListPaneItem.color.a, 1, "category rail must not let content show through");
         compare(testCase.content.pageListPane.color.a, 1, "page list must not let content show through");
     }
+
+    function test_content_pane_is_opaque_and_themed() {
+        const pane = testCase.content.contentPaneItem;
+        compare(pane.color.a, 1, "content pane must not let the desktop show through");
+        compare(String(pane.color), String(Appearance.colors.colLayer0Base), "content pane must use a themed opaque surface");
+    }
 }

@@ -434,7 +434,7 @@ Item {
                     top: parent.top
                     bottom: parent.bottom
                 }
-                color: "transparent"
+                color: Appearance.colors.colLayer0Base
                 radius: Appearance.rounding.normal
                 clip: true
 
