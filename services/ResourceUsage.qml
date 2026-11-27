@@ -7,7 +7,8 @@ import Quickshell
 import Quickshell.Io
 
 /**
- * Simple polled resource usage service with RAM, Swap, CPU and Disk usage.
+ * Simple polled resource usage service with RAM, Swap, Zram, CPU and Disk usage.
+ * Swap figures exclude zram devices so the two are reported separately.
  */
 Singleton {
     id: root
@@ -19,17 +20,23 @@ Singleton {
     property real swapFree: 0
     property real swapUsed: swapTotal - swapFree
     property real swapUsedPercentage: swapTotal > 0 ? (swapUsed / swapTotal) : 0
+    property real zramTotal: 0
+    property real zramFree: 0
+    property real zramUsed: zramTotal - zramFree
+    property real zramUsedPercentage: zramTotal > 0 ? (zramUsed / zramTotal) : 0
     property real cpuUsage: 0
     property var previousCpuStats
 
     property string maxAvailableMemoryString: kbToGbString(ResourceUsage.memoryTotal)
     property string maxAvailableSwapString: kbToGbString(ResourceUsage.swapTotal)
+    property string maxAvailableZramString: kbToGbString(ResourceUsage.zramTotal)
     property string maxAvailableCpuString: "--"
 
     readonly property int historyLength: Config?.options.resources.historyLength ?? 60
     property list<real> cpuUsageHistory: []
     property list<real> memoryUsageHistory: []
     property list<real> swapUsageHistory: []
+    property list<real> zramUsageHistory: []
 
     property real cpuTemp: 0
 
@@ -114,6 +121,10 @@ Singleton {
         swapUsageHistory = [...swapUsageHistory, swapUsedPercentage]
         if (swapUsageHistory.length > historyLength) swapUsageHistory.shift()
     }
+    function updateZramUsageHistory() {
+        zramUsageHistory = [...zramUsageHistory, zramUsedPercentage]
+        if (zramUsageHistory.length > historyLength) zramUsageHistory.shift()
+    }
     function updateCpuUsageHistory() {
         cpuUsageHistory = [...cpuUsageHistory, cpuUsage]
         if (cpuUsageHistory.length > historyLength) cpuUsageHistory.shift()
@@ -125,6 +136,7 @@ Singleton {
     function updateHistories() {
         updateMemoryUsageHistory()
         updateSwapUsageHistory()
+        updateZramUsageHistory()
         updateCpuUsageHistory()
         updateDiskUsageHistory()
     }
@@ -136,6 +148,7 @@ Singleton {
         onTriggered: {
             fileMeminfo.reload()
             fileStat.reload()
+            fileSwaps.reload()
 
             if (root.thermalPath.length > 0) {
                 fileTemp.reload()
@@ -155,10 +168,28 @@ Singleton {
             root.diskTick++
 
             const textMeminfo = fileMeminfo.text()
+            const textSwaps = fileSwaps.text()
             memoryTotal = Number(textMeminfo.match(/MemTotal: *(\d+)/)?.[1] ?? 1)
             memoryFree  = Number(textMeminfo.match(/MemAvailable: *(\d+)/)?.[1] ?? 0)
-            swapTotal   = Number(textMeminfo.match(/SwapTotal: *(\d+)/)?.[1] ?? 1)
-            swapFree    = Number(textMeminfo.match(/SwapFree: *(\d+)/)?.[1] ?? 0)
+
+            // zram devices are backed by RAM but reported by the kernel as swap.
+            // Count them separately and subtract them so Swap means disk swap only.
+            let zramTotalKb = 0
+            let zramUsedKb = 0
+            for (const swapLine of textSwaps.trim().split("\n").slice(1)) {
+                const parts = swapLine.trim().split(/\s+/)
+                if (parts.length < 4 || !parts[0].startsWith("/dev/zram")) continue
+                zramTotalKb += Number(parts[2]) || 0
+                zramUsedKb  += Number(parts[3]) || 0
+            }
+            zramTotal = zramTotalKb
+            zramFree  = zramTotalKb - Math.min(zramTotalKb, zramUsedKb)
+
+            const memSwapTotal = Number(textMeminfo.match(/SwapTotal: *(\d+)/)?.[1] ?? 0)
+            const memSwapFree  = Number(textMeminfo.match(/SwapFree: *(\d+)/)?.[1] ?? 0)
+            swapTotal = Math.max(0, memSwapTotal - zramTotal)
+            const nonZramUsed = Math.max(0, (memSwapTotal - memSwapFree) - zramUsed)
+            swapFree  = swapTotal - Math.min(swapTotal, nonZramUsed)
 
             const textStat = fileStat.text()
             const cpuLine  = textStat.match(/^cpu\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/)
@@ -181,6 +212,7 @@ Singleton {
 
     FileView { id: fileMeminfo; path: "/proc/meminfo" }
     FileView { id: fileStat;    path: "/proc/stat" }
+    FileView { id: fileSwaps;   path: "/proc/swaps" }
 
     Process {
         id: findCpuMaxFreqProc

@@ -618,12 +618,14 @@ Singleton {
                     property string style: "filled"
                     property bool showValue: false
                     property bool alwaysShowSwap: false
+                    property bool alwaysShowZram: false
                     property bool alwaysShowCpu: true
                     property bool alwaysShowCpuTemp: false
                     property bool alwaysShowDisk: false
                     property bool alwaysShowRam: true
                     property int memoryWarningThreshold: 95
                     property int swapWarningThreshold: 85
+                    property int zramWarningThreshold: 85
                     property int cpuWarningThreshold: 90
                 }
 

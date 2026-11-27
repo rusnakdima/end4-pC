@@ -35,6 +35,12 @@ StyledOverlayWidget {
             "history": ResourceUsage.swapUsageHistory,
             "maxAvailableString": ResourceUsage.maxAvailableSwapString
         },
+        {
+            "icon": "compress",
+            "name": Translation.tr("Zram"),
+            "history": ResourceUsage.zramUsageHistory,
+            "maxAvailableString": ResourceUsage.maxAvailableZramString
+        },
     ]
 
     contentItem: OverlayBackground {

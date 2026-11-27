@@ -66,6 +66,16 @@ BarWidgetSwitcherArea {
                 Layout.leftMargin: shown ? 6 : 0
                 warningThreshold: Config.options.bar.resources.swapWarningThreshold
             }
+            Resource {
+                contentColor: root.contentColor
+                contentColorOverridden: root.contentColorOverridden
+                iconName: "compress"
+                label: "ZRAM"
+                shown: Config.options.bar.resources.alwaysShowZram
+                percentage: ResourceUsage.zramUsedPercentage
+                Layout.leftMargin: shown ? 6 : 0
+                warningThreshold: Config.options.bar.resources.zramWarningThreshold
+            }
         }
     }
 
@@ -118,6 +128,16 @@ BarWidgetSwitcherArea {
                 percentage: ResourceUsage.swapUsedPercentage
                 Layout.leftMargin: shown ? 6 : 0
                 warningThreshold: Config.options.bar.resources.swapWarningThreshold
+            }
+            Resource {
+                contentColor: root.contentColor
+                contentColorOverridden: root.contentColorOverridden
+                iconName: "compress"
+                label: "ZRAM"
+                shown: Config.options.bar.resources.alwaysShowZram
+                percentage: ResourceUsage.zramUsedPercentage
+                Layout.leftMargin: shown ? 6 : 0
+                warningThreshold: Config.options.bar.resources.zramWarningThreshold
             }
         }
     }
@@ -178,6 +198,17 @@ BarWidgetSwitcherArea {
                 percentage: ResourceUsage.swapUsedPercentage
                 warningThreshold: Config.options.bar.resources.swapWarningThreshold
             }
+            Resource {
+                contentColor: root.contentColor
+                contentColorOverridden: root.contentColorOverridden
+                Layout.alignment: Qt.AlignHCenter
+                iconName: "compress"
+                label: "ZRAM"
+                vertical: true
+                visible: Config.options.bar.resources.alwaysShowZram
+                percentage: ResourceUsage.zramUsedPercentage
+                warningThreshold: Config.options.bar.resources.zramWarningThreshold
+            }
         }
     }
 
@@ -236,6 +267,17 @@ BarWidgetSwitcherArea {
                 visible: Config.options.bar.resources.alwaysShowSwap
                 percentage: ResourceUsage.swapUsedPercentage
                 warningThreshold: Config.options.bar.resources.swapWarningThreshold
+            }
+            Resource {
+                contentColor: root.contentColor
+                contentColorOverridden: root.contentColorOverridden
+                Layout.alignment: Qt.AlignHCenter
+                iconName: "compress"
+                label: "ZRAM"
+                vertical: true
+                visible: Config.options.bar.resources.alwaysShowZram
+                percentage: ResourceUsage.zramUsedPercentage
+                warningThreshold: Config.options.bar.resources.zramWarningThreshold
             }
         }
     }

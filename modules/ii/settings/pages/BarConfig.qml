@@ -786,6 +786,12 @@ ContentPage {
                     checked: Config.options.bar.resources.alwaysShowSwap
                     onCheckedChanged: { Config.options.bar.resources.alwaysShowSwap = checked }
                 }
+                ConfigSwitch {
+                    buttonIcon: "compress"
+                    text: Translation.tr("Zram")
+                    checked: Config.options.bar.resources.alwaysShowZram
+                    onCheckedChanged: { Config.options.bar.resources.alwaysShowZram = checked }
+                }
                 ConfigSelectionArray {
                     text: Translation.tr("Style")
                     icon: "style"

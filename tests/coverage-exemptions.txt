@@ -26,7 +26,7 @@ services/Notes.qml|notes are persisted as JSON in the user's notes file, and the
 services/Notifications.qml|it owns the live D-Bus notification server and persists the notifications of the running session into the notification file of the user, so the list it groups and serialises only means something against a running notification server
 services/PeripheralBattery.qml|it classifies the UPower devices the shell enumerates and fires notifications for them, so the thresholds only mean something against real device states
 services/PresetsOnline.qml|it lists and downloads presets from GitHub and renders their thumbnails with curl and magick, and every helper belongs to that live fetch-and-cache pipeline
-services/ResourceUsage.qml|the RAM, swap, CPU and disk figures it reports are read from /proc and the system tools on the running machine
+services/ResourceUsage.qml|the RAM, swap, zram, CPU and disk figures it reports are read from /proc and the system tools on the running machine
 services/SessionWarnings.qml|it detects a running package manager or download by probing live processes and the filesystem
 services/SettingsPages.qml|it is a declarative table of settings pages whose entries point at the QML files on disk, and byId only looks a page up in that table
 services/SettingsQuickControls.qml|the control table is declarative and every control reads and writes the live config path or the live Hyprland option it names; the lookup resolves a control by progressively shorter page, section and label keys
@@ -97,7 +97,7 @@ modules/ii/bar/ClockWidgetPopup.qml|it prints the todos and the uptime that the 
 modules/ii/bar/HyprlandXkbIndicator.qml|it shows the keyboard layout the running compositor reports, so the flag it draws is the one of the live session
 modules/ii/bar/NetworkSpeedPopup.qml|it formats the rates and totals that the live Network service samples from nmcli
 modules/ii/bar/NetworkSpeed.qml|it samples /proc/net/dev on the running machine and shows the deltas between the samples
-modules/ii/bar/ResourcesPopup.qml|it prints the RAM, CPU, swap and disk figures that the live ResourceUsage service samples, and its formatter only divides by 1024 twice
+modules/ii/bar/ResourcesPopup.qml|it prints the RAM, CPU, swap, zram and disk figures that the live ResourceUsage service samples, and its formatter only divides by 1024 twice
 modules/ii/bar/SysTrayItem.qml|it activates the live tray item and opens the menu that the tray service hands it
 modules/ii/bar/SysTrayMenu.qml|it renders the live D-Bus menu of a tray item and manages the submenu stack of that menu
 modules/ii/bar/SysTray.qml|it shows the live system tray items and grabs the compositor focus for their menus

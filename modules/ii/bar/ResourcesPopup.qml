@@ -49,6 +49,14 @@ StyledPopup {
             }
 
             ResourceCard {
+                label: "Zram"
+                iconText: "compress"
+                iconShape: MaterialShape.Shape.ClamShell
+                value: ResourceUsage.zramUsedPercentage
+                sublabel: root.formatKB(ResourceUsage.zramUsed) + " / " + root.formatKB(ResourceUsage.zramTotal)
+            }
+
+            ResourceCard {
                 label: "Disk"
                 iconText: "hard_drive"
                 iconShape: MaterialShape.Shape.Circle

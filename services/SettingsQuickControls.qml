@@ -379,6 +379,7 @@ Singleton {
         "bar:RAM": root.optionSwitch("bar.resources.alwaysShowRam"),
         "bar:Disk": root.optionSwitch("bar.resources.alwaysShowDisk"),
         "bar:Swap": root.optionSwitch("bar.resources.alwaysShowSwap"),
+        "bar:Zram": root.optionSwitch("bar.resources.alwaysShowZram"),
         "bar:Show Percentage": root.optionSwitch("bar.resources.showValue"),
         "bar:Pin media controls": root.optionSwitch("bar.media.alwaysVisible"),
         "bar:Show only title": root.optionSwitch("bar.media.onlyTitle"),
