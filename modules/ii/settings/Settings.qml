@@ -170,9 +170,7 @@ Scope {
                     anchors.fill: parent
                     active: window.settled
 
-                    source: Config.options.settings.style === "categories"
-                        ? "CategoriesSettingsContent.qml"
-                        : "SettingsContent.qml"
+                    source: "UnifiedSettingsContent.qml"
                 }
             }
         }

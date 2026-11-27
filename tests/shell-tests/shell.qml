@@ -54,7 +54,7 @@ ShellRoot {
         "tst_default_apps.qml", "tst_DefaultApps.qml",
         "tst_default_apps_rows.qml", "tst_settings_deeplink.qml",
         "tst_wifi_settings_page.qml", "tst_bluetooth_settings_page.qml",
-        "tst_categories_settings.qml", "tst_settings_tab.qml",
+        "tst_categories_settings.qml", "tst_unified_settings.qml", "tst_settings_tab.qml",
         "tst_managed_keybinds.qml",
         "tst_keybind_disable_store.qml",
         "tst_disabled_keybinds.qml",
