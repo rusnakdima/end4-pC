@@ -68,4 +68,16 @@ TestCase {
         verify(label.visible, "a failed action must show an error");
         compare(label.text, "Pair failed");
     }
+
+    function test_action_output_json_is_not_treated_as_an_error() {
+        const saved = BluetoothStatus.lastActionError;
+        BluetoothStatus.lastActionError = "";
+        BluetoothStatus.applyActionOutput('{"available":true,"enabled":true}');
+        compare(BluetoothStatus.lastActionError, "",
+            "the helper's state JSON must not become an error");
+        BluetoothStatus.applyActionOutput('{"available":true,"lastActionError":"Pair failed"}');
+        compare(BluetoothStatus.lastActionError, "Pair failed",
+            "an explicit action failure must be surfaced");
+        BluetoothStatus.lastActionError = saved;
+    }
 }

@@ -14,6 +14,7 @@ import qs.modules.common
 import qs.modules.common.widgets
 import "."
 import "../../common/functions/SettingsEscape.js" as SettingsEscape
+import "../../common/functions/SettingsTabDecision.js" as SettingsTabDecision
 
 Scope {
     id: root
@@ -140,23 +141,24 @@ Scope {
                 }
 
                 Keys.onTabPressed: (event) => {
-                    const pages = contentLoader.item?.pages ?? [];
-                    if (pages.length > 0) {
-                        const item = contentLoader.item;
-                        item.currentPage = (item.currentPage + 1) % pages.length;
+                    const item = contentLoader.item;
+                    const decision = SettingsTabDecision.decide(item?.pages ?? [], item?.currentPage ?? 0, "forward");
+                    if (decision.accept) {
+                        item.currentPage = decision.currentPage;
                         item.showingProfile = false;
                     }
-                    event.accepted = true;
+                    // Styles without a page list keep native focus navigation.
+                    event.accepted = decision.accept;
                 }
 
                 Keys.onBacktabPressed: (event) => {
-                    const pages = contentLoader.item?.pages ?? [];
-                    if (pages.length > 0) {
-                        const item = contentLoader.item;
-                        item.currentPage = (item.currentPage - 1 + pages.length) % pages.length;
+                    const item = contentLoader.item;
+                    const decision = SettingsTabDecision.decide(item?.pages ?? [], item?.currentPage ?? 0, "back");
+                    if (decision.accept) {
+                        item.currentPage = decision.currentPage;
                         item.showingProfile = false;
                     }
-                    event.accepted = true;
+                    event.accepted = decision.accept;
                 }
 
                 // Created once the window has a real size, the same way

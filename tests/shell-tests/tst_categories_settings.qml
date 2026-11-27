@@ -78,6 +78,25 @@ TestCase {
         compare(testCase.content.selectedPageId, "bluetooth");
     }
 
+    function test_cold_open_deep_link_is_consumed() {
+        // Production sets settingsTarget before settingsOpen; the window takes
+        // time to create this component, so a Connections-only consumer misses
+        // the change. Recreate the component with the target already pending.
+        testCase.content.destroy();
+        testCase.content = null;
+        // destroy() is deferred: let the old component's Connections go away
+        // before setting the pending target, or it consumes the change first.
+        testCase.wait(20);
+        GlobalStates.settingsTarget = { page: "wifi" };
+        const component = Qt.createComponent("modules/ii/settings/CategoriesSettingsContent.qml");
+        compare(component.status, Component.Ready, "CategoriesSettingsContent failed to load: " + component.errorString());
+        testCase.content = component.createObject(null, { width: 900, height: 600 });
+        verify(testCase.content !== null, "CategoriesSettingsContent could not be created");
+        compare(testCase.content.selectedPageId, "wifi");
+        compare(testCase.content.selectedCategory, "Network & internet");
+        compare(GlobalStates.settingsTarget, null);
+    }
+
     function test_only_one_content_loader_is_active() {
         testCase.content.selectCategory("Network & internet");
         testCase.content.openPage("wifi");

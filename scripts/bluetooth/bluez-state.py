@@ -21,8 +21,15 @@ import subprocess
 import sys
 
 
-def bluetoothctl(*args):
-    """Run one non-interactive bluetoothctl command; "" on any failure."""
+FAILURE_RE = re.compile(
+    r"\b(?:failed|failure|invalid|not available|no such device|permission denied|"
+    r"not supported|cannot be used)\b",
+    re.IGNORECASE,
+)
+
+
+def bluetoothctl_result(*args):
+    """Run one non-interactive command; report output and any failure text."""
     try:
         result = subprocess.run(
             ["bluetoothctl", "--timeout", "1", *args],
@@ -30,9 +37,18 @@ def bluetoothctl(*args):
             text=True,
             timeout=6,
         )
-        return result.stdout
-    except (OSError, subprocess.TimeoutExpired):
-        return ""
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"output": "", "error": str(exc) or "Bluetooth command failed."}
+    stdout = result.stdout or ""
+    stderr = (result.stderr or "").strip()
+    if result.returncode != 0 or stderr or FAILURE_RE.search(stdout):
+        return {"output": stdout, "error": stderr or stdout.strip() or "Bluetooth command failed."}
+    return {"output": stdout, "error": ""}
+
+
+def bluetoothctl(*args):
+    """Run one command for read-only queries; "" on any failure."""
+    return bluetoothctl_result(*args)["output"]
 
 
 def field(text, key):
@@ -112,10 +128,16 @@ def main():
     parser.add_argument("--forget", metavar="ADDR")
     args = parser.parse_args()
 
+    action_error = ""
     for command in actions_from_args(args):
-        bluetoothctl(*command)
+        outcome = bluetoothctl_result(*command)
+        if outcome["error"]:
+            action_error = outcome["error"]
+            break
 
-    sys.stdout.write(json.dumps(query(), separators=(",", ":")) + "\n")
+    payload = query()
+    payload["lastActionError"] = action_error
+    sys.stdout.write(json.dumps(payload, separators=(",", ":")) + "\n")
 
 
 if __name__ == "__main__":

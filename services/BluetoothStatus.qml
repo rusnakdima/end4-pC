@@ -191,12 +191,20 @@ Singleton {
         root.setPower(!root.enabled);
     }
 
+    // The helper always emits a state JSON line after an action; only its
+    // explicit lastActionError field is an error. Treating the whole line as
+    // one hid real failures behind a raw JSON dump in the Settings page.
+    function applyActionOutput(line) {
+        try {
+            const parsed = JSON.parse(line.trim());
+            if (parsed.lastActionError) root.lastActionError = parsed.lastActionError;
+        } catch (e) {}
+    }
+
     Process {
         id: actionProc
         stdout: SplitParser {
-            onRead: line => {
-                if (line.trim().length > 0) root.lastActionError = line.trim();
-            }
+            onRead: line => root.applyActionOutput(line)
         }
         stderr: SplitParser {
             onRead: line => {

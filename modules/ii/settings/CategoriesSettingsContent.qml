@@ -68,6 +68,17 @@ Item {
         settingsSearch.forceActiveFocus();
     }
 
+    // A tile sets settingsTarget before settingsOpen; the window creates this
+    // component a few frames later, so the Connections handler below misses
+    // that change. Resolve a target that was already pending at creation here.
+    Component.onCompleted: {
+        const pendingTarget = GlobalStates.settingsTarget;
+        if (pendingTarget) {
+            root.goToTarget(pendingTarget);
+            GlobalStates.settingsTarget = null;
+        }
+    }
+
     Connections {
         target: GlobalStates
         function onSettingsTargetChanged() {
