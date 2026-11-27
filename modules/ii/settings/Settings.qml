@@ -12,6 +12,7 @@ import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
+import "."
 import "../../common/functions/SettingsEscape.js" as SettingsEscape
 
 Scope {
@@ -167,7 +168,9 @@ Scope {
                     anchors.fill: parent
                     active: window.settled
 
-                    sourceComponent: SettingsContent {}
+                    source: Config.options.settings.style === "categories"
+                        ? "CategoriesSettingsContent.qml"
+                        : "SettingsContent.qml"
                 }
             }
         }
