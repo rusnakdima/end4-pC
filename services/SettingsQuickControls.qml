@@ -231,7 +231,8 @@ Singleton {
         "interface:Transparency/Content": root.optionSlider("appearance.transparency.contentTransparency", 0, 1, [0.57]),
         "interface:Settings Panel/Style": root.optionSelect("settings.style", [
             { displayName: Translation.tr("Default"), icon: "settings_panorama", value: "default" },
-            { displayName: Translation.tr("Minimal"), icon: "settings_heart", value: "minimal" }
+            { displayName: Translation.tr("Minimal"), icon: "settings_heart", value: "minimal" },
+            { displayName: Translation.tr("Categories"), icon: "category", value: "categories" }
         ]),
         "interface:Settings Panel/Sidebar": root.optionSelect("settings.sidebarDensity", [
             { displayName: Translation.tr("Default"), icon: "unfold_more", value: "default" },

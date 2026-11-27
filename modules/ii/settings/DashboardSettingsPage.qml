@@ -100,7 +100,7 @@ Item {
     }
 
     readonly property var heroEntries: [
-        { id: "hero:style", type: "style", title: Translation.tr("Settings panel style"), section: Translation.tr("Interface"), kw: "settings panel style default minimal dashboard window overlay" },
+        { id: "hero:style", type: "style", title: Translation.tr("Settings panel style"), section: Translation.tr("Interface"), kw: "settings panel style default minimal dashboard categories window overlay" },
         { id: "hero:blur", type: "toggle", key: "desktop:Blur wall", title: Translation.tr("Blur wallpaper"), icon: "blur_on", section: Translation.tr("Desktop"), kw: "blur wallpaper background" },
         { id: "hero:transparency", type: "toggle", key: "interface:Transparency/Enable", title: Translation.tr("Transparency"), icon: "opacity", section: Translation.tr("Interface"), kw: "transparency opacity" },
         { id: "hero:glass", type: "toggle", key: "interface:Glassy UI", title: Translation.tr("Glassy UI"), icon: "water_drop", section: Translation.tr("Interface"), kw: "glassy ui liquid glass frosted blur translucent ui panels bar sidebars dock widgets" },
