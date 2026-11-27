@@ -29,6 +29,8 @@ Item {
     readonly property var breadcrumbItem: breadcrumb
     readonly property var pageListPane: pageListRectangle
     readonly property var searchFieldItem: categorySearchField
+    readonly property var contentPaneItem: contentPane
+    readonly property var categoryListPaneItem: categoryListRectangle
     readonly property int activeLoaderCount: pageContentLoader.active ? 1 : 0
 
     function selectCategory(category) {
@@ -113,6 +115,7 @@ Item {
 
         // Category rail (macOS Settings-like icon sidebar).
         Rectangle {
+            id: categoryListRectangle
             Layout.preferredWidth: 180
             Layout.fillHeight: true
             color: Appearance.colors.colLayer1
@@ -269,10 +272,14 @@ Item {
 
         // Single lazy page pane.
         Rectangle {
+            id: contentPane
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: !root.narrow || root.selectedPageId !== ""
-            color: Appearance.colors.colSurface
+            // ContentPage widgets paint their own themed cards. Painting a
+            // separate pane colour here used an undefined token and produced
+            // a white rectangle with washed-out text in the dark scheme.
+            color: "transparent"
             radius: Appearance.rounding.normal
 
             ColumnLayout {

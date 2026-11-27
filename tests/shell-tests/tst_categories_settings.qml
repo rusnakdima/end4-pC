@@ -155,4 +155,70 @@ TestCase {
         compare(testCase.content.selectedCategory, "System");
         pane.destroy();
     }
+
+    function luminance(value) {
+        const match = String(value).match(/^#([0-9a-f]{6}|[0-9a-f]{8})$/i);
+        if (match === null) return -1;
+        const hex = match[1].length === 8 ? match[1].slice(0, 6) : match[1];
+        const channels = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+        const linear = channels.map(c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+    }
+
+    function contrast(background, foreground) {
+        const a = luminance(background);
+        const b = luminance(foreground);
+        if (a < 0 || b < 0) return 0;
+        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    }
+
+    function test_nav_surfaces_follow_the_active_color_scheme() {
+        const rail = testCase.content.categoryListPaneItem;
+        const list = testCase.content.pageListPane;
+        verify(rail !== null, "the category rail is missing");
+        verify(list !== null, "the page list is missing");
+        const savedBackground = Appearance.m3colors.m3background;
+        const savedOnBackground = Appearance.m3colors.m3onBackground;
+        const schemes = [
+            { background: "#141313", onBackground: "#e6e1e1" },
+            { background: "#fffbfe", onBackground: "#1d1b20" }
+        ];
+        for (const scheme of schemes) {
+            Appearance.m3colors.m3background = scheme.background;
+            Appearance.m3colors.m3onBackground = scheme.onBackground;
+            compare(String(rail.color), String(Appearance.colors.colLayer1),
+                "the category rail must use the themed layer colour");
+            compare(String(list.color), String(Appearance.colors.colLayer0),
+                "the page list must use the themed layer colour");
+        }
+        Appearance.m3colors.m3background = savedBackground;
+        Appearance.m3colors.m3onBackground = savedOnBackground;
+    }
+
+    function test_content_pane_uses_transparent_themed_background() {
+        const pane = testCase.content.contentPaneItem;
+        verify(pane !== null, "the categories content pane is missing");
+        compare(pane.color.a, 0,
+            "the content pane must not paint its own surface over themed cards");
+    }
+
+    function test_layer0_contrast_holds_in_dark_and_light_schemes() {
+        const savedBackground = Appearance.m3colors.m3background;
+        const savedOnBackground = Appearance.m3colors.m3onBackground;
+        const schemes = [
+            { name: "dark", background: "#141313", onBackground: "#e6e1e1" },
+            { name: "light", background: "#fffbfe", onBackground: "#1d1b20" }
+        ];
+        const ratios = [];
+        for (const scheme of schemes) {
+            Appearance.m3colors.m3background = scheme.background;
+            Appearance.m3colors.m3onBackground = scheme.onBackground;
+            ratios.push({ name: scheme.name,
+                ratio: contrast(Appearance.colors.colLayer0Base, Appearance.colors.colOnLayer0) });
+        }
+        Appearance.m3colors.m3background = savedBackground;
+        Appearance.m3colors.m3onBackground = savedOnBackground;
+        for (const entry of ratios)
+            verify(entry.ratio >= 4.5, entry.name + " layer0 contrast too low: " + entry.ratio);
+    }
 }
