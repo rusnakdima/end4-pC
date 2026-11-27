@@ -47,6 +47,30 @@ TestCase {
         compare(labels.join(" | "), "Network & internet | Connected devices | Personalization | System | About");
     }
 
+    function test_nav_items_are_packed_from_top_without_gaps() {
+        const rail = testCase.content.categoryRepeater;
+        verify(rail.itemAt(0).y < 80, "category items must start at the top");
+        for (let i = 1; i < rail.count; i++) {
+            const previous = rail.itemAt(i - 1);
+            const current = rail.itemAt(i);
+            verify(current.y - (previous.y + previous.height) <= 12,
+                "category items must not be spread over the full height");
+        }
+        const pages = testCase.content.pageRepeater;
+        verify(pages.itemAt(0).y < 80, "page items must start at the top");
+        for (let i = 1; i < pages.count; i++) {
+            const previous = pages.itemAt(i - 1);
+            const current = pages.itemAt(i);
+            verify(current.y - (previous.y + previous.height) <= 12,
+                "page items must not be spread over the full height");
+        }
+    }
+
+    function test_category_rail_has_a_search_field() {
+        const field = testCase.content.searchFieldItem;
+        verify(field !== null && field.visible, "the categories style needs a search field");
+    }
+
     function test_network_category_lists_and_loads_wifi() {
         testCase.content.selectCategory("Network & internet");
         compare(testCase.content.pageRepeater.count, 1);

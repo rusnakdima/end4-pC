@@ -28,6 +28,7 @@ Item {
     readonly property var backButtonItem: backButton
     readonly property var breadcrumbItem: breadcrumb
     readonly property var pageListPane: pageListRectangle
+    readonly property var searchFieldItem: categorySearchField
     readonly property int activeLoaderCount: pageContentLoader.active ? 1 : 0
 
     function selectCategory(category) {
@@ -104,24 +105,42 @@ Item {
             color: Appearance.colors.colLayer1
             radius: Appearance.rounding.normal
 
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 12
+            // A plain Column packs the items from the top down. ColumnLayout
+            // distributes the leftover height into the gaps, which spread the
+            // navigation items across the whole window.
+            Column {
+                anchors {
+                    fill: parent
+                    margins: 12
+                }
                 spacing: 6
 
-                SettingsSearchPane {
-                    id: settingsSearch
-                    Layout.fillWidth: true
+                ToolbarTextField {
+                    id: categorySearchField
+                    width: parent.width
+                    placeholderText: Translation.tr("Search settings…")
+                    onAccepted: settingsSearch.acceptCurrent()
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Down) {
+                            settingsSearch.moveSelection(1);
+                            event.accepted = true;
+                        } else if (event.key === Qt.Key_Up) {
+                            settingsSearch.moveSelection(-1);
+                            event.accepted = true;
+                        } else if (event.key === Qt.Key_Escape && text !== "") {
+                            text = "";
+                            event.accepted = true;
+                        }
+                    }
                 }
 
                 Repeater {
                     id: categoryListRepeater
                     model: SettingsPages.categories
                     delegate: RippleButton {
-                        id: categoryButton
                         buttonText: modelData
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 40
+                        width: parent.width
+                        height: 40
                         buttonRadius: Appearance.rounding.small
                         colBackground: root.selectedCategory === modelData
                             ? Appearance.colors.colPrimaryContainer
@@ -159,6 +178,21 @@ Item {
                     }
                 }
             }
+
+            // Overhang the rail instead of pushing the navigation items down.
+            SettingsSearchPane {
+                id: settingsSearch
+                z: 3
+                anchors {
+                    top: categorySearchField.bottom
+                    topMargin: 6
+                    left: parent.left
+                    right: parent.right
+                    margins: 12
+                }
+                query: categorySearchField.text
+                onDismissed: categorySearchField.text = ""
+            }
         }
 
         // Page list — hidden on narrow windows while a page is open.
@@ -171,13 +205,15 @@ Item {
             color: Appearance.colors.colLayer0
             radius: Appearance.rounding.normal
 
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 12
+            Column {
+                anchors {
+                    fill: parent
+                    margins: 12
+                }
                 spacing: 6
 
                 StyledText {
-                    Layout.fillWidth: true
+                    width: parent.width
                     visible: !root.narrow || root.selectedPageId === ""
                     text: root.selectedCategory
                     color: Appearance.colors.colOnSurfaceVariant
@@ -189,8 +225,8 @@ Item {
                     model: SettingsPages.pagesInCategory(root.selectedCategory)
                     delegate: RippleButton {
                         buttonText: modelData.name
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 40
+                        width: parent.width
+                        height: 40
                         buttonRadius: Appearance.rounding.small
                         colBackground: root.selectedPageId === modelData.id
                             ? Appearance.colors.colSecondaryContainer
