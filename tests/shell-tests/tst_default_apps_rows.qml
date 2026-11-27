@@ -21,6 +21,7 @@ TestCase {
     property var savedOverlay: null
     property var savedEntries: null
     property string savedPath: ""
+    property string savedFilter: ""
     property string generatorOutput: ""
     property string readerText: ""
     property bool readerLoaded: false
@@ -30,6 +31,7 @@ TestCase {
         testCase.savedOverlay = ManagedKeybinds.overlay;
         testCase.savedEntries = ManagedKeybinds.entries;
         testCase.savedPath = ManagedKeybinds.keybindsPath;
+        testCase.savedFilter = GlobalStates.keybindFilter ?? "";
         const add = KeybindStore.makeAdd({
             name: "Test App",
             category: "Apps",
@@ -44,6 +46,7 @@ TestCase {
         ManagedKeybinds.overlay = testCase.savedOverlay;
         ManagedKeybinds.entries = testCase.savedEntries;
         ManagedKeybinds.keybindsPath = testCase.savedPath;
+        GlobalStates.keybindFilter = testCase.savedFilter;
     }
 
     // Writes go through FileView.setText -> generator Process. Let both
@@ -168,6 +171,55 @@ TestCase {
         id: generatorProc
         stdout: StdioCollector { onStreamFinished: testCase.generatorOutput = text }
         stderr: StdioCollector { onStreamFinished: testCase.generatorOutput += text }
+    }
+
+    function test_keyboard_pane_edits_app_keybinds() {
+        const component = Qt.createComponent("modules/ii/settings/pages/KeyboardConfig.qml");
+        compare(component.status, Component.Ready,
+            "Keyboard page failed to load: " + component.errorString());
+        const page = component.createObject(null);
+        verify(page !== null, "Keyboard page failed to instantiate");
+        verify(page.appsFilter === true || page.appsFilter === false,
+            "the Keyboard page has no Apps filter");
+
+        ManagedKeybinds.keybindsPath = testCase.tempPath;
+        GlobalStates.keybindFilter = "Apps";
+        verify(page.appsFilter, "the Apps filter was not recognised");
+        compare(page.visibleManaged.length, 1, "non-app entries survived the Apps filter");
+        compare(page.visibleManaged[0].id, "test-app-1");
+
+        page.openEditForm(ManagedKeybinds.entries.find(entry => entry.id === "test-app-1"));
+        compare(page.formCategory, "Apps");
+        page.formCombo = "SUPER + CTRL + T";
+        page.saveForm();
+        compare(page.formError, "");
+        const edited = DefaultApps.appRows.find(row => row.id === "test-app-1");
+        verify(edited !== undefined, "the edited app is missing from Default apps");
+        compare(edited.combo, "SUPER + CTRL + T");
+
+        page.openCreateForm();
+        compare(page.formCategory, "Apps", "new keybinds from the Apps filter default to Apps");
+        page.formName = "Keyboard App";
+        page.formCommand = "keyboardapp --flag";
+        page.formCombo = "SUPER + SHIFT + K";
+        page.saveForm();
+        compare(page.formError, "");
+        const created = DefaultApps.appRows.find(row => row.label === "Keyboard App");
+        verify(created !== undefined, "the new app is missing from Default apps");
+        compare(created.custom, true);
+        compare(created.combo, "SUPER + SHIFT + K");
+
+        settleWrites();
+        page.destroy();
+    }
+
+    function test_every_app_row_has_the_fields_the_pane_renders() {
+        const rows = DefaultApps.appRows;
+        for (const row of rows) {
+            verify(row.appName !== undefined, "row " + row.id + " has no appName");
+            verify(row.appIcon !== undefined, "row " + row.id + " has no appIcon");
+            verify(row.label !== undefined, "row " + row.id + " has no label");
+        }
     }
 
     function test_builtin_roles_are_all_present_once() {

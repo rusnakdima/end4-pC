@@ -55,6 +55,17 @@ ContentPage {
     readonly property bool keybindFiltering:
         String(GlobalStates.keybindFilter ?? "").trim() !== ""
 
+    // Apps are just another category in the keybind overlay, so the existing
+    // free-text filter already finds them. This shortcut makes "set a keybind
+    // for an app" a one-click action without a second list of entries.
+    readonly property bool appsFilter:
+        String(GlobalStates.keybindFilter ?? "").trim().toLowerCase() === "apps"
+
+    function toggleAppsFilter() {
+        GlobalStates.keybindFilter = page.appsFilter ? "" : "Apps";
+        keybindFilterField.forceActiveFocus();
+    }
+
     readonly property var visibleManaged: CF.StringUtils.filterByQueryWithCombos(
         ManagedKeybinds.editableEntries, GlobalStates.keybindFilter,
         ["name", "category", "command"], ["combo"])
@@ -701,7 +712,7 @@ ContentPage {
         page.formEditId = "";
         page.formOriginalCombo = "";
         page.formName = "";
-        page.formCategory = "";
+        page.formCategory = page.appsFilter ? "Apps" : "";
         page.formCommand = "";
         page.formCombo = "";
         page.formError = "";
@@ -1059,6 +1070,17 @@ ContentPage {
                                 text: "search"
                                 iconSize: Appearance.font.pixelSize.large
                                 color: Appearance.colors.colOnSurfaceVariant
+                            }
+
+                            IconToolbarButton {
+                                text: "apps"
+                                colBackground: page.appsFilter
+                                    ? Appearance.colors.colPrimaryContainer
+                                    : Appearance.colors.colLayer2
+                                onClicked: page.toggleAppsFilter()
+                                StyledToolTip {
+                                    text: Translation.tr("Show only app keybinds")
+                                }
                             }
 
                             ToolbarTextField {
