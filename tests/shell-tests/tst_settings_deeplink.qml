@@ -15,12 +15,16 @@ TestCase {
     property var savedTarget: null
     property var content: null
 
-    function init() {
-        testCase.savedTarget = GlobalStates.settingsTarget;
+    function openContent() {
         const component = Qt.createComponent("modules/ii/settings/SettingsContent.qml");
         compare(component.status, Component.Ready, "SettingsContent failed to load: " + component.errorString());
         testCase.content = component.createObject(null);
         verify(testCase.content !== null, "SettingsContent could not be created");
+    }
+
+    function init() {
+        testCase.savedTarget = GlobalStates.settingsTarget;
+        openContent();
     }
 
     function cleanup() {
@@ -48,5 +52,23 @@ TestCase {
     function test_deeplink_works_when_settings_was_closed() {
         GlobalStates.settingsOpen = false;
         deepLink("wifi");
+    }
+
+    function test_pending_deeplink_is_consumed_when_content_is_created() {
+        // The right-pane tile sets the target BEFORE the window creates the
+        // settings content, so onSettingsTargetChanged never fires for it.
+        testCase.content.destroy();
+        testCase.content = null;
+        // destroy() completes on the next event-loop turn; until then the old
+        // content's Connections would consume the target before the new one
+        // is created.
+        wait(10);
+        GlobalStates.settingsOpen = false;
+        GlobalStates.settingsTarget = { page: "bluetooth" };
+        openContent();
+        const expected = SettingsPages.pages.findIndex(p => p.id === "bluetooth");
+        verify(expected >= 0, "bluetooth is not registered");
+        compare(testCase.content.currentPage, expected);
+        compare(GlobalStates.settingsTarget, null);
     }
 }

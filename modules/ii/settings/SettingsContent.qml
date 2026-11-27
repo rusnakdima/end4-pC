@@ -101,6 +101,15 @@ Item {
     property int preloadUpTo: -1
 
     Component.onCompleted: {
+        // A tile can set settingsTarget before the panel has been created
+        // (settingsOpen flips from false to true in the same gesture). The
+        // Connections handler below only sees changes after creation, so
+        // resolve any pending target here as well.
+        const pendingTarget = GlobalStates.settingsTarget
+        if (pendingTarget) {
+            root.goToTarget(pendingTarget)
+            GlobalStates.settingsTarget = null
+        }
         Config.readWriteDelay = 0
         // The settings pages used to own this: with the Hyprland pane split
         // into six pages, each of them asking would race six rewrites of the
