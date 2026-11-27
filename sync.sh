@@ -168,6 +168,25 @@ session_locked() {
     local st=""
     if command -v qs >/dev/null 2>&1; then
         # qs needs the compositor env to discover the running instance;
+        # sync.sh is often run from bare/ssh shells or with sudo, so derive
+        # the runtime dir from the TARGET user, not from root's id. The
+        # mid-lock incident happened exactly that way.
+        local runtime_dir="/run/user/$(id -u "$TARGET_USER" 2>/dev/null || echo 0)"
+        [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" ]] && runtime_dir="$XDG_RUNTIME_DIR"
+        local signature="${HYPRLAND_INSTANCE_SIGNATURE:-}"
+        if [[ -z "$signature" ]]; then
+            local d
+            for d in "$runtime_dir"/hypr/*; do
+                [[ -d "$d" ]] && signature="$(basename "$d")"
+            done
+        fi
+        local -a env_args=("WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}" "XDG_RUNTIME_DIR=$runtime_dir")
+        [[ -n "$signature" ]] && env_args+=("HYPRLAND_INSTANCE_SIGNATURE=$signature")
+        if [[ $(id -u) -eq 0 && "$TARGET_USER" != root ]] && command -v runuser >/dev/null 2>&1; then
+            st=$(runuser -u "$TARGET_USER" -- env "${env_args[@]}" qs -c end4-pC ipc call lock status 2>/dev/null) || st=""
+        else
+            st=$(env "${env_args[@]}" qs -c end4-pC ipc call lock status 2>/dev/null) || st=""
+        fi
     fi
     [[ "$st" == "locked" ]] && return 0
     pgrep -x hyprlock >/dev/null 2>&1 && return 0
@@ -1009,6 +1028,13 @@ if [[ $do_reload -eq 1 ]]; then
         echo "!! hyprctl not found; run \`hyprctl reload\` yourself" >&2
         fail=1
     fi
+
+    # Hyprland reloading is not enough: the QML files are read by the running
+    # shell. Reload it through IPC, never by killing the process.
+    env END4PC_TARGET_HOME="$TARGET_HOME" \
+        END4PC_TARGET_USER="$TARGET_USER" \
+        "$src/scripts/hyprland/reload-shell.sh" \
+        || { echo "  !! shell reload failed" >&2; fail=1; }
 fi
 
 if command -v qs >/dev/null 2>&1 && qs -c end4-pC ipc show >/dev/null 2>&1; then

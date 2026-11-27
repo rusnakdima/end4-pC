@@ -59,6 +59,7 @@ Options:
   --no-app-theming-qt-env    Do not set QT_STYLE_OVERRIDE=kvantum.
   --no-app-theming-hook      Do not install matugen post-hooks.
   --no-theme-packages        Do not install compatible GTK/Qt theme packages.
+  --no-reload                Do not reload the running quickshell theme.
   --reload-sddm              Ask to restart SDDM after deploying the greeter
                              (interactive only; ends active sessions).
   --                         Stop option parsing.
@@ -72,6 +73,7 @@ Environment (flags take precedence; binary variables must be 0 or 1):
   APP_THEMING_QT_ENV=0       Same as --no-app-theming-qt-env.
   APP_THEMING_MATUGEN_HOOK=0 Same as --no-app-theming-hook.
   APP_THEME_PACKAGES=0       Same as --no-theme-packages.
+  RELOAD_SHELL=0             Same as --no-reload.
   RELOAD_SDDM=1              Same as --reload-sddm.
   VNC_MODE / VNC_AUDIO / VNC_AUTOLOGIN  Same as the matching flags.
 
@@ -107,6 +109,7 @@ APP_THEMING="${APP_THEMING:-1}"
 APP_THEMING_QT_ENV="${APP_THEMING_QT_ENV:-1}"
 APP_THEMING_MATUGEN_HOOK="${APP_THEMING_MATUGEN_HOOK:-1}"
 APP_THEME_PACKAGES="${APP_THEME_PACKAGES:-1}"
+RELOAD_SHELL="${RELOAD_SHELL:-1}"
 RELOAD_SDDM="${RELOAD_SDDM:-0}"
 OFFLINE="${OFFLINE:-0}"
 OFFLINE_WHEELHOUSE="${OFFLINE_WHEELHOUSE:-}"
@@ -137,6 +140,7 @@ while (($#)); do
         --no-app-theming-qt-env) APP_THEMING_QT_ENV=0 ;;
         --no-app-theming-hook) APP_THEMING_MATUGEN_HOOK=0 ;;
         --no-theme-packages) APP_THEME_PACKAGES=0 ;;
+        --no-reload) RELOAD_SHELL=0 ;;
         --reload-sddm) RELOAD_SDDM=1 ;;
         --) shift; break ;;
         -*) die "unknown option: $1 (try --help)" ;;
@@ -153,6 +157,7 @@ check_01 APP_THEMING "$APP_THEMING"
 check_01 APP_THEMING_QT_ENV "$APP_THEMING_QT_ENV"
 check_01 APP_THEMING_MATUGEN_HOOK "$APP_THEMING_MATUGEN_HOOK"
 check_01 APP_THEME_PACKAGES "$APP_THEME_PACKAGES"
+check_01 RELOAD_SHELL "$RELOAD_SHELL"
 check_01 RELOAD_SDDM "$RELOAD_SDDM"
 check_01 VNC_AUTOLOGIN "$VNC_AUTOLOGIN"
 case "$VNC_MODE" in full|mirror) ;; *) die "invalid --vnc-mode '$VNC_MODE' (expected full or mirror)" ;; esac
@@ -1223,6 +1228,7 @@ main() {
     echo "[install] Options: offline=$OFFLINE skip-checks=$SKIP_CHECKS"
     echo "[install]          window-buttons-kept=$((1 - DISABLE_WINDOW_BUTTONS)) app-theming=$APP_THEMING"
     echo "[install]          waydroid=$WITH_WAYDROID vnc=$WITH_VNC"
+    echo "[install]          reload-shell=$RELOAD_SHELL reload-sddm=$RELOAD_SDDM"
     if [[ $WITH_VNC -eq 1 ]]; then
         echo "[install]          vnc-mode=$VNC_MODE vnc-audio=$VNC_AUDIO vnc-autologin=$VNC_AUTOLOGIN"
     fi
@@ -1275,6 +1281,16 @@ main() {
             echo "[install] WARN: VNC setup failed — see [vnc] messages above." >&2
             echo "[install]       Rerun: ./optional/vnc/install-vnc.sh" >&2
         fi
+    fi
+
+    # Files are in place: ask the running shell to reload through IPC. Never
+    # kill it -- that would take the lock surface down. --no-reload skips this.
+    if [[ $RELOAD_SHELL -eq 1 ]]; then
+        echo "[install] Reloading quickshell theme..."
+        env END4PC_TARGET_HOME="$TARGET_HOME" \
+            END4PC_TARGET_USER="$TARGET_USER" \
+            "$SOURCE_DIR/scripts/hyprland/reload-shell.sh" \
+            || echo "[install] WARN: shell reload failed; use Super+/ to reload manually" >&2
     fi
 
     echo ""
