@@ -9,6 +9,7 @@ import qs.modules.common.widgets
 import qs.modules.common.functions
 import qs.modules.common.functions as CF
 import "../../../common/functions/DefaultAppsStore.js" as Store
+import "../../../common/functions/KeybindConflicts.js" as KeybindConflicts
 
 /**
  * Default apps = the app each quick-launch shortcut opens.
@@ -30,6 +31,10 @@ ContentPage {
     property string captureError: ""
     property string searchText: ""
     property bool showAllApps: false
+    property string addNameText: ""
+    property string addCommandText: ""
+    property string pendingAddName: ""
+    property string pendingAddCommand: ""
 
     // The ids behind the row being captured. All of a role's binds get the
     // same combination, so e.g. all three terminal shortcuts stay in step.
@@ -39,6 +44,63 @@ ContentPage {
         page.pickerRole = "";
         page.searchText = "";
         page.showAllApps = false;
+        page.addNameText = "";
+        page.addCommandText = "";
+    }
+
+    // The picker doubles as the Add app dialog. "__add__" means the selected
+    // app (or typed command) becomes a new overlay add instead of an override.
+    function startAdd() {
+        page.captureError = "";
+        page.pickerRole = "__add__";
+        page.searchText = "";
+        page.showAllApps = true;
+        page.addNameText = "";
+        page.addCommandText = "";
+    }
+
+    function addApp(name, command, combo) {
+        const label = String(name ?? "").trim();
+        const normalized = Store.commandFromExec(command);
+        if (label === "" || normalized === "") {
+            page.captureError = "empty-command";
+            return { ok: false, error: "empty-command", id: "" };
+        }
+        const sequence = String(combo ?? "").trim();
+        if (sequence === "") {
+            page.captureError = "empty-combo";
+            return { ok: false, error: "empty-combo", id: "" };
+        }
+        const result = ManagedKeybinds.create({
+            name: label, category: "Apps", command: normalized, combo: sequence
+        });
+        if (!result.ok) {
+            if (!KeybindConflicts.writeSucceeded(result, ManagedKeybinds.lastSaveError))
+                page.captureError = result.error;
+            return result;
+        }
+        page.captureError = "";
+        page.closePicker();
+        return result;
+    }
+
+    function captureNewApp(name, command) {
+        page.pendingAddName = String(name ?? "").trim();
+        page.pendingAddCommand = Store.commandFromExec(command);
+        page.closePicker();
+        page.captureError = "";
+        page.captureIds = [];
+        page.capturingRole = "__new__";
+        captureTimeout.restart();
+        Qt.callLater(() => page.forceActiveFocus());
+    }
+
+    function chooseAddApp(entry) {
+        page.captureNewApp(entry.name, entry.execString);
+    }
+
+    function useTypedAddCommand() {
+        page.captureNewApp(page.addNameText.trim() || Translation.tr("Custom app"), page.addCommandText);
     }
 
     function stopCapture() {
@@ -73,6 +135,12 @@ ContentPage {
         }
         const combo = CF.StringUtils.keyEventToCombo(event);
         if (combo === "") return false;
+
+        if (page.capturingRole === "__new__") {
+            page.addApp(page.pendingAddName, page.pendingAddCommand, combo);
+            page.stopCapture();
+            return true;
+        }
 
         let firstError = "";
         for (const id of page.captureIds) {
@@ -155,6 +223,31 @@ ContentPage {
             icon: "apps"
             title: Translation.tr("Default apps")
             hint: Translation.tr("Choose the app each quick-launch shortcut opens. Changes are saved to your keybind overrides; the original shortcut keys are kept.")
+
+            RowLayout {
+                Layout.fillWidth: true
+                RippleButton {
+                    Layout.preferredHeight: 36
+                    buttonRadius: Appearance.rounding.small
+                    colBackground: ColorUtils.transparentize(Appearance.colors.colPrimary, 0.2)
+                    implicitHeight: 36
+                    onClicked: page.startAdd()
+                    contentItem: RowLayout {
+                        spacing: 6
+                        MaterialSymbol {
+                            iconSize: 18
+                            text: "add"
+                            color: Appearance.colors.colPrimary
+                        }
+                        StyledText {
+                            text: Translation.tr("Add app")
+                            color: Appearance.colors.colPrimary
+                            font.pixelSize: Appearance.font.pixelSize.small
+                        }
+                    }
+                }
+                Item { Layout.fillWidth: true }
+            }
 
             ContentSubsection {
                 title: Translation.tr("Applications")
@@ -329,7 +422,9 @@ ContentPage {
                     Layout.fillWidth: true
                     StyledText {
                         Layout.fillWidth: true
-                        text: Translation.tr("Choose app")
+                        text: page.pickerRole === "__add__"
+                            ? Translation.tr("Add app")
+                            : Translation.tr("Choose app")
                         color: Appearance.colors.colOnSurface
                         font.pixelSize: Appearance.font.pixelSize.large
                         font.bold: true
@@ -359,6 +454,33 @@ ContentPage {
                     onTextChanged: page.searchText = text
                 }
 
+                ColumnLayout {
+                    visible: page.pickerRole === "__add__"
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    MaterialTextField {
+                        id: addNameField
+                        Layout.fillWidth: true
+                        placeholderText: Translation.tr("App name (optional)")
+                        text: page.addNameText
+                        onTextChanged: page.addNameText = text
+                    }
+                    MaterialTextField {
+                        id: addCommandField
+                        Layout.fillWidth: true
+                        placeholderText: Translation.tr("Or type a command")
+                        text: page.addCommandText
+                        onTextChanged: page.addCommandText = text
+                        onAccepted: page.useTypedAddCommand()
+                    }
+                    DialogButton {
+                        buttonText: Translation.tr("Use typed command")
+                        enabled: page.addCommandText.trim() !== ""
+                        onClicked: page.useTypedAddCommand()
+                    }
+                }
+
                 ConfigSwitch {
                     Layout.fillWidth: true
                     text: Translation.tr("Show all applications")
@@ -374,12 +496,15 @@ ContentPage {
                     clip: true
                     spacing: 4
                     model: page.pickerRole !== ""
-                        ? page.candidates(DefaultApps.roleFor(page.pickerRole) ?? { categories: [], hints: [] })
+                        ? page.candidates(page.pickerRole === "__add__"
+                            ? { categories: [], hints: [] }
+                            : (DefaultApps.roleFor(page.pickerRole) ?? { categories: [], hints: [] }))
                         : []
 
                     header: Rectangle {
                         width: appList.width
-                        height: page.pickerRole !== "" && DefaultApps.roleFor(page.pickerRole)?.overridden ? 46 : 0
+                        height: page.pickerRole !== "" && page.pickerRole !== "__add__"
+                            && DefaultApps.roleFor(page.pickerRole)?.overridden ? 46 : 0
                         radius: Appearance.rounding.small
                         color: ColorUtils.transparentize(Appearance.colors.colLayer2, 0.5)
                         visible: height > 0
@@ -420,7 +545,9 @@ ContentPage {
                             id: appMouse
                             anchors.fill: parent
                             hoverEnabled: true
-                            onClicked: page.choose(DefaultApps.roleFor(page.pickerRole), appRow.modelData)
+                            onClicked: page.pickerRole === "__add__"
+                                ? page.chooseAddApp(appRow.modelData)
+                                : page.choose(DefaultApps.roleFor(page.pickerRole), appRow.modelData)
                         }
 
                         RowLayout {
