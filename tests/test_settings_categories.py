@@ -52,6 +52,13 @@ class SettingsCategoriesTest(unittest.TestCase):
                 )
                 self.assertIn('category: "%s"' % category, line)
 
+    def test_missing_category_falls_back_to_system_in_both_consumers(self):
+        # SettingsPages.pages is readonly, so the fallback is pinned at source
+        # level in the two places that consume page.category.
+        self.assertIn('?? "System"', self.text)
+        content = (ROOT / "modules/ii/settings/CategoriesSettingsContent.qml").read_text()
+        self.assertIn('page.category ?? "System"', content)
+
 
 if __name__ == "__main__":
     unittest.main()
