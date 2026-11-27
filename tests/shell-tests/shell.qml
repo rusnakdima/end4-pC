@@ -53,7 +53,7 @@ ShellRoot {
         "tst_app_window_rules.qml", "tst_bind_overrides.qml",
         "tst_default_apps.qml", "tst_DefaultApps.qml",
         "tst_default_apps_rows.qml", "tst_settings_deeplink.qml",
-        "tst_wifi_settings_page.qml",
+        "tst_wifi_settings_page.qml", "tst_bluetooth_settings_page.qml",
         "tst_managed_keybinds.qml",
         "tst_keybind_disable_store.qml",
         "tst_disabled_keybinds.qml",
