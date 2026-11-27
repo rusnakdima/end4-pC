@@ -155,6 +155,15 @@ Item {
         Config.options.settings.collapsedSections = list;
     }
 
+    // ContentPage centres a fixed 600px column by default. Match it to the
+    // pane so cards compress instead of being clipped on narrow windows.
+    function fitLoadedPage() {
+        const loader = pageContentLoader;
+        if (!loader.item) return;
+        loader.item.forceWidth = true;
+        loader.item.baseWidth = Math.max(0, contentPane.width - 40);
+    }
+
     Component.onCompleted: {
         root.applyStylePreset();
         const pendingTarget = GlobalStates.settingsTarget;
@@ -290,14 +299,14 @@ Item {
 
             Rectangle {
                 id: categoryListRectangle
-                visible: !root.categoryCollapsed
+                visible: !root.categoryCollapsed && (!root.narrow || root.selectedPageId === "")
                 anchors {
                     left: parent.left
                     top: parent.top
                     bottom: parent.bottom
                 }
-                width: root.categoryCollapsed ? 0 : root.categoryWidth
-                color: Appearance.colors.colLayer1
+                width: visible ? root.categoryWidth : 0
+                color: Appearance.colors.colLayer1Base
                 radius: Appearance.rounding.normal
 
                 Column {
@@ -365,7 +374,7 @@ Item {
                     bottom: parent.bottom
                 }
                 width: visible ? root.pageListWidth : 0
-                color: Appearance.colors.colLayer0
+                color: Appearance.colors.colLayer0Base
                 radius: Appearance.rounding.normal
 
                 Column {
@@ -427,6 +436,7 @@ Item {
                 }
                 color: "transparent"
                 radius: Appearance.rounding.normal
+                clip: true
 
                 ColumnLayout {
                     anchors {
@@ -476,11 +486,16 @@ Item {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         Layout.minimumWidth: 0
+                        Layout.preferredWidth: Math.max(0, root.width - 32 - root.categoryWidth - root.pageListWidth)
+                        Layout.maximumWidth: Math.max(0, root.width - 32 - root.categoryWidth - root.pageListWidth)
                         active: root.selectedPageId !== ""
                         source: root.currentPageData?.component ?? ""
+
                         onLoaded: {
+                            Qt.callLater(root.fitLoadedPage);
                             if (item) GlobalStates.currentPageInstance = item;
                         }
+                        onWidthChanged: Qt.callLater(root.fitLoadedPage)
                     }
                 }
             }

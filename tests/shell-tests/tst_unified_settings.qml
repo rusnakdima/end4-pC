@@ -94,4 +94,38 @@ TestCase {
         verify(testCase.content.currentPage >= 0 && testCase.content.currentPage < testCase.content.pages.length);
         verify(testCase.content.showingProfile === false);
     }
+
+    function test_narrow_page_open_hides_all_side_panes() {
+        testCase.content.width = 520;
+        testCase.content.openPage("wifi");
+        wait(100);
+        verify(!testCase.content.categoryListPaneItem.visible, "category rail must hide when a page is open on a narrow window");
+        verify(!testCase.content.pageListPane.visible, "page list must hide when a page is open on a narrow window");
+        testCase.content.back();
+        wait(50);
+        // Very narrow windows keep all side panes hidden, KDE-style.
+        verify(!testCase.content.categoryListPaneItem.visible, "category rail stays hidden at very narrow width");
+        verify(!testCase.content.pageListPane.visible, "page list stays hidden at very narrow width");
+        testCase.content.width = 900;
+        wait(50);
+        verify(testCase.content.categoryListPaneItem.visible, "widening restores the category rail");
+        verify(testCase.content.pageListPane.visible, "widening restores the page list");
+    }
+
+    function test_loaded_page_compresses_to_the_content_pane() {
+        testCase.content.width = 520;
+        testCase.content.openPage("wifi");
+        const pane = testCase.content.contentPaneItem;
+        tryVerify(() => testCase.content.contentLoader.item !== null, 2000);
+        wait(100);
+        const page = testCase.content.contentLoader.item;
+        verify(page.baseWidth <= pane.width - 20,
+            "baseWidth=" + page.baseWidth + " paneWidth=" + pane.width +
+            " loaderWidth=" + testCase.content.contentLoader.width);
+    }
+
+    function test_side_panes_are_opaque() {
+        compare(testCase.content.categoryListPaneItem.color.a, 1, "category rail must not let content show through");
+        compare(testCase.content.pageListPane.color.a, 1, "page list must not let content show through");
+    }
 }
