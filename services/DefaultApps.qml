@@ -83,6 +83,38 @@ Singleton {
         });
     })
 
+    // One row list for the settings page: the eight built-in roles first,
+    // then every user-added app from the overlay. Built-ins are never
+    // filtered out, so the default list stays visible with a clean overlay.
+    readonly property var appRows: {
+        const rows = root.roles.map(role => ({
+            id: role.id,
+            label: role.label,
+            icon: role.appIcon !== "" ? role.appIcon : role.icon,
+            command: role.command,
+            combo: role.combo,
+            overridden: role.overridden,
+            bindIds: role.bindIds,
+            custom: false
+        }));
+        const customs = (ManagedKeybinds.entries ?? [])
+            .filter(entry => entry.category === "Apps" && String(entry.command ?? "") !== "")
+            .map(entry => {
+                const installed = root.entryForCommand(entry.command);
+                return {
+                    id: entry.id,
+                    label: entry.name,
+                    icon: String(installed?.icon ?? "apps"),
+                    command: entry.command,
+                    combo: entry.combo,
+                    overridden: false,
+                    bindIds: [entry.id],
+                    custom: true
+                };
+            });
+        return rows.concat(customs);
+    }
+
     function roleFor(id) {
         return root.roles.find(role => role.id === id) ?? null;
     }
