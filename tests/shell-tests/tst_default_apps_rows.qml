@@ -46,6 +46,17 @@ TestCase {
         ManagedKeybinds.keybindsPath = testCase.savedPath;
     }
 
+    // Writes go through FileView.setText -> generator Process. Let both
+    // finish before a test restores the live path, or a late setText can land
+    // in the next test's overlay file.
+    function settleWrites() {
+        tryCompare(ManagedKeybinds, "awaitGeneration", false, 5000);
+        settleProc.command = ["sh", "-c",
+            "while pgrep -f '[g]enerate_keybinds.py' >/dev/null 2>&1; do sleep 0.05; done"];
+        settleProc.running = true;
+        tryCompare(settleProc, "running", false, 5000);
+    }
+
     function readFile(path) {
         if (testCase.reader !== null) {
             testCase.reader.destroy();
@@ -107,11 +118,49 @@ TestCase {
         const commands = JSON.parse(readFile(testCase.tempDir + "/commands.json"));
         compare(commands[result.id].command, "myapp --flag");
 
+        settleWrites();
         page.destroy();
     }
 
     Process {
         id: seedProc
+        onExited: {}
+    }
+
+    function test_rebinding_builtin_and_custom_rows() {
+        const component = Qt.createComponent("modules/ii/settings/pages/DefaultAppsConfig.qml");
+        compare(component.status, Component.Ready, "Default apps page failed to load: " + component.errorString());
+        const page = component.createObject(null);
+        verify(page !== null, "Default apps page failed to instantiate");
+        verify(typeof page.setCombo === "function", "the Default apps page has no setCombo helper");
+
+        seedProc.command = ["sh", "-c", "mkdir -p \"$1\" && printf '%s' > \"$2\"",
+            "seed", testCase.tempDir, testCase.tempPath];
+        seedProc.running = true;
+        tryCompare(seedProc, "running", false, 5000);
+        ManagedKeybinds.keybindsPath = testCase.tempPath;
+
+        const builtin = DefaultApps.appRows.find(row => row.id === "terminal");
+        verify(builtin !== undefined, "the terminal row is missing");
+        const builtinResult = page.setCombo(builtin, "SUPER + ALT + B");
+        verify(builtinResult.ok, "built-in rebind failed: " + builtinResult.error);
+        verify(ManagedKeybinds.isOverridden("apps"), "the terminal bind was not overridden");
+        const builtinAfter = DefaultApps.appRows.find(row => row.id === "terminal");
+        compare(builtinAfter.combo, "SUPER + ALT + B");
+
+        const custom = DefaultApps.appRows.find(row => row.custom === true);
+        verify(custom !== undefined, "the custom row is missing");
+        const customResult = page.setCombo(custom, "SUPER + CTRL + B");
+        verify(customResult.ok, "custom rebind failed: " + customResult.error);
+        const customAfter = DefaultApps.appRows.find(row => row.id === custom.id);
+        compare(customAfter.combo, "SUPER + CTRL + B");
+
+        settleWrites();
+        page.destroy();
+    }
+
+    Process {
+        id: settleProc
         onExited: {}
     }
 

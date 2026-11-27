@@ -90,7 +90,8 @@ Singleton {
         const rows = root.roles.map(role => ({
             id: role.id,
             label: role.label,
-            icon: role.appIcon !== "" ? role.appIcon : role.icon,
+            icon: role.icon,
+            appIcon: role.appIcon ?? "",
             command: role.command,
             combo: role.combo,
             overridden: role.overridden,
@@ -105,6 +106,7 @@ Singleton {
                     id: entry.id,
                     label: entry.name,
                     icon: String(installed?.icon ?? "apps"),
+                    appIcon: "",
                     command: entry.command,
                     combo: entry.combo,
                     overridden: false,

@@ -28,6 +28,7 @@ ContentPage {
 
     property string pickerRole: ""
     property string capturingRole: ""
+    property bool capturingCustom: false
     property string captureError: ""
     property string searchText: ""
     property bool showAllApps: false
@@ -106,6 +107,7 @@ ContentPage {
     function stopCapture() {
         page.capturingRole = "";
         page.captureIds = [];
+        page.capturingCustom = false;
         captureTimeout.stop();
     }
 
@@ -114,8 +116,42 @@ ContentPage {
         page.captureError = "";
         page.captureIds = role.bindIds.map(id => String(id));
         page.capturingRole = role.id;
+        page.capturingCustom = role.custom === true;
         captureTimeout.restart();
         Qt.callLater(() => page.forceActiveFocus());
+    }
+
+    // One write path for the combo button: frozen roles take narrow overrides
+    // on every bind of the role, user-added apps are edited in place in the
+    // overlay. Both end up in the same keybinds JSON the Keyboard pane uses.
+    function setCombo(row, combo) {
+        if (row === null || row === undefined) return { ok: false, error: "not-found" };
+        const sequence = String(combo ?? "").trim();
+        if (sequence === "") return { ok: false, error: "empty-combo" };
+        if (row.custom === true) {
+            const result = ManagedKeybinds.update(row.id, { combo: sequence });
+            if (!result.ok) KeybindConflicts.writeSucceeded(result, ManagedKeybinds.lastSaveError);
+            else page.captureError = "";
+            return result;
+        }
+        let firstError = "";
+        for (const id of row.bindIds) {
+            const result = ManagedKeybinds.setOverride(id, sequence);
+            if (!result.ok && firstError === "") firstError = result.error;
+        }
+        if (firstError !== "") {
+            KeybindConflicts.writeSucceeded({ ok: false, error: firstError }, ManagedKeybinds.lastSaveError);
+            return { ok: false, error: firstError };
+        }
+        page.captureError = "";
+        return { ok: true, error: "" };
+    }
+
+    function removeApp(id) {
+        const result = ManagedKeybinds.remove(id);
+        if (!result.ok) KeybindConflicts.writeSucceeded(result, ManagedKeybinds.lastSaveError);
+        else page.captureError = "";
+        return result;
     }
 
     // Settings forwards unhandled presses to the active page; the page also
@@ -138,6 +174,12 @@ ContentPage {
 
         if (page.capturingRole === "__new__") {
             page.addApp(page.pendingAddName, page.pendingAddCommand, combo);
+            page.stopCapture();
+            return true;
+        }
+        if (page.capturingCustom) {
+            const row = DefaultApps.appRows.find(item => item.id === page.capturingRole);
+            page.setCombo(row, combo);
             page.stopCapture();
             return true;
         }
@@ -258,7 +300,7 @@ ContentPage {
                     spacing: 8
 
                     Repeater {
-                        model: DefaultApps.roles
+                        model: DefaultApps.appRows
 
                         delegate: Rectangle {
                             id: row
@@ -276,7 +318,9 @@ ContentPage {
                                 id: rowMouse
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                onClicked: page.pickerRole = row.modelData.id
+                                onClicked: {
+                                    if (!row.modelData.custom) page.pickerRole = row.modelData.id;
+                                }
                             }
 
                             RowLayout {
@@ -290,12 +334,12 @@ ContentPage {
                                     Layout.preferredHeight: 32
                                     AppIcon {
                                         anchors.fill: parent
-                                        visible: row.modelData.appIcon !== ""
-                                        source: row.modelData.appIcon
+                                        visible: (row.modelData.appIcon ?? "") !== ""
+                                        source: row.modelData.appIcon ?? ""
                                     }
                                     MaterialSymbol {
                                         anchors.fill: parent
-                                        visible: row.modelData.appIcon === ""
+                                        visible: (row.modelData.appIcon ?? "") === ""
                                         iconSize: 26
                                         text: row.modelData.icon
                                         color: Appearance.colors.colPrimary
@@ -358,6 +402,23 @@ ContentPage {
                                         anchors.centerIn: parent
                                         iconSize: 18
                                         text: "restart_alt"
+                                        color: Appearance.colors.colOnSurfaceVariant
+                                    }
+                                }
+
+                                RippleButton {
+                                    visible: row.modelData.custom === true
+                                    Layout.preferredWidth: 34
+                                    Layout.preferredHeight: 34
+                                    buttonRadius: Appearance.rounding.small
+                                    colBackground: ColorUtils.transparentize(Appearance.colors.colLayer2, 0.7)
+                                    implicitWidth: Layout.preferredWidth
+                                    implicitHeight: Layout.preferredHeight
+                                    onClicked: page.removeApp(row.modelData.id)
+                                    contentItem: MaterialSymbol {
+                                        anchors.centerIn: parent
+                                        iconSize: 18
+                                        text: "delete"
                                         color: Appearance.colors.colOnSurfaceVariant
                                     }
                                 }
