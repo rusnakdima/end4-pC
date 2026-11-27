@@ -200,6 +200,25 @@ while the shell is running needs no restart.
   and is never modified. When sync runs as root, the generated files are chowned
   back to the target user.
 
+## Default apps
+
+The Default apps pane and the Keyboard pane write the same files described
+above — no separate settings store:
+
+- Built-in roles (terminal, file manager, browser, code editor, office, text
+  editor, volume mixer, task manager) are listed in `defaults/default-apps.json`.
+  Each role names its frozen catalog bind ids; picking an app writes narrow
+  overrides for those ids and the reset button clears them.
+- An app added with **Add app** is an `adds` entry in
+  `~/.config/hypr/custom/keybind-overlay.json` with `category: "Apps"`, a
+  `combo`, and a `command` dispatch. Its icon is looked up from the command, so
+  no icon field is stored in the JSON. The delete button removes the add.
+- Both panes can change an app's keybind. Changing it in Default apps writes
+  overrides for built-in ids or edits the add in place; changing it in Keyboard
+  uses the same overlay through the normal form. After a save the generator
+  regenerates the Lua/command bridge and Hyprland reloads, so the two panes
+  stay in sync.
+
 ## Validation
 
 Use temporary outputs; do not run these against live paths while other lanes are
