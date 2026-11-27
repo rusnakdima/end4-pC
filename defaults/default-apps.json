@@ -1,0 +1,68 @@
+{
+  "roles": [
+    {
+      "id": "terminal",
+      "label": "Terminal",
+      "icon": "terminal",
+      "bindIds": ["apps", "apps-2", "apps-3"],
+      "categories": ["TerminalEmulator", "System"],
+      "hints": ["kitty", "konsole", "xfce4-terminal", "alacritty", "wezterm"]
+    },
+    {
+      "id": "filemanager",
+      "label": "File manager",
+      "icon": "folder",
+      "bindIds": ["apps-4"],
+      "categories": ["FileManager", "System"],
+      "hints": ["dolphin", "nautilus", "nemo", "thunar", "yazi"]
+    },
+    {
+      "id": "browser",
+      "label": "Browser",
+      "icon": "public",
+      "bindIds": ["apps-5"],
+      "categories": ["WebBrowser", "Network"],
+      "hints": ["google-chrome-stable", "zen-browser", "firefox", "brave", "chromium", "microsoft-edge-stable", "opera", "librewolf"]
+    },
+    {
+      "id": "codeeditor",
+      "label": "Code editor",
+      "icon": "code",
+      "bindIds": ["apps-6"],
+      "categories": ["IDE", "Development", "TextEditor"],
+      "hints": ["windsurf", "antigravity", "code", "codium", "cursor", "zed", "kate", "emacs"]
+    },
+    {
+      "id": "office",
+      "label": "Office",
+      "icon": "description",
+      "bindIds": ["apps-7"],
+      "categories": ["Office", "Viewer"],
+      "hints": ["wps", "onlyoffice-desktopeditors", "libreoffice"]
+    },
+    {
+      "id": "texteditor",
+      "label": "Text editor",
+      "icon": "edit_note",
+      "bindIds": ["apps-8"],
+      "categories": ["TextEditor", "Utility"],
+      "hints": ["kate", "gnome-text-editor", "emacs"]
+    },
+    {
+      "id": "volumemixer",
+      "label": "Volume mixer",
+      "icon": "volume_up",
+      "bindIds": ["apps-9"],
+      "categories": ["Mixer", "AudioVideo"],
+      "hints": ["pavucontrol-qt", "pavucontrol"]
+    },
+    {
+      "id": "taskmanager",
+      "label": "Task manager",
+      "icon": "monitoring",
+      "bindIds": ["apps-11"],
+      "categories": ["Monitor", "System"],
+      "hints": ["gnome-system-monitor", "plasma-systemmonitor", "btop"]
+    }
+  ]
+}

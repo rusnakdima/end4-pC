@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import qs.services
 import "../modules/common/functions/DefaultAppsStore.js" as Store
 
@@ -16,6 +17,26 @@ import "../modules/common/functions/DefaultAppsStore.js" as Store
  */
 Singleton {
     id: root
+
+    // The JSON catalog is the readable/editable source of truth. The JS
+    // literal stays as a startup fallback (and for the pure-store tests).
+    property var roleCatalog: Store.ROLES
+
+    FileView {
+        id: defaultAppsCatalogFile
+        path: Quickshell.shellPath("defaults/default-apps.json")
+        preload: true
+
+        onLoaded: {
+            try {
+                const parsed = JSON.parse(defaultAppsCatalogFile.text() ?? "null");
+                if (parsed && Array.isArray(parsed.roles) && parsed.roles.length > 0)
+                    root.roleCatalog = parsed.roles;
+            } catch (e) {
+                console.error("[default-apps] catalog parse failed: " + e);
+            }
+        }
+    }
 
     function isOverridden(bindId) {
         return Store.isOverriddenIn(ManagedKeybinds.overlay, bindId);
@@ -48,7 +69,7 @@ Singleton {
         return null;
     }
 
-    readonly property var roles: Store.ROLES.map(role => {
+    readonly property var roles: root.roleCatalog.map(role => {
         const bindId = role.bindIds[0];
         const overridden = root.isOverridden(bindId);
         const command = root.commandFor(bindId);
